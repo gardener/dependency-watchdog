@@ -7,12 +7,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gardener/controlplane-restarter/pkg/restarter"
+	"github.com/gardener/dep-controller/pkg/restarter"
 
 	"github.com/spf13/pflag"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/client-go/informers"
 
@@ -21,11 +20,19 @@ import (
 	"k8s.io/klog"
 )
 
+const (
+	defaultBackoffPeriod = 5
+	defaultRetries       = 3
+)
+
 var (
-	masterURL            string
-	configFile           string
-	kubeconfig           string
-	defaultSyncDuration  = time.Second * 30
+	masterURL     string
+	configFile    string
+	kubeconfig    string
+	backoffPeriod int
+	retries       int
+
+	defaultSyncDuration  = 30 * time.Second
 	onlyOneSignalHandler = make(chan struct{})
 	shutdownSignals      = []os.Signal{os.Interrupt, syscall.SIGTERM}
 	labelSelector        = labels.Set(map[string]string{"app": "etcd-statefulset", "role": "main"}).AsSelector()
@@ -35,6 +42,8 @@ func init() {
 	pflag.StringVar(&configFile, "config-file", "config.yaml", "path to the config file that has the service depenancies")
 	pflag.StringVar(&kubeconfig, "kubeconfig", "kubeconfig.yaml", "path to the kube config file")
 	pflag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
+	pflag.IntVar(&backoffPeriod, "backoff-interval", defaultBackoffPeriod, "The duration in between successive retries.")
+	pflag.IntVar(&retries, "retries", defaultRetries, "The number of retries to during changes to endpoint")
 }
 
 func main() {
@@ -49,7 +58,7 @@ func main() {
 	if err != nil {
 		klog.Fatalf("Error parsing config file: %s", err.Error())
 	}
-	klog.Infof("Dependencies: %v", deps)
+	klog.Infof("Dependencies: %+v", deps)
 	config, err := clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
 	if err != nil {
 		klog.Fatalf("Error parsing kubeconfig file: %s", err.Error())
@@ -60,15 +69,16 @@ func main() {
 		klog.Fatalf("Error creating k8s clientset: %s", err.Error())
 	}
 
+	klog.Info(labelSelector.String())
 	factory := informers.NewSharedInformerFactoryWithOptions(
 		clientset,
 		defaultSyncDuration,
 		informers.WithNamespace(deps.Namespace),
-		informers.WithTweakListOptions(func(options *meta_v1.ListOptions) {
+		informers.WithTweakListOptions(func(options *metav1.ListOptions) {
 			options.LabelSelector = labelSelector.String()
 		}))
 
-	controller := restarter.NewController(clientset, factory, stopCh)
+	controller := restarter.NewController(clientset, factory, deps, retries, time.Duration(backoffPeriod)*time.Second, stopCh)
 
 	klog.Info("Starting informer factory.")
 	factory.Start(stopCh)

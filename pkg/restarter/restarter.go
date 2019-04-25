@@ -4,8 +4,13 @@ import (
 	"fmt"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+
 	"k8s.io/client-go/kubernetes"
 
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -15,13 +20,21 @@ import (
 	"k8s.io/klog"
 )
 
-func NewController(clientset *kubernetes.Clientset, sharedInformerFactory informers.SharedInformerFactory, stopCh <-chan struct{}) *Controller {
+func NewController(clientset *kubernetes.Clientset,
+	sharedInformerFactory informers.SharedInformerFactory,
+	serviceDependants *ServiceDependants,
+	retries int,
+	backoff time.Duration,
+	stopCh <-chan struct{}) *Controller {
 	c := &Controller{
-		clientset:        clientset,
-		podLister:        sharedInformerFactory.Core().V1().Pods().Lister(),
-		endpointInformer: sharedInformerFactory.Core().V1().Endpoints().Informer(),
-		workqueue:        workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Endpoints"),
-		stopCh:           stopCh,
+		clientset:         clientset,
+		endpointInformer:  sharedInformerFactory.Core().V1().Endpoints().Informer(),
+		endpointLister:    sharedInformerFactory.Core().V1().Endpoints().Lister(),
+		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Endpoints"),
+		stopCh:            stopCh,
+		serviceDependants: serviceDependants,
+		backoff:           backoff,
+		retries:           retries,
 	}
 
 	c.endpointInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -64,7 +77,7 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 
 	// Start the informer factories to begin populating the informer caches
 	klog.Info("Starting restarter controller")
-	//go c.endpointInformer.Run(stopCh)
+
 	// Wait for the caches to be synced before starting workers
 	klog.Info("Waiting for informer caches to sync")
 	if ok := cache.WaitForCacheSync(stopCh, c.hasSynced); !ok {
@@ -101,39 +114,23 @@ func (c *Controller) processNextWorkItem() bool {
 		return false
 	}
 
-	// We wrap this block in a func so we can defer c.workqueue.Done.
 	err := func(obj interface{}) error {
-		// We call Done here so the workqueue knows we have finished
-		// processing this item. We also must remember to call Forget if we
-		// do not want this work item being re-queued. For example, we do
-		// not call Forget if a transient error occurs, instead the item is
-		// put back on the workqueue and attempted again after a back-off
-		// period.
 		defer c.workqueue.Done(obj)
 		var key string
 		var ok bool
-		// We expect strings to come off the workqueue. These are of the
-		// form namespace/name. We do this as the delayed nature of the
-		// workqueue means the items in the informer cache may actually be
-		// more up to date that when the item was initially put onto the
-		// workqueue.
 		if key, ok = obj.(string); !ok {
-			// As the item in the workqueue is actually invalid, we call
-			// Forget here else we'd go into a loop of attempting to
-			// process a work item that is invalid.
+
 			c.workqueue.Forget(obj)
 			utilruntime.HandleError(fmt.Errorf("expected string in workqueue but got %#v", obj))
 			return nil
 		}
-		// Run the processEndpoint, passing it the namespace/name string of the
-		// VPA resource to be synced.
+
 		if err := c.processEndpoint(key); err != nil {
-			// Put the item back on the workqueue to handle any transient errors.
+
 			c.workqueue.AddRateLimited(key)
-			return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
+			return fmt.Errorf("error syncing '%s': %v, requeuing", key, err)
 		}
-		// Finally, if no error occurs we Forget this item so it does not
-		// get queued again until another change happens.
+
 		c.workqueue.Forget(obj)
 		klog.Infof("Successfully synced '%s'", key)
 		return nil
@@ -149,5 +146,76 @@ func (c *Controller) processNextWorkItem() bool {
 
 func (c *Controller) processEndpoint(key string) error {
 	klog.Infof("Processing endpoint: %s", key)
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		utilruntime.HandleError(fmt.Errorf("invalid resource key: %s", key))
+		return nil
+	}
+	if namespace != c.serviceDependants.Namespace || name != c.serviceDependants.Service {
+		return nil
+	}
+
+	ep, err := c.clientset.CoreV1().Endpoints(namespace).Get(name, metav1.GetOptions{})
+	if err != nil {
+		// The endpoint resource may no longer exist, in which case we stop
+		// processing.
+		if errors.IsNotFound(err) {
+			utilruntime.HandleError(fmt.Errorf("endpoint '%s' in work queue no longer exists", key))
+			return nil
+		}
+		return err
+	}
+
+	if !IsReadyEndpointPresentInSubsets(ep.Subsets) {
+		klog.Infof("Endpoint %s does not have any endpoint subset. Skipping pod terminations.", ep.Name)
+		return nil
+	}
+
+	for i := 0; i < c.retries; i++ {
+		<-time.Tick(c.backoff)
+		klog.Infof("Retrying shooting pods in CrashLoopBackOff")
+		if err := c.shootPodsIfNecessary(namespace); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func (c *Controller) shootPodsIfNecessary(namespace string) error {
+
+	for _, dependantPod := range c.serviceDependants.Dependants {
+		selector, err := metav1.LabelSelectorAsSelector(dependantPod.Selector)
+		if err != nil {
+			return fmt.Errorf("error converting label selector to selector %s", dependantPod.Selector.String())
+		}
+		klog.Infof("Selecting pods in CrashloopBackoff using selector: %s", selector.String())
+		podList, err := c.clientset.CoreV1().Pods(namespace).List(metav1.ListOptions{
+			LabelSelector: selector.String(),
+		})
+		if err != nil {
+			return fmt.Errorf("error listing pods with selector %s", selector.String())
+		}
+		for _, pod := range podList.Items {
+			err := c.processPod(&pod)
+			if err != nil {
+				return fmt.Errorf("error processing pod %s: %v", pod.Name, err.Error())
+			}
+		}
+
+	}
+	return nil
+}
+
+func (c *Controller) processPod(pod *v1.Pod) error {
+	// Validate pod status again before shoot it out.
+	po, err := c.clientset.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("error getting pod %s", pod.Name)
+	}
+	if !ShouldDeletePod(po) {
+		return nil
+	}
+	klog.Infof("Deleting pod: %v", po.Name)
+
+	return c.clientset.CoreV1().Pods(po.Namespace).Delete(po.Name, &metav1.DeleteOptions{})
 }
