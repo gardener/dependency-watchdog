@@ -21,16 +21,14 @@ import (
 )
 
 const (
-	defaultBackoffPeriod = 5
-	defaultRetries       = 3
+	defaultWatchDuration = "2m"
 )
 
 var (
-	masterURL     string
-	configFile    string
-	kubeconfig    string
-	backoffPeriod int
-	retries       int
+	masterURL        string
+	configFile       string
+	kubeconfig       string
+	strWatchDuration string
 
 	defaultSyncDuration  = 30 * time.Second
 	onlyOneSignalHandler = make(chan struct{})
@@ -42,8 +40,7 @@ func init() {
 	pflag.StringVar(&configFile, "config-file", "config.yaml", "path to the config file that has the service depenancies")
 	pflag.StringVar(&kubeconfig, "kubeconfig", "kubeconfig.yaml", "path to the kube config file")
 	pflag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
-	pflag.IntVar(&backoffPeriod, "backoff-interval", defaultBackoffPeriod, "The duration in between successive retries.")
-	pflag.IntVar(&retries, "retries", defaultRetries, "The number of retries to during changes to endpoint")
+	pflag.StringVar(&strWatchDuration, "watch-duration", defaultWatchDuration, "The duration to watch dependencies after the service is ready.")
 }
 
 func main() {
@@ -51,6 +48,11 @@ func main() {
 	flag.Set("logtostderr", "true")
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	pflag.Parse()
+
+	watchDuration, err := time.ParseDuration(strWatchDuration)
+	if err != nil {
+		klog.Fatalf("Unhandled watch duration %s: %s", strWatchDuration, err)
+	}
 
 	// set up signals so we handle the first shutdown signal gracefully
 	stopCh := setupSignalHandler()
@@ -78,7 +80,7 @@ func main() {
 			options.LabelSelector = labelSelector.String()
 		}))
 
-	controller := restarter.NewController(clientset, factory, deps, retries, time.Duration(backoffPeriod)*time.Second, stopCh)
+	controller := restarter.NewController(clientset, factory, deps, watchDuration, stopCh)
 
 	klog.Info("Starting informer factory.")
 	factory.Start(stopCh)

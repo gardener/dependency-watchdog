@@ -1,6 +1,7 @@
 package restarter
 
 import (
+	"context"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,6 +35,12 @@ type Controller struct {
 	hasSynced         cache.InformerSynced
 	stopCh            <-chan struct{}
 	serviceDependants *ServiceDependants
-	retries           int
-	backoff           time.Duration
+	watchDuration     time.Duration
+	cancelFn          map[string]context.CancelFunc
+	contextCh         chan contextMessage
+}
+
+type contextMessage struct {
+	key      string
+	cancelFn context.CancelFunc
 }

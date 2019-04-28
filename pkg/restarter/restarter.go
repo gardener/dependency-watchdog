@@ -1,15 +1,17 @@
 package restarter
 
 import (
+	"context"
 	"fmt"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	watch "k8s.io/apimachinery/pkg/watch"
 
 	"k8s.io/client-go/kubernetes"
 
@@ -23,8 +25,7 @@ import (
 func NewController(clientset *kubernetes.Clientset,
 	sharedInformerFactory informers.SharedInformerFactory,
 	serviceDependants *ServiceDependants,
-	retries int,
-	backoff time.Duration,
+	watchDuration time.Duration,
 	stopCh <-chan struct{}) *Controller {
 	c := &Controller{
 		clientset:         clientset,
@@ -33,8 +34,9 @@ func NewController(clientset *kubernetes.Clientset,
 		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Endpoints"),
 		stopCh:            stopCh,
 		serviceDependants: serviceDependants,
-		backoff:           backoff,
-		retries:           retries,
+		watchDuration:     watchDuration,
+		cancelFn:          make(map[string]context.CancelFunc),
+		contextCh:         make(chan contextMessage),
 	}
 
 	c.endpointInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -78,6 +80,10 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	// Start the informer factories to begin populating the informer caches
 	klog.Info("Starting restarter controller")
 
+	// Start listening to context start messages
+	klog.Info("Starting to listen for context start messages")
+	go c.handleContextMessages(stopCh)
+
 	// Wait for the caches to be synced before starting workers
 	klog.Info("Waiting for informer caches to sync")
 	if ok := cache.WaitForCacheSync(stopCh, c.hasSynced); !ok {
@@ -95,6 +101,35 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	klog.Info("Shutting down workers")
 
 	return nil
+}
+
+// handleContextMessages will close any old context associated with the key from the message
+// and register the new cancel function for the future.
+// This is to ensure that there is only one active context for any given key.
+func (c *Controller) handleContextMessages(stopCh <-chan struct{}) {
+	defer close(c.contextCh)
+
+	for {
+		select {
+		case <-stopCh:
+			klog.Info("Received stop signal. Stopping the handling of context messages.")
+			return
+		case cmsg := <-c.contextCh:
+			oldCancelFn, ok := c.cancelFn[cmsg.key]
+			if cmsg.cancelFn != nil {
+				klog.Infof("Registering the context for the key: %s", cmsg.key)
+				c.cancelFn[cmsg.key] = cmsg.cancelFn
+			} else {
+				klog.Infof("Unregistering the context for the key: %s", cmsg.key)
+				delete(c.cancelFn, cmsg.key)
+			}
+
+			if ok && oldCancelFn != nil {
+				klog.Infof("Cancelling older context for the key: %s", cmsg.key)
+				oldCancelFn()
+			}
+		}
+	}
 }
 
 // runWorker is a long-running function that will continually call the
@@ -168,42 +203,102 @@ func (c *Controller) processEndpoint(key string) error {
 
 	if !IsReadyEndpointPresentInSubsets(ep.Subsets) {
 		klog.Infof("Endpoint %s does not have any endpoint subset. Skipping pod terminations.", ep.Name)
+		// Cancel any existing context to pro-actively avoid shooting pods accidentally.
+		c.contextCh <- contextMessage{
+			key:      key,
+			cancelFn: nil,
+		}
 		return nil
 	}
 
-	for i := 0; i < c.retries; i++ {
-		<-time.Tick(c.backoff)
-		klog.Infof("Retrying shooting pods in CrashLoopBackOff")
-		if err := c.shootPodsIfNecessary(namespace); err != nil {
-			return err
+	go func() {
+		klog.Infof("Watching for pods in CrashLoopBackOff for a period of %s", c.watchDuration.String())
+		ctx, cancelFn := context.WithTimeout(context.Background(), c.watchDuration)
+		defer cancelFn()
+
+		c.contextCh <- contextMessage{
+			key:      key,
+			cancelFn: cancelFn,
 		}
+
+		c.shootPodsIfNecessary(ctx, namespace)
+		select {
+		case <-ctx.Done():
+			c.contextCh <- contextMessage{
+				key:      key,
+				cancelFn: nil,
+			}
+			return
+		case <-c.stopCh:
+			return
+		}
+	}()
+	return nil
+}
+
+func (c *Controller) shootPodsIfNecessary(ctx context.Context, namespace string) error {
+	for _, dependantPod := range c.serviceDependants.Dependants {
+		go func(depPods DependantPods) {
+			err := c.shootDependentPodsIfNecessary(ctx, namespace, &depPods)
+			if err != nil {
+				klog.Errorf("Error processing dependents pods: %s", err)
+			}
+		}(dependantPod)
 	}
 	return nil
 }
 
-func (c *Controller) shootPodsIfNecessary(namespace string) error {
-
-	for _, dependantPod := range c.serviceDependants.Dependants {
-		selector, err := metav1.LabelSelectorAsSelector(dependantPod.Selector)
-		if err != nil {
-			return fmt.Errorf("error converting label selector to selector %s", dependantPod.Selector.String())
-		}
-		klog.Infof("Selecting pods in CrashloopBackoff using selector: %s", selector.String())
-		podList, err := c.clientset.CoreV1().Pods(namespace).List(metav1.ListOptions{
-			LabelSelector: selector.String(),
-		})
-		if err != nil {
-			return fmt.Errorf("error listing pods with selector %s", selector.String())
-		}
-		for _, pod := range podList.Items {
-			err := c.processPod(&pod)
-			if err != nil {
-				return fmt.Errorf("error processing pod %s: %v", pod.Name, err.Error())
-			}
-		}
-
+func (c *Controller) shootDependentPodsIfNecessary(ctx context.Context, namespace string, depPods *DependantPods) error {
+	selector, err := metav1.LabelSelectorAsSelector(depPods.Selector)
+	if err != nil {
+		return fmt.Errorf("error converting label selector to selector %s", depPods.Selector.String())
 	}
-	return nil
+
+	for {
+		retry, err := func() (bool, error) {
+			klog.Infof("Watching pods in CrashloopBackoff using selector: %s", selector.String())
+			w, err := c.clientset.CoreV1().Pods(namespace).Watch(metav1.ListOptions{
+				LabelSelector: selector.String(),
+			})
+			if err != nil {
+				return false, fmt.Errorf("error watching pods with selector %s", selector.String())
+			}
+
+			defer w.Stop()
+
+			for {
+				select {
+				case <-ctx.Done():
+					klog.Infof("Watch duration completed for pods with selector: %s", selector.String())
+					return false, nil
+				case <-c.stopCh:
+					klog.Infof("Received stop signal. Stopping watch for pods with selector: %s", selector.String())
+					return false, nil
+				case ev, ok := <-w.ResultChan():
+					if !ok {
+						klog.Infof("Received error from watch channel. Will restart the watch with selector: %s", selector.String())
+						return true, nil
+					}
+					if ev.Type != watch.Added && ev.Type != watch.Modified {
+						klog.Infof("Skipping event type: %s", ev.Type)
+						continue
+					}
+					switch pod := ev.Object.(type) {
+					case *v1.Pod:
+						err := c.processPod(pod)
+						if err != nil {
+							klog.Errorf("error processing pod %s: %v", pod.Name, err.Error())
+						}
+					default:
+						klog.Errorf("Unknown type received from watch channel: %T", ev.Object)
+					}
+				}
+			}
+		}()
+		if !retry {
+			return err
+		}
+	}
 }
 
 func (c *Controller) processPod(pod *v1.Pod) error {
