@@ -1,3 +1,17 @@
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package restarter
 
 import (
@@ -24,7 +38,7 @@ import (
 
 func NewController(clientset *kubernetes.Clientset,
 	sharedInformerFactory informers.SharedInformerFactory,
-	serviceDependants *ServiceDependants,
+	serviceDependants *serviceDependants,
 	watchDuration time.Duration,
 	stopCh <-chan struct{}) *Controller {
 	c := &Controller{
@@ -238,7 +252,7 @@ func (c *Controller) processEndpoint(key string) error {
 
 func (c *Controller) shootPodsIfNecessary(ctx context.Context, namespace string) error {
 	for _, dependantPod := range c.serviceDependants.Dependants {
-		go func(depPods DependantPods) {
+		go func(depPods dependantPods) {
 			err := c.shootDependentPodsIfNecessary(ctx, namespace, &depPods)
 			if err != nil {
 				klog.Errorf("Error processing dependents pods: %s", err)
@@ -248,7 +262,7 @@ func (c *Controller) shootPodsIfNecessary(ctx context.Context, namespace string)
 	return nil
 }
 
-func (c *Controller) shootDependentPodsIfNecessary(ctx context.Context, namespace string, depPods *DependantPods) error {
+func (c *Controller) shootDependentPodsIfNecessary(ctx context.Context, namespace string, depPods *dependantPods) error {
 	selector, err := metav1.LabelSelectorAsSelector(depPods.Selector)
 	if err != nil {
 		return fmt.Errorf("error converting label selector to selector %s", depPods.Selector.String())

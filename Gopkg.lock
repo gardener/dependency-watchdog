@@ -435,8 +435,8 @@
 [[projects]]
   name = "k8s.io/klog"
   packages = ["."]
-  revision = "e531227889390a39d9533dde61f590fe9f4b0035"
-  version = "v0.3.0"
+  revision = "71442cd4037d612096940ceb0f3fec3f7fff66e0"
+  version = "v0.2.0"
 
 [[projects]]
   name = "sigs.k8s.io/yaml"
@@ -447,6 +447,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "2ea0d35dc890ca6e847b93f5a8398e4fc144272ad350129be67deabb548eab9a"
+  inputs-digest = "b3f9f1faddf4e9652e83f53785d3aed130cdbe6f40b813e6d2c22a249493624f"
   solver-name = "gps-cdcl"
   solver-version = 1

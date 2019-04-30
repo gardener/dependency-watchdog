@@ -1,5 +1,5 @@
 service: etcd-main-client
-namespace: shoot--dev--i308301-2
+namespace: <NAMESPACE>
 labels:
   "app" : "etcd-statefulset"
   "role" : "main"
@@ -12,21 +12,6 @@ dependantpods:
       values:
       - controlplane
     - key: role
-      operator: In
+      operator: NotIn
       values:
-      - cloud-controller-manager
-      - addon-manager
-      - apiserver
-      - controller-manager
-      - scheduler
-- name: aws-lb-readvertiser
-  selector:
-    matchExpressions:
-    - key: app
-      operator: In
-      values:
-      - aws-lb-readvertiser
-    - key: garden.sapcloud.io/role
-      operator: In
-      values:
-      - controlplane
+      - main
