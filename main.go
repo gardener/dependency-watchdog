@@ -52,7 +52,7 @@ var (
 
 func init() {
 	pflag.StringVar(&configFile, "config-file", "config.yaml", "path to the config file that has the service depenancies")
-	pflag.StringVar(&kubeconfig, "kubeconfig", "kubeconfig.yaml", "path to the kube config file")
+	pflag.StringVar(&kubeconfig, "kubeconfig", "", "path to the kube config file")
 	pflag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
 	pflag.StringVar(&strWatchDuration, "watch-duration", defaultWatchDuration, "The duration to watch dependencies after the service is ready.")
 }
@@ -75,6 +75,7 @@ func main() {
 		klog.Fatalf("Error parsing config file: %s", err.Error())
 	}
 	klog.Infof("Dependencies: %+v", deps)
+
 	config, err := clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
 	if err != nil {
 		klog.Fatalf("Error parsing kubeconfig file: %s", err.Error())
