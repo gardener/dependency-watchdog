@@ -1,4 +1,4 @@
-dep-controller:
+dependency-watchdog:
   template: 'default'
   base_definition:
     repo: ~
@@ -9,9 +9,9 @@ dep-controller:
         inject_effective_version: true
       publish:
         dockerimages:
-          dep-controller:
+          dependency-watchdog:
             registry: 'gcr-readwrite'
-            image: 'eu.gcr.io/gardener-project/gardener/dep-controller'
+            image: 'eu.gcr.io/gardener-project/gardener/dependency-watchdog'
             dockerfile: 'build/Dockerfile'
             inputs:
               repos:

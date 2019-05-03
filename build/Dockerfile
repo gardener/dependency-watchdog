@@ -16,6 +16,6 @@ FROM alpine:3.7
 
 RUN apk add --update bash curl
 
-COPY ./bin/linux-amd64/dep-controller /usr/local/bin/dep-controller
+COPY ./bin/linux-amd64/dependency-watchdog /usr/local/bin/dependency-watchdog
 WORKDIR /
-ENTRYPOINT ["/usr/local/bin/dep-controller"]
+ENTRYPOINT ["/usr/local/bin/dependency-watchdog"]

@@ -21,7 +21,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gardener/dep-controller/pkg/restarter"
+	"github.com/gardener/dependency-watchdog/pkg/restarter"
 
 	"github.com/spf13/pflag"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

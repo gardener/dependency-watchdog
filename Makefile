@@ -14,7 +14,7 @@
 
 VERSION             := $(shell cat VERSION)
 REGISTRY            := eu.gcr.io/gardener-project/gardener
-IMAGE_REPOSITORY    := $(REGISTRY)/dep-controller
+IMAGE_REPOSITORY    := $(REGISTRY)/dependency-watchdog
 IMAGE_TAG           := $(VERSION)
 BUILD_DIR           := build
 BIN_DIR             := bin
@@ -33,7 +33,7 @@ build-local:
 
 .PHONY: docker-image
 docker-image: 
-	@if [[ ! -f $(BIN_DIR)/linux-amd64/dep-controller ]]; then echo "No binary found. Please run 'make build'"; false; fi
+	@if [[ ! -f $(BIN_DIR)/linux-amd64/dependency-watchdog ]]; then echo "No binary found. Please run 'make build'"; false; fi
 	@docker build -t $(IMAGE_REPOSITORY):$(IMAGE_TAG) -f $(BUILD_DIR)/Dockerfile --rm .
 
 .PHONY: docker-push

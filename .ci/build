@@ -32,7 +32,7 @@ fi
 
 VCS="github.com"
 ORGANIZATION="gardener"
-PROJECT="dep-controller"
+PROJECT="dependency-watchdog"
 REPOSITORY=${VCS}/${ORGANIZATION}/${PROJECT}
 
 # The `go <cmd>` commands requires to see the target repository to be part of a
@@ -64,13 +64,13 @@ if [[ -z "$LOCAL_BUILD" ]]; then
   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -a \
     -v \
-    -o ${BINARY_PATH}/linux-amd64/dep-controller \
+    -o ${BINARY_PATH}/linux-amd64/dependency-watchdog \
     main.go
 
 # If the LOCAL_BUILD environment variable is set, we simply run `go build`.
 else
   go build \
     -v \
-    -o ${BINARY_PATH}/dep-controller \
+    -o ${BINARY_PATH}/dependency-watchdog \
     main.go
 fi

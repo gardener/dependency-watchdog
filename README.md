@@ -1,5 +1,5 @@
-# dep-controller
-When etcd becomes unavailable, the control-plane components go into `CrashloopBackoff`. The control-plane components can remain unavailable for some time even after etcd becomes ready and available. dep-controller helps to alleviate the delay where control plane components remain unavailable by finding the respective pods in CrashloopBackoff and restarting them once etcd becomes ready and available.
+# dependency-watchdog
+When etcd becomes unavailable, the control-plane components go into `CrashloopBackoff`. The control-plane components can remain unavailable for some time even after etcd becomes ready and available. dependency-watchdog helps to alleviate the delay where control plane components remain unavailable by finding the respective pods in CrashloopBackoff and restarting them once etcd becomes ready and available.
 
 ## Table of Contents
 
@@ -60,14 +60,14 @@ In case you want to build Docker images, you have to install Docker itself. We r
 
 ### Build
 
-First, you need to create a target folder structure before cloning and building `dep-controller`.
+First, you need to create a target folder structure before cloning and building `dependency-watchdog`.
 
 ```sh
 
 mkdir -p ~/go/src/github.com/gardener
 cd ~/go/src/github.com/gardener
-git clone https://github.com/gardener/dep-controller.git
-cd dep-controller
+git clone https://github.com/gardener/dependency-watchdog.git
+cd dependency-watchdog
 ```
 
 To build the binary in your local machine environment, use `make` target `build-local`.
@@ -76,7 +76,7 @@ To build the binary in your local machine environment, use `make` target `build-
 make build-local
 ```
 
-This will build the binary `dep-controller` under the `bin` directory.
+This will build the binary `dependency-watchdog` under the `bin` directory.
 
 Next you can make it available to use as shell command by moving the executable to `/usr/local/bin`.
 
@@ -98,11 +98,11 @@ The dependencies are installed into the `vendor` folder which **should be added*
 
 ### Usage
 
-Use the `help` option of the `dep-controller` command to show usage details.
+Use the `help` option of the `dependency-watchdog` command to show usage details.
 
 ```sh
-dep-controller --help
-Usage of ./bin/dep-controller:
+dependency-watchdog --help
+Usage of ./bin/dependency-watchdog:
       --alsologtostderr                  log to standard error as well as files
       --config-file string               path to the config file that has the service depenancies (default "config.yaml")
       --kubeconfig string                path to the kube config file (default "kubeconfig.yaml")

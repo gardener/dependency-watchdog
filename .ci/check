@@ -25,7 +25,7 @@ fi
 
 VCS="github.com"
 ORGANIZATION="gardener"
-PROJECT="dep-controller"
+PROJECT="dependency-watchdog"
 REPOSITORY=${VCS}/${ORGANIZATION}/${PROJECT}
 
 # The `go <cmd>` commands requires to see the target repository to be part of a
@@ -51,7 +51,7 @@ go get -u golang.org/x/lint/golint
 ###############################################################################
 
 PACKAGES="$(go list -e ./... | grep -vE '/tmp/|/vendor/')"
-LINT_FOLDERS="$(echo ${PACKAGES} | sed "s|github.com/gardener/dep-controller|.|g")"
+LINT_FOLDERS="$(echo ${PACKAGES} | sed "s|github.com/gardener/dependency-watchdog|.|g")"
 
 # Execute static code checks.
 go vet ${PACKAGES}
