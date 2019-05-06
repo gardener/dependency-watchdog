@@ -23,7 +23,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func LoadServiceDependants(file string) (*serviceDependants, error) {
+// LoadServiceDependants creates the ServiceDependants from a config-file.
+func LoadServiceDependants(file string) (*ServiceDependants, error) {
 	data, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, err
@@ -31,8 +32,8 @@ func LoadServiceDependants(file string) (*serviceDependants, error) {
 	return decodeConfigFile(data)
 }
 
-func decodeConfigFile(data []byte) (*serviceDependants, error) {
-	dependants := new(serviceDependants)
+func decodeConfigFile(data []byte) (*ServiceDependants, error) {
+	dependants := new(ServiceDependants)
 	err := yaml.Unmarshal(data, dependants)
 	if err != nil {
 		return nil, err
@@ -104,26 +105,31 @@ func GetPodConditionFromList(conditions []v1.PodCondition, conditionType v1.PodC
 	return -1, nil
 }
 
+// ShouldDeletePod checks if the pod is in CrashloopBackoff and decides to delete the pod if its is
+// not already deleted.
 func ShouldDeletePod(pod *v1.Pod) bool {
 	return !IsPodDeleted(pod) && IsPodInCrashloopBackoff(pod.Status)
 }
 
+// IsPodInCrashloopBackoff checks if the pod is in CrashloopBackoff from its status fields.
 func IsPodInCrashloopBackoff(status v1.PodStatus) bool {
 	for _, containerStatus := range status.ContainerStatuses {
-		if IsContainerInCrashLoopBackOff(containerStatus.State) {
+		if isContainerInCrashLoopBackOff(containerStatus.State) {
 			return true
 		}
 	}
 	return false
 }
 
-func IsContainerInCrashLoopBackOff(containerState v1.ContainerState) bool {
+func isContainerInCrashLoopBackOff(containerState v1.ContainerState) bool {
 	if containerState.Waiting != nil {
-		return containerState.Waiting.Reason == CrashLoopBackOff
+		return containerState.Waiting.Reason == crashLoopBackOff
 	}
 	return false
 }
 
+// IsReadyEndpointPresentInSubsets checks if the endpoint resource have a subset of ready
+// IP endpoints.
 func IsReadyEndpointPresentInSubsets(subsets []v1.EndpointSubset) bool {
 	for _, subset := range subsets {
 		if len(subset.Addresses) != 0 {

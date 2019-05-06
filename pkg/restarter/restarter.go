@@ -38,7 +38,7 @@ import (
 
 func NewController(clientset *kubernetes.Clientset,
 	sharedInformerFactory informers.SharedInformerFactory,
-	serviceDependants *serviceDependants,
+	serviceDependants *ServiceDependants,
 	watchDuration time.Duration,
 	stopCh <-chan struct{}) *Controller {
 	c := &Controller{
