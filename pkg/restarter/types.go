@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	CrashLoopBackOff = "CrashLoopBackOff"
+	crashLoopBackOff = "CrashLoopBackOff"
 )
 
 // Controller looks at ServiceDependants and reconciles the dependantPods once the service becomes available.
@@ -37,13 +37,15 @@ type Controller struct {
 	workqueue         workqueue.RateLimitingInterface
 	hasSynced         cache.InformerSynced
 	stopCh            <-chan struct{}
-	serviceDependants *serviceDependants
+	serviceDependants *ServiceDependants
 	watchDuration     time.Duration
 	cancelFn          map[string]context.CancelFunc
 	contextCh         chan contextMessage
 }
 
-type serviceDependants struct {
+// ServiceDependants holds the service and the label selectors of the pods which has to be restarted when
+// the service becomes ready and the pods are in CrashloopBackoff.
+type ServiceDependants struct {
 	Service    string            `json:"service"`
 	Labels     map[string]string `json:"labels"`
 	Namespace  string            `json:"namespace"`
