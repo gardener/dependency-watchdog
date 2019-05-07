@@ -36,6 +36,7 @@ import (
 	"k8s.io/klog"
 )
 
+// NewController initializes a new K8s depencency-watchdog controller.
 func NewController(clientset *kubernetes.Clientset,
 	sharedInformerFactory informers.SharedInformerFactory,
 	serviceDependants *ServiceDependants,

@@ -64,7 +64,7 @@ func IsPodReady(pod *v1.Pod) bool {
 	return IsPodReadyConditionTrue(pod.Status)
 }
 
-// IsPodReady returns true if a pod is ready; false otherwise.
+// IsPodDeleted returns true if a pod is deleted; false otherwise.
 func IsPodDeleted(pod *v1.Pod) bool {
 	return pod.DeletionTimestamp != nil
 }
