@@ -49,7 +49,7 @@ type ServiceDependants struct {
 	Service    string            `json:"service"`
 	Labels     map[string]string `json:"labels"`
 	Namespace  string            `json:"namespace"`
-	Dependants []dependantPods   `json:"dependantpods"`
+	Dependants []dependantPods   `json:"dependantPods"`
 }
 
 type dependantPods struct {
