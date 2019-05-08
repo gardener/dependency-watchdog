@@ -3,7 +3,7 @@ namespace: <NAMESPACE>
 labels:
   "app" : "etcd-statefulset"
   "role" : "main"
-dependantpods:
+dependantPods:
 - name: controlplane
   selector:
     matchExpressions:
