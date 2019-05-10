@@ -21,16 +21,15 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
-
-	"k8s.io/client-go/kubernetes"
+	componentbaseconfigv1alpha1 "k8s.io/component-base/config/v1alpha1"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
@@ -44,6 +43,7 @@ func NewController(clientset *kubernetes.Clientset,
 	stopCh <-chan struct{}) *Controller {
 	c := &Controller{
 		clientset:         clientset,
+		informerFactory:   sharedInformerFactory,
 		endpointInformer:  sharedInformerFactory.Core().V1().Endpoints().Informer(),
 		endpointLister:    sharedInformerFactory.Core().V1().Endpoints().Lister(),
 		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Endpoints"),
@@ -53,7 +53,7 @@ func NewController(clientset *kubernetes.Clientset,
 		cancelFn:          make(map[string]context.CancelFunc),
 		contextCh:         make(chan contextMessage),
 	}
-
+	componentbaseconfigv1alpha1.RecommendedDefaultLeaderElectionConfiguration(&c.LeaderElection)
 	c.endpointInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: c.enqueueEndpoint,
 		UpdateFunc: func(old, new interface{}) {
@@ -95,6 +95,8 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	// Start the informer factories to begin populating the informer caches
 	klog.Info("Starting restarter controller")
 
+	klog.Info("Starting informer factory.")
+	c.informerFactory.Start(stopCh)
 	// Start listening to context start messages
 	klog.Info("Starting to listen for context start messages")
 	go c.handleContextMessages(stopCh)
