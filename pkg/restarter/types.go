@@ -33,7 +33,7 @@ const (
 
 // Controller looks at ServiceDependants and reconciles the dependantPods once the service becomes available.
 type Controller struct {
-	clientset         *kubernetes.Clientset
+	clientset         kubernetes.Interface
 	informerFactory   informers.SharedInformerFactory
 	endpointInformer  cache.SharedIndexInformer
 	endpointLister    listerv1.EndpointsLister

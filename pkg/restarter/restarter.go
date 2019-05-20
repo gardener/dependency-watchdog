@@ -36,7 +36,7 @@ import (
 )
 
 // NewController initializes a new K8s depencency-watchdog controller.
-func NewController(clientset *kubernetes.Clientset,
+func NewController(clientset kubernetes.Interface,
 	sharedInformerFactory informers.SharedInformerFactory,
 	serviceDependants *ServiceDependants,
 	watchDuration time.Duration,
@@ -88,7 +88,7 @@ func (c *Controller) enqueueEndpoint(obj interface{}) {
 // as syncing informer caches and starting workers. It will block until stopCh
 // is closed, at which point it will shutdown the workqueue and wait for
 // workers to finish processing their current work items.
-func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
+func (c *Controller) Run(threadiness int) error {
 	defer utilruntime.HandleCrash()
 	defer c.workqueue.ShutDown()
 
@@ -96,25 +96,25 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	klog.Info("Starting restarter controller")
 
 	klog.Info("Starting informer factory.")
-	c.informerFactory.Start(stopCh)
+	c.informerFactory.Start(c.stopCh)
 	// Start listening to context start messages
 	klog.Info("Starting to listen for context start messages")
-	go c.handleContextMessages(stopCh)
+	go c.handleContextMessages(c.stopCh)
 
 	// Wait for the caches to be synced before starting workers
 	klog.Info("Waiting for informer caches to sync")
-	if ok := cache.WaitForCacheSync(stopCh, c.hasSynced); !ok {
+	if ok := cache.WaitForCacheSync(c.stopCh, c.hasSynced); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
 	klog.Info("Starting workers")
 	// Launch workers to process VPA resources
 	for i := 0; i < threadiness; i++ {
-		go wait.Until(c.runWorker, time.Second, stopCh)
+		go wait.Until(c.runWorker, time.Second, c.stopCh)
 	}
 
 	klog.Info("Started workers")
-	<-stopCh
+	<-c.stopCh
 	klog.Info("Shutting down workers")
 
 	return nil
@@ -276,7 +276,6 @@ func (c *Controller) shootDependentPodsIfNecessary(ctx context.Context, namespac
 
 	for {
 		retry, err := func() (bool, error) {
-			klog.Infof("Watching pods in CrashloopBackoff using selector: %s", selector.String())
 			w, err := c.clientset.CoreV1().Pods(namespace).Watch(metav1.ListOptions{
 				LabelSelector: selector.String(),
 			})
@@ -331,6 +330,5 @@ func (c *Controller) processPod(pod *v1.Pod) error {
 		return nil
 	}
 	klog.Infof("Deleting pod: %v", po.Name)
-
 	return c.clientset.CoreV1().Pods(po.Namespace).Delete(po.Name, &metav1.DeleteOptions{})
 }
