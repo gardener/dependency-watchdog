@@ -23,6 +23,12 @@
   version = "v1.2.1"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/golang/groupcache"
+  packages = ["lru"]
+  revision = "5b532d6fd5efaf7fa130d4e859a2fde0fc3a9e1b"
+
+[[projects]]
   name = "github.com/golang/protobuf"
   packages = [
     "proto",
@@ -276,16 +282,19 @@
     "pkg/util/framer",
     "pkg/util/intstr",
     "pkg/util/json",
+    "pkg/util/mergepatch",
     "pkg/util/naming",
     "pkg/util/net",
     "pkg/util/runtime",
     "pkg/util/sets",
+    "pkg/util/strategicpatch",
     "pkg/util/validation",
     "pkg/util/validation/field",
     "pkg/util/wait",
     "pkg/util/yaml",
     "pkg/version",
     "pkg/watch",
+    "third_party/forked/golang/json",
     "third_party/forked/golang/reflect"
   ]
   revision = "d7deff9243b165ee192f5551710ea4285dcfd615"
@@ -416,8 +425,10 @@
     "tools/clientcmd/api",
     "tools/clientcmd/api/latest",
     "tools/clientcmd/api/v1",
+    "tools/leaderelection/resourcelock",
     "tools/metrics",
     "tools/pager",
+    "tools/record",
     "tools/reference",
     "transport",
     "util/buffer",
@@ -433,10 +444,37 @@
   version = "v10.0.0"
 
 [[projects]]
+  branch = "master"
+  name = "k8s.io/component-base"
+  packages = [
+    "config",
+    "config/v1alpha1"
+  ]
+  revision = "8de8845fb6423fc4b9ffa37ab657670958272da4"
+
+[[projects]]
   name = "k8s.io/klog"
   packages = ["."]
   revision = "71442cd4037d612096940ceb0f3fec3f7fff66e0"
   version = "v0.2.0"
+
+[[projects]]
+  branch = "master"
+  name = "k8s.io/kube-openapi"
+  packages = ["pkg/util/proto"]
+  revision = "411b2483e5034420675ebcdd4a55fc76fe5e55cf"
+
+[[projects]]
+  name = "k8s.io/kubernetes"
+  packages = ["staging/src/k8s.io/client-go/tools/leaderelection"]
+  revision = "b7394102d6ef778017f2ca4046abbaa23b88c290"
+  version = "v1.14.1"
+
+[[projects]]
+  branch = "master"
+  name = "k8s.io/utils"
+  packages = ["pointer"]
+  revision = "8fab8cb257d50c8cf94ec9771e74826edbb68fb5"
 
 [[projects]]
   name = "sigs.k8s.io/yaml"
@@ -447,6 +485,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "b3f9f1faddf4e9652e83f53785d3aed130cdbe6f40b813e6d2c22a249493624f"
+  inputs-digest = "b269e9a8251124e4f483b7c75c9f084a0bd491979944908f1af95a5204735568"
   solver-name = "gps-cdcl"
   solver-version = 1

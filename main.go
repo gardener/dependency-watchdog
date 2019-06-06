@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	"os/signal"
@@ -24,13 +25,20 @@ import (
 	"github.com/gardener/dependency-watchdog/pkg/restarter"
 
 	"github.com/spf13/pflag"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	labels "k8s.io/apimachinery/pkg/labels"
+	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/kubernetes/staging/src/k8s.io/client-go/tools/leaderelection"
 
 	"k8s.io/client-go/informers"
-
 	"k8s.io/client-go/kubernetes"
+	kubescheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
 )
 
@@ -39,12 +47,13 @@ const (
 )
 
 var (
-	masterURL        string
-	configFile       string
-	kubeconfig       string
-	strWatchDuration string
+	masterURL                   string
+	configFile                  string
+	kubeconfig                  string
+	strWatchDuration            string
+	dependencyWatchdogAgentName = "dependency-watchdog"
+	defaultSyncDuration         = 30 * time.Second
 
-	defaultSyncDuration  = 30 * time.Second
 	onlyOneSignalHandler = make(chan struct{})
 	shutdownSignals      = []os.Signal{os.Interrupt, syscall.SIGTERM}
 	labelSelector        = labels.Set(map[string]string{"app": "etcd-statefulset", "role": "main"}).AsSelector()
@@ -74,7 +83,6 @@ func main() {
 	if err != nil {
 		klog.Fatalf("Error parsing config file: %s", err.Error())
 	}
-	klog.Infof("Dependencies: %+v", deps)
 
 	config, err := clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
 	if err != nil {
@@ -86,7 +94,6 @@ func main() {
 		klog.Fatalf("Error creating k8s clientset: %s", err.Error())
 	}
 
-	klog.Info(labelSelector.String())
 	factory := informers.NewSharedInformerFactoryWithOptions(
 		clientset,
 		defaultSyncDuration,
@@ -94,16 +101,60 @@ func main() {
 		informers.WithTweakListOptions(func(options *metav1.ListOptions) {
 			options.LabelSelector = labelSelector.String()
 		}))
-
 	controller := restarter.NewController(clientset, factory, deps, watchDuration, stopCh)
+	labelSelector = labels.Set(deps.Labels).AsSelector()
+	leaderElectionClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, "dependency-watchdog-election"))
+	recorder := createRecorder(leaderElectionClient)
+	run := func(ctx context.Context) {
 
-	klog.Info("Starting informer factory.")
-	factory.Start(stopCh)
-	klog.Info("Starting endpoint controller.")
-	if err = controller.Run(1, stopCh); err != nil {
-		klog.Fatalf("Error running controller: %s", err.Error())
+		klog.Info("Starting endpoint controller.")
+		if err = controller.Run(1, stopCh); err != nil {
+			klog.Fatalf("Error running controller: %s", err.Error())
+		}
+		panic("unreachable")
+	}
+	if !*controller.LeaderElection.LeaderElect {
+		run(nil)
 	}
 
+	id, err := os.Hostname()
+	if err != nil {
+		klog.Fatalf("error fetching hostname: %v", err)
+	}
+
+	rl, err := resourcelock.New(controller.LeaderElection.ResourceLock,
+		deps.Namespace,
+		"dependency-watchdog",
+		leaderElectionClient.CoreV1(),
+		resourcelock.ResourceLockConfig{
+			Identity:      id,
+			EventRecorder: recorder,
+		})
+	if err != nil {
+		klog.Fatalf("error creating lock: %v", err)
+	}
+
+	ctx := context.TODO()
+	leaderelection.RunOrDie(ctx, leaderelection.LeaderElectionConfig{
+		Lock:          rl,
+		LeaseDuration: controller.LeaderElection.LeaseDuration.Duration,
+		RenewDeadline: controller.LeaderElection.RenewDeadline.Duration,
+		RetryPeriod:   controller.LeaderElection.RetryPeriod.Duration,
+		Callbacks: leaderelection.LeaderCallbacks{
+			OnStartedLeading: run,
+			OnStoppedLeading: func() {
+				klog.Fatalf("leaderelection lost")
+			},
+		},
+	})
+	panic("unreachable")
+}
+
+func createRecorder(kubeClient *kubernetes.Clientset) record.EventRecorder {
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartLogging(klog.Infof)
+	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: v1core.New(kubeClient.CoreV1().RESTClient()).Events("")})
+	return eventBroadcaster.NewRecorder(kubescheme.Scheme, v1.EventSource{Component: dependencyWatchdogAgentName})
 }
 
 // setupSignalHandler registered for SIGTERM and SIGINT. A stop channel is returned
