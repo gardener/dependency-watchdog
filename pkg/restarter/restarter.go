@@ -184,7 +184,7 @@ func (c *Controller) processNextWorkItem() bool {
 		}
 
 		c.workqueue.Forget(obj)
-		klog.Infof("Successfully synced '%s'", key)
+
 		return nil
 	}(obj)
 
@@ -197,13 +197,12 @@ func (c *Controller) processNextWorkItem() bool {
 }
 
 func (c *Controller) processEndpoint(key string) error {
-	klog.Infof("Processing endpoint: %s", key)
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("invalid resource key: %s", key))
 		return nil
 	}
-	if namespace != c.serviceDependants.Namespace || name != c.serviceDependants.Service {
+	if namespace != c.serviceDependants.Namespace {
 		return nil
 	}
 
@@ -217,7 +216,11 @@ func (c *Controller) processEndpoint(key string) error {
 		}
 		return err
 	}
-
+	srv, ok := c.serviceDependants.Services[name]
+	if !ok {
+		return nil
+	}
+	klog.Infof("Processing endpoint: %s", key)
 	if !IsReadyEndpointPresentInSubsets(ep.Subsets) {
 		klog.Infof("Endpoint %s does not have any endpoint subset. Skipping pod terminations.", ep.Name)
 		// Cancel any existing context to pro-actively avoid shooting pods accidentally.
@@ -238,7 +241,7 @@ func (c *Controller) processEndpoint(key string) error {
 			cancelFn: cancelFn,
 		}
 
-		c.shootPodsIfNecessary(ctx, namespace)
+		c.shootPodsIfNecessary(ctx, namespace, srv)
 		select {
 		case <-ctx.Done():
 			c.contextCh <- contextMessage{
@@ -253,8 +256,8 @@ func (c *Controller) processEndpoint(key string) error {
 	return nil
 }
 
-func (c *Controller) shootPodsIfNecessary(ctx context.Context, namespace string) error {
-	for _, dependantPod := range c.serviceDependants.Dependants {
+func (c *Controller) shootPodsIfNecessary(ctx context.Context, namespace string, srv service) error {
+	for _, dependantPod := range srv.Dependants {
 		go func(depPods dependantPods) {
 			err := c.shootDependentPodsIfNecessary(ctx, namespace, &depPods)
 			if err != nil {

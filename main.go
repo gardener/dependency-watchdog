@@ -28,7 +28,6 @@ import (
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	labels "k8s.io/apimachinery/pkg/labels"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/kubernetes/staging/src/k8s.io/client-go/tools/leaderelection"
 
@@ -56,7 +55,6 @@ var (
 
 	onlyOneSignalHandler = make(chan struct{})
 	shutdownSignals      = []os.Signal{os.Interrupt, syscall.SIGTERM}
-	labelSelector        = labels.Set(map[string]string{"app": "etcd-statefulset", "role": "main"}).AsSelector()
 )
 
 func init() {
@@ -98,11 +96,8 @@ func main() {
 		clientset,
 		defaultSyncDuration,
 		informers.WithNamespace(deps.Namespace),
-		informers.WithTweakListOptions(func(options *metav1.ListOptions) {
-			options.LabelSelector = labelSelector.String()
-		}))
+		informers.WithTweakListOptions(func(options *metav1.ListOptions) {}))
 	controller := restarter.NewController(clientset, factory, deps, watchDuration, stopCh)
-	labelSelector = labels.Set(deps.Labels).AsSelector()
 	leaderElectionClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, "dependency-watchdog-election"))
 	recorder := createRecorder(leaderElectionClient)
 	run := func(ctx context.Context) {
