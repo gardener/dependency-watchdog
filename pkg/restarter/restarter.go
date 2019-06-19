@@ -20,7 +20,6 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -210,7 +209,7 @@ func (c *Controller) processEndpoint(key string) error {
 	if err != nil {
 		// The endpoint resource may no longer exist, in which case we stop
 		// processing.
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			utilruntime.HandleError(fmt.Errorf("endpoint '%s' in work queue no longer exists", key))
 			return nil
 		}
@@ -323,7 +322,7 @@ func (c *Controller) shootDependentPodsIfNecessary(ctx context.Context, namespac
 func (c *Controller) processPod(pod *v1.Pod) error {
 	// Validate pod status again before shoot it out.
 	po, err := c.clientset.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
-	if err != nil && !apierrors.IsNotFound(err) {
+	if err != nil {
 		return fmt.Errorf("error getting pod %s", pod.Name)
 	}
 	if !ShouldDeletePod(po) {

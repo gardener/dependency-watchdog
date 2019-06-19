@@ -174,23 +174,30 @@ func TestDeleteOnlyCrashloopBackoffPods(t *testing.T) {
 	}
 	deps.Namespace = metav1.NamespaceDefault
 	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	const (
+		healthyPod  = "pod-h"
+		crashingPod = "pod-c"
+	)
+
 	depMap, err := metav1.LabelSelectorAsMap(deps.Services["kube-apiserver"].Dependants[0].Selector)
 	if err != nil {
 		t.Fatalf("error creating map from selector: %v", err)
 	}
 	e := newEndpoint("kube-apiserver", deps.Namespace, depMap)
-	pC := newPodInCrashloop("pod-0", map[string]string{
+	pC := newPodInCrashloop(crashingPod, map[string]string{
 		"garden.sapcloud.io/role": "controlplane",
 		"role":                    "NotEtcd",
 	})
-	pH := newPodHealthy("pod-1", map[string]string{
+	pH := newPodHealthy(healthyPod, map[string]string{
 		"garden.sapcloud.io/role": "controlplane",
 		"role":                    "NotEtcd",
 	})
 
 	f.endpoints = append(f.endpoints, e)
 	f.objects = append(f.objects, e, pC, pH)
-	watcher := watch.NewFake()
+	watcher := watch.NewFakeWithChanSize(2, false)
 	client := fake.NewSimpleClientset(f.objects...)
 	client.PrependWatchReactor("pods", test.DefaultWatchReactor(watcher, nil))
 	f.client = client
@@ -200,29 +207,38 @@ func TestDeleteOnlyCrashloopBackoffPods(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error creating Deployment controller: %v", err)
 	}
+
+	watcher.Add(pC)
+	watcher.Add(pH)
+
+	pl, err := f.client.CoreV1().Pods(metav1.NamespaceDefault).List(metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("error fetching pods: %v", err)
+	}
+	if len(pl.Items) != 2 {
+		t.Errorf("Error setting up the test case. Expected 2 pods but got %d", len(pl.Items))
+	}
+
 	go func() {
-		pl, err := f.client.CoreV1().Pods(metav1.NamespaceDefault).List(metav1.ListOptions{})
-		if err != nil {
-			t.Fatalf("error fetching pods: %v", err)
-		}
-		before := len(pl.Items)
-		t.Logf("Number of pods before the watchdog started: %v.", before)
-		watcher.Add(pC)
-		watcher.Add(pH)
-		pl, err = f.client.CoreV1().Pods(metav1.NamespaceDefault).List(metav1.ListOptions{})
-		if err != nil {
-			t.Fatalf("error fetching pods: %v", err)
-		}
-		after := len(pl.Items)
-		t.Logf("Number of pods after the watchdog started: %v.", after)
-		close(stopCh)
-		if before == after {
-			t.Error("Pod in CrashloopBackoff not deleted by the dependency-watchdog.")
-		}
+		t.Logf("Starting dep watchdog.\n")
+		c.Run(1)
 	}()
 
-	t.Logf("Starting dep watchdog.\n")
-	c.Run(1)
+	// Wait for the dependency watchdog to take action.
+	time.Sleep(2 * time.Second)
+
+	pl, err = f.client.CoreV1().Pods(metav1.NamespaceDefault).List(metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("error fetching pods: %v", err)
+	}
+
+	if len(pl.Items) != 1 {
+		t.Errorf("Pod in CrashloopBackoff not deleted by the dependency-watchdog. Expected 1 pods but got %d", len(pl.Items))
+	}
+
+	if pl.Items[0].Name != healthyPod {
+		t.Errorf("Pod in CrashloopBackoff not deleted by the dependency-watchdog. Expected the remaining pod to be %s but was %s", healthyPod, pl.Items[0].Name)
+	}
 
 }
 
@@ -234,20 +250,29 @@ func TestDeletePodTransitioningToCrashloopBackoff(t *testing.T) {
 	}
 	deps.Namespace = metav1.NamespaceDefault
 	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	const (
+		healthyPod = "pod-h"
+	)
+
 	depMap, err := metav1.LabelSelectorAsMap(deps.Services["kube-apiserver"].Dependants[0].Selector)
 	if err != nil {
 		t.Fatalf("error creating map from selector: %v", err)
 	}
 	e := newEndpoint("kube-apiserver", deps.Namespace, depMap)
-
-	pH := newPodHealthy("pod-1", map[string]string{
+	// pC := newPodInCrashloop("pod-0", map[string]string{
+	// 	"garden.sapcloud.io/role": "controlplane",
+	// 	"role":                    "NotEtcd",
+	// })
+	pH := newPodHealthy(healthyPod, map[string]string{
 		"garden.sapcloud.io/role": "controlplane",
 		"role":                    "NotEtcd",
 	})
 
 	f.endpoints = append(f.endpoints, e)
 	f.objects = append(f.objects, e, pH)
-	watcher := watch.NewFake()
+	watcher := watch.NewFakeWithChanSize(1, false)
 	client := fake.NewSimpleClientset(f.objects...)
 	client.PrependWatchReactor("pods", test.DefaultWatchReactor(watcher, nil))
 	f.client = client
@@ -257,39 +282,39 @@ func TestDeletePodTransitioningToCrashloopBackoff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error creating Deployment controller: %v", err)
 	}
-	go func() {
-		pl, err := f.client.CoreV1().Pods(metav1.NamespaceDefault).List(metav1.ListOptions{})
-		if err != nil {
-			t.Fatalf("error fetching pods: %v", err)
-		}
-		before := len(pl.Items)
-		t.Logf("Number of pods before the watchdog started: %v.", before)
-		watcher.Add(pH)
-		pl, err = f.client.CoreV1().Pods(metav1.NamespaceDefault).List(metav1.ListOptions{})
-		if err != nil {
-			t.Fatalf("error fetching pods: %v", err)
-		}
 
-		t.Logf("Making pod go into CrashloopBackoff and wait for 2 seconds.")
-		pU, err := f.client.CoreV1().Pods(metav1.NamespaceDefault).Update(makePodUnhealthy(pH))
-		if err != nil {
-			t.Fatalf("error updating pods: %v", err)
-		}
-		watcher.Modify(pU)
-		<-time.After(2 * time.Second)
-		pl, err = f.client.CoreV1().Pods(metav1.NamespaceDefault).List(metav1.ListOptions{})
-		if err != nil {
-			t.Fatalf("error fetching pods: %v", err)
-		}
-		after := len(pl.Items)
-		t.Logf("Number of pods after the watchdog started: %v.", after)
-		close(stopCh)
-		if before == after {
-			t.Error("Pod in CrashloopBackoff not deleted by the dependency-watchdog.")
-		}
+	pl, err := f.client.CoreV1().Pods(metav1.NamespaceDefault).List(metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("error fetching pods: %v", err)
+	}
+	watcher.Add(pH)
+	pl, err = f.client.CoreV1().Pods(metav1.NamespaceDefault).List(metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("error fetching pods: %v", err)
+	}
+
+	if len(pl.Items) != 1 {
+		t.Errorf("Error setting up the test case. Expected 1 pod but got %d", len(pl.Items))
+	}
+
+	go func() {
+		t.Logf("Starting dep watchdog.\n")
+		c.Run(1)
 	}()
 
-	t.Logf("Starting dep watchdog.\n")
-	c.Run(1)
+	t.Logf("Making pod go into CrashloopBackoff and wait for 2 seconds.")
+	pU, err := f.client.CoreV1().Pods(metav1.NamespaceDefault).Update(makePodUnhealthy(pH))
+	if err != nil {
+		t.Fatalf("error updating pods: %v", err)
+	}
+	watcher.Modify(pU)
+	time.Sleep(2 * time.Second)
 
+	pl, err = f.client.CoreV1().Pods(metav1.NamespaceDefault).List(metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("error fetching pods: %v", err)
+	}
+	if len(pl.Items) != 0 {
+		t.Errorf("Pod in CrashloopBackoff not deleted by the dependency-watchdog. Expected 0 pods but got %d", len(pl.Items))
+	}
 }
