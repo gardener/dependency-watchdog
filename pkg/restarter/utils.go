@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/ghodss/yaml"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -29,10 +29,11 @@ func LoadServiceDependants(file string) (*ServiceDependants, error) {
 	if err != nil {
 		return nil, err
 	}
-	return decodeConfigFile(data)
+	return DecodeConfigFile(data)
 }
 
-func decodeConfigFile(data []byte) (*ServiceDependants, error) {
+// DecodeConfigFile decodes the byte stream to ServiceDependants objects.
+func DecodeConfigFile(data []byte) (*ServiceDependants, error) {
 	dependants := new(ServiceDependants)
 	err := yaml.Unmarshal(data, dependants)
 	if err != nil {

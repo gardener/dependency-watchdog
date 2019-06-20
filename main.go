@@ -25,11 +25,11 @@ import (
 	"github.com/gardener/dependency-watchdog/pkg/restarter"
 
 	"github.com/spf13/pflag"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/kubernetes/staging/src/k8s.io/client-go/tools/leaderelection"
+	"k8s.io/client-go/tools/leaderelection"
 
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -103,7 +103,7 @@ func main() {
 	run := func(ctx context.Context) {
 
 		klog.Info("Starting endpoint controller.")
-		if err = controller.Run(1, stopCh); err != nil {
+		if err = controller.Run(1); err != nil {
 			klog.Fatalf("Error running controller: %s", err.Error())
 		}
 		panic("unreachable")
@@ -121,6 +121,7 @@ func main() {
 		deps.Namespace,
 		"dependency-watchdog",
 		leaderElectionClient.CoreV1(),
+		leaderElectionClient.CoordinationV1(),
 		resourcelock.ResourceLockConfig{
 			Identity:      id,
 			EventRecorder: recorder,
