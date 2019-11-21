@@ -21,7 +21,13 @@ BIN_DIR             := bin
 
 .PHONY: revendor
 revendor:
-	@dep ensure -update -v
+	@env GO111MODULE=on go mod vendor -v
+	@env GO111MODULE=on go mod tidy -v
+
+.PHONY: update-dependencies
+update-dependencies:
+	@env GO111MODULE=on go get -u
+	@make revendor
 
 .PHONY: build
 build: 

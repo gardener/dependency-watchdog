@@ -24,3 +24,5 @@ test/e2e_test_data
 # developers workspace
 tmp
 dev
+hack/test
+.DS_Store

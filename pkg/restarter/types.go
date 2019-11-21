@@ -15,9 +15,9 @@
 package restarter
 
 import (
-	"context"
 	"time"
 
+	"github.com/gardener/dependency-watchdog/pkg/multicontext"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -42,10 +42,9 @@ type Controller struct {
 	stopCh            <-chan struct{}
 	serviceDependants *ServiceDependants
 	watchDuration     time.Duration
-	cancelFn          map[string]context.CancelFunc
-	contextCh         chan contextMessage
 	// LeaderElection defines the configuration of leader election client.
 	LeaderElection componentbaseconfig.LeaderElectionConfiguration
+	*multicontext.Multicontext
 }
 
 // ServiceDependants holds the service and the label selectors of the pods which has to be restarted when
@@ -62,9 +61,4 @@ type service struct {
 type dependantPods struct {
 	Name     string                `json:"name,omitempty"`
 	Selector *metav1.LabelSelector `json:"selector"`
-}
-
-type contextMessage struct {
-	key      string
-	cancelFn context.CancelFunc
 }

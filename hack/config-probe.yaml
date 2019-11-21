@@ -1,0 +1,14 @@
+#namespace: <NAMESPACE>
+probes:
+- name: kube-apiserver
+  probe:
+    external:
+      kubeconfigSecretName: kubeconfig-external
+    internal:
+      kubeconfigSecretName: kubeconfig-internal
+  dependantScales:
+  - scaleRef:
+      apiVersion: extensions/v1beta1
+      kind: Deployment
+      name: kube-controller-manager
+    replicas: 1

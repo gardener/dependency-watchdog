@@ -28,9 +28,6 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	test "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
-	_ "k8s.io/kubernetes/pkg/apis/core/install"
-	"k8s.io/kubernetes/pkg/controller"
-	"k8s.io/kubernetes/pkg/controller/testutil"
 )
 
 var (
@@ -106,8 +103,30 @@ func newEndpoint(name, namespace string, labels map[string]string) *v1.Endpoints
 	return &e
 }
 
+func newPod(name, host string) *v1.Pod {
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      name,
+		},
+		Spec: v1.PodSpec{
+			NodeName: host,
+		},
+		Status: v1.PodStatus{
+			Conditions: []v1.PodCondition{
+				{
+					Type:   v1.PodReady,
+					Status: v1.ConditionTrue,
+				},
+			},
+		},
+	}
+
+	return pod
+}
+
 func newPodInCrashloop(name string, labels map[string]string) *v1.Pod {
-	p := testutil.NewPod(name, "node-0")
+	p := newPod(name, "node-0")
 	p.Labels = labels
 	p.Namespace = metav1.NamespaceDefault
 	p.Status.ContainerStatuses = []v1.ContainerStatus{
@@ -125,7 +144,7 @@ func newPodInCrashloop(name string, labels map[string]string) *v1.Pod {
 }
 
 func newPodHealthy(name string, labels map[string]string) *v1.Pod {
-	p := testutil.NewPod(name, "node-0")
+	p := newPod(name, "node-0")
 	p.Labels = labels
 	p.Namespace = metav1.NamespaceDefault
 	p.Status.ContainerStatuses = []v1.ContainerStatus{
@@ -151,11 +170,15 @@ func makePodUnhealthy(p *v1.Pod) *v1.Pod {
 	return p
 }
 
+func noResyncPeriodFunc() time.Duration {
+	return 0
+}
+
 func (f *fixture) newController(deps *ServiceDependants, stopCh chan struct{}) (*Controller, informers.SharedInformerFactory, error) {
 
 	informers := informers.NewSharedInformerFactoryWithOptions(
 		f.client,
-		controller.NoResyncPeriodFunc(),
+		noResyncPeriodFunc(),
 		informers.WithNamespace(deps.Namespace),
 		informers.WithTweakListOptions(func(options *metav1.ListOptions) {}))
 
