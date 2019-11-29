@@ -22,11 +22,9 @@ import (
 
 	"github.com/gardener/dependency-watchdog/pkg/scaler"
 	"github.com/spf13/cobra"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers"
-	"k8s.io/client-go/informers/internalinterfaces"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
@@ -74,7 +72,6 @@ func runProbe(cmd *cobra.Command, args []string) {
 	if deps.Namespace != "" {
 		opts = append(opts, informers.WithNamespace(deps.Namespace))
 	}
-	opts = append(opts, informers.WithTweakListOptions(internalinterfaces.TweakListOptionsFunc(func(options *metav1.ListOptions) {})))
 	factory := informers.NewSharedInformerFactoryWithOptions(
 		clientset,
 		defaultSyncDuration,
@@ -104,7 +101,7 @@ func runProbe(cmd *cobra.Command, args []string) {
 
 	rl, err := resourcelock.New(controller.LeaderElection.ResourceLock,
 		deployedNamespace,
-		"dependency-watchdog",
+		"dependency-watchdog-probe",
 		leaderElectionClient.CoreV1(),
 		leaderElectionClient.CoordinationV1(),
 		resourcelock.ResourceLockConfig{

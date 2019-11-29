@@ -29,9 +29,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
-	"k8s.io/client-go/informers/internalinterfaces"
 	"k8s.io/client-go/kubernetes"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -135,7 +133,6 @@ func runRoot(cmd *cobra.Command, args []string) {
 	if deps.Namespace != "" {
 		opts = append(opts, informers.WithNamespace(deps.Namespace))
 	}
-	opts = append(opts, informers.WithTweakListOptions(internalinterfaces.TweakListOptionsFunc(func(options *metav1.ListOptions) {})))
 	factory := informers.NewSharedInformerFactoryWithOptions(
 		clientset,
 		defaultSyncDuration,

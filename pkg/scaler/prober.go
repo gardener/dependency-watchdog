@@ -187,18 +187,42 @@ func (p *prober) isUnhealthy(pr *probeResult) bool {
 	return pr.lastError != nil && pr.resultRun >= p.failureThreshold
 }
 
+// probe probes the internal and external endpoints scales the dependents
+// according to the following logic.
+// 1. A probe (internal or external) is considered HEALTHY only if the last
+// at least successThreshold number of consecutive attempts at that probe succeeded.
+// 2. A probe (internal or external) is considered UNHEALTHY only if the last
+// at least failureThreshold number of consecutive attempts at that probe failed.
+// 3. A probe (internal or external) could be neither HEALTHY nor UNHEALTHY.
+// 4. Everytime the internal probe transitions (from UNHEALTHY or unknown) to HEALTHY,
+// no external probes are done until time has elapsed by at least initialDelay. Also,
+// no actions are taken on the dependants.
+// 5. Unless the internal probe is HEALTHY, no external probes are done. Also,
+// no actions are taken on the dependants.
+// 6. If the external probe is HEALTHY then the dependants are scaled up.
+// 7. If the external probe is UNHEALTHY then the dependants are scaled down.
 func (p *prober) probe() error {
 	p.doProbe(fmt.Sprintf("%s/%s/internal", p.probeDeps.Name, p.namespace), p.internalClient, &p.internalResult)
 	if p.isUnhealthy(&p.internalResult) {
+		klog.V(3).Infof("%s/%s/internal is unhealthy. Activating initial delay.", p.probeDeps.Name, p.namespace)
+		if p.initialDelayTimer != nil {
+			p.initialDelayTimer.Stop()
+		}
 		p.initialDelayTimer = time.NewTimer(p.initialDelay)
 		return nil // Short-circuit external probe if the internal one fails
+	}
 
-	} else if p.isHealthy(&p.internalResult) && p.initialDelayTimer != nil {
+	if !p.isHealthy(&p.internalResult) {
+		klog.V(3).Infof("%s/%s/internal is not healthy. Skipping the external probe.", p.probeDeps.Name, p.namespace)
+		return nil //  Short-circuit external probe if the internal one fails
+	}
+
+	if p.initialDelayTimer != nil {
 		p.initialDelayTimer.Stop()
 		p.initialDelayTimer = nil
 	}
 
-	p.doProbe(fmt.Sprintf("%s/%s/internal", p.probeDeps.Name, p.namespace), p.externalClient, &p.externalResult)
+	p.doProbe(fmt.Sprintf("%s/%s/external", p.probeDeps.Name, p.namespace), p.externalClient, &p.externalResult)
 	if p.isHealthy(&p.externalResult) {
 		return p.scaleUp()
 	}
