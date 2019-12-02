@@ -26,6 +26,7 @@ import (
 	watch "k8s.io/apimachinery/pkg/watch"
 	componentbaseconfigv1alpha1 "k8s.io/component-base/config/v1alpha1"
 
+	"github.com/gardener/dependency-watchdog/pkg/multicontext"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -34,7 +35,7 @@ import (
 	"k8s.io/klog"
 )
 
-// NewController initializes a new K8s depencency-watchdog controller.
+// NewController initializes a new K8s dependency-watchdog controller with restarter.
 func NewController(clientset kubernetes.Interface,
 	sharedInformerFactory informers.SharedInformerFactory,
 	serviceDependants *ServiceDependants,
@@ -49,8 +50,7 @@ func NewController(clientset kubernetes.Interface,
 		stopCh:            stopCh,
 		serviceDependants: serviceDependants,
 		watchDuration:     watchDuration,
-		cancelFn:          make(map[string]context.CancelFunc),
-		contextCh:         make(chan contextMessage),
+		Multicontext:      multicontext.New(),
 	}
 	componentbaseconfigv1alpha1.RecommendedDefaultLeaderElectionConfiguration(&c.LeaderElection)
 	c.endpointInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -80,6 +80,22 @@ func (c *Controller) enqueueEndpoint(obj interface{}) {
 		utilruntime.HandleError(err)
 		return
 	}
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		klog.Errorf("Error parsing key %s: %s", key, err)
+		return
+	}
+
+	// Skip resources from other namespaces if namespace is specified explicitly in the configuration.
+	if c.serviceDependants.Namespace != "" && c.serviceDependants.Namespace != namespace {
+		return
+	}
+
+	// Skip if the resource is not found in the services configured as to be watched.
+	if _, ok := c.serviceDependants.Services[name]; !ok {
+		return
+	}
+
 	c.workqueue.AddRateLimited(key)
 }
 
@@ -96,9 +112,8 @@ func (c *Controller) Run(threadiness int) error {
 
 	klog.Info("Starting informer factory.")
 	c.informerFactory.Start(c.stopCh)
-	// Start listening to context start messages
-	klog.Info("Starting to listen for context start messages")
-	go c.handleContextMessages(c.stopCh)
+
+	go c.Multicontext.Start(c.stopCh)
 
 	// Wait for the caches to be synced before starting workers
 	klog.Info("Waiting for informer caches to sync")
@@ -117,35 +132,6 @@ func (c *Controller) Run(threadiness int) error {
 	klog.Info("Shutting down workers")
 
 	return nil
-}
-
-// handleContextMessages will close any old context associated with the key from the message
-// and register the new cancel function for the future.
-// This is to ensure that there is only one active context for any given key.
-func (c *Controller) handleContextMessages(stopCh <-chan struct{}) {
-	defer close(c.contextCh)
-
-	for {
-		select {
-		case <-stopCh:
-			klog.Info("Received stop signal. Stopping the handling of context messages.")
-			return
-		case cmsg := <-c.contextCh:
-			oldCancelFn, ok := c.cancelFn[cmsg.key]
-			if cmsg.cancelFn != nil {
-				klog.Infof("Registering the context for the key: %s", cmsg.key)
-				c.cancelFn[cmsg.key] = cmsg.cancelFn
-			} else {
-				klog.Infof("Unregistering the context for the key: %s", cmsg.key)
-				delete(c.cancelFn, cmsg.key)
-			}
-
-			if ok && oldCancelFn != nil {
-				klog.Infof("Cancelling older context for the key: %s", cmsg.key)
-				oldCancelFn()
-			}
-		}
-	}
 }
 
 // runWorker is a long-running function that will continually call the
@@ -201,7 +187,7 @@ func (c *Controller) processEndpoint(key string) error {
 		utilruntime.HandleError(fmt.Errorf("invalid resource key: %s", key))
 		return nil
 	}
-	if namespace != c.serviceDependants.Namespace {
+	if c.serviceDependants.Namespace != "" && namespace != c.serviceDependants.Namespace {
 		return nil
 	}
 
@@ -211,6 +197,11 @@ func (c *Controller) processEndpoint(key string) error {
 		// processing.
 		if apierrors.IsNotFound(err) {
 			utilruntime.HandleError(fmt.Errorf("endpoint '%s' in work queue no longer exists", key))
+			// Cancel any existing context to pro-actively avoid shooting pods accidentally.
+			c.ContextCh <- &multicontext.ContextMessage{
+				Key:      key,
+				CancelFn: nil,
+			}
 			return nil
 		}
 		return err
@@ -223,9 +214,9 @@ func (c *Controller) processEndpoint(key string) error {
 	if !IsReadyEndpointPresentInSubsets(ep.Subsets) {
 		klog.Infof("Endpoint %s does not have any endpoint subset. Skipping pod terminations.", ep.Name)
 		// Cancel any existing context to pro-actively avoid shooting pods accidentally.
-		c.contextCh <- contextMessage{
-			key:      key,
-			cancelFn: nil,
+		c.ContextCh <- &multicontext.ContextMessage{
+			Key:      key,
+			CancelFn: nil,
 		}
 		return nil
 	}
@@ -235,17 +226,17 @@ func (c *Controller) processEndpoint(key string) error {
 		ctx, cancelFn := context.WithTimeout(context.Background(), c.watchDuration)
 		defer cancelFn()
 
-		c.contextCh <- contextMessage{
-			key:      key,
-			cancelFn: cancelFn,
+		c.ContextCh <- &multicontext.ContextMessage{
+			Key:      key,
+			CancelFn: cancelFn,
 		}
 
 		c.shootPodsIfNecessary(ctx, namespace, srv)
 		select {
 		case <-ctx.Done():
-			c.contextCh <- contextMessage{
-				key:      key,
-				cancelFn: nil,
+			c.ContextCh <- &multicontext.ContextMessage{
+				Key:      key,
+				CancelFn: nil,
 			}
 			return
 		case <-c.stopCh:
