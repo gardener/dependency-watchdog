@@ -50,6 +50,8 @@ func init() {
 }
 
 func runProbe(cmd *cobra.Command, args []string) {
+	klog.V(5).Info("Running probe command")
+
 	// set up signals so we handle the first shutdown signal gracefully
 	stopCh := setupSignalHandler()
 	deps, err := scaler.LoadProbeDependantsListFile(configFile)

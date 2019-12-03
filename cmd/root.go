@@ -100,12 +100,12 @@ func init() {
 	rootCmd.Flags().StringVar(&strWatchDuration, "watch-duration", defaultWatchDuration, "The duration to watch dependencies after the service is ready.")
 
 	klog.InitFlags(nil)
-	flag.Parse()
+	flag.Set("logtostderr", "true")
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 }
 
 func runRoot(cmd *cobra.Command, args []string) {
-	flag.Set("logtostderr", "true")
+	klog.V(5).Info("Running root command")
 
 	watchDuration, err := time.ParseDuration(strWatchDuration)
 	if err != nil {
