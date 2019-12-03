@@ -48,6 +48,7 @@ if [[ "${SOURCE_PATH}" != *"src/${REPOSITORY}" ]]; then
   export GOPATH="${SOURCE_PATH}/tmp"
   export GOBIN="${SOURCE_PATH}/tmp/bin"
   export PATH="${GOBIN}:${PATH}"
+  export GO111MODULE=on
 fi
 
 # Install Ginkgo (test framework) to be able to execute the tests.
