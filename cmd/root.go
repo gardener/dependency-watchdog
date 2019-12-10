@@ -203,9 +203,9 @@ func setupSignalHandler() (stopCh <-chan struct{}) {
 	c := make(chan os.Signal, 2)
 	signal.Notify(c, shutdownSignals...)
 	go func() {
-		<-c
+		klog.Info("Received signal %s. Stopping the controller.", <-c)
 		close(stop)
-		<-c
+		klog.Info("Received signal %s. Exiting directly.", <-c)
 		os.Exit(1) // second signal. Exit directly.
 	}()
 

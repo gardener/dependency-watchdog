@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/scale"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
@@ -47,20 +48,20 @@ const (
 )
 
 type prober struct {
-	namespace         string
-	mapper            apimeta.RESTMapper
-	secretInterface   typedcorev1.SecretInterface
-	scaleInterface    scale.ScaleInterface
-	probeDeps         *probeDependants
-	initialDelay      time.Duration
-	initialDelayTimer *time.Timer
-	successThreshold  int32
-	failureThreshold  int32
-	internalClient    kubernetes.Interface
-	externalClient    kubernetes.Interface
-	internalResult    probeResult
-	externalResult    probeResult
-	resultCh          chan *probeResult
+	namespace            string
+	mapper               apimeta.RESTMapper
+	secretInterface      typedcorev1.SecretInterface
+	scaleInterface       scale.ScaleInterface
+	probeDeps            *probeDependants
+	initialDelay         time.Duration
+	initialDelayTimer    *time.Timer
+	successThreshold     int32
+	failureThreshold     int32
+	internalClientConfig *rest.Config
+	externalClientConfig *rest.Config
+	internalResult       probeResult
+	externalResult       probeResult
+	resultCh             chan *probeResult
 }
 
 type probeResult struct {
@@ -68,7 +69,7 @@ type probeResult struct {
 	resultRun int32
 }
 
-func (p *prober) getClientFromSecret(secretName string) (kubernetes.Interface, error) {
+func (p *prober) getClientConfigFromSecret(secretName string) (*rest.Config, error) {
 	var (
 		secret *corev1.Secret
 		err    error
@@ -105,7 +106,7 @@ func (p *prober) getClientFromSecret(secretName string) (kubernetes.Interface, e
 
 	config.Timeout = toDuration(p.probeDeps.Probe.TimeoutSeconds, defaultTimeoutSeconds)
 
-	return kubernetes.NewForConfig(config)
+	return config, nil
 }
 
 // runWorker is a long-running function that will continually call the
@@ -137,11 +138,11 @@ func (p *prober) run(stopCh <-chan struct{}) error {
 	}
 
 	var err error
-	p.internalClient, err = p.getClientFromSecret(p.probeDeps.Probe.Internal.KubeconfigSecretName)
+	p.internalClientConfig, err = p.getClientConfigFromSecret(p.probeDeps.Probe.Internal.KubeconfigSecretName)
 	if err != nil {
 		return err
 	}
-	p.externalClient, err = p.getClientFromSecret(p.probeDeps.Probe.External.KubeconfigSecretName)
+	p.externalClientConfig, err = p.getClientConfigFromSecret(p.probeDeps.Probe.External.KubeconfigSecretName)
 	if err != nil {
 		return err
 	}
@@ -202,7 +203,9 @@ func (p *prober) isUnhealthy(pr *probeResult) bool {
 // 6. If the external probe is HEALTHY then the dependants are scaled up.
 // 7. If the external probe is UNHEALTHY then the dependants are scaled down.
 func (p *prober) probe() error {
-	p.doProbe(fmt.Sprintf("%s/%s/internal", p.probeDeps.Name, p.namespace), p.internalClient, &p.internalResult)
+	if err := p.doProbe(fmt.Sprintf("%s/%s/internal", p.probeDeps.Name, p.namespace), p.internalClientConfig, &p.internalResult); err != nil {
+		return err
+	}
 	if p.isUnhealthy(&p.internalResult) {
 		klog.V(3).Infof("%s/%s/internal is unhealthy. Activating initial delay.", p.probeDeps.Name, p.namespace)
 		if p.initialDelayTimer != nil {
@@ -222,7 +225,9 @@ func (p *prober) probe() error {
 		p.initialDelayTimer = nil
 	}
 
-	p.doProbe(fmt.Sprintf("%s/%s/external", p.probeDeps.Name, p.namespace), p.externalClient, &p.externalResult)
+	if err := p.doProbe(fmt.Sprintf("%s/%s/external", p.probeDeps.Name, p.namespace), p.externalClientConfig, &p.externalResult); err != nil {
+		return err
+	}
 	if p.isHealthy(&p.externalResult) {
 		return p.scaleUp()
 	}
@@ -233,8 +238,15 @@ func (p *prober) probe() error {
 	return nil
 }
 
-func (p *prober) doProbe(msg string, client kubernetes.Interface, pr *probeResult) {
-	var err error
+// doProbe probes the apiserver using the clientConfig and updates the probeResult.
+// It returns error only if the kubernetes client could not be constructed from the clientConfig.
+func (p *prober) doProbe(msg string, clientConfig *rest.Config, pr *probeResult) error {
+	client, err := kubernetes.NewForConfig(clientConfig)
+	if err != nil {
+		klog.Errorf("%s: failed to create client from config: %s", msg, err)
+		return err
+	}
+
 	for i := 0; i < maxRetries; i++ {
 		if _, err = client.Discovery().ServerVersion(); err == nil {
 			klog.V(4).Infof("%s: probe succeeded", msg)
@@ -252,7 +264,8 @@ func (p *prober) doProbe(msg string, client kubernetes.Interface, pr *probeResul
 		pr.resultRun++
 	}
 
-	klog.V(3).Infof("%s: probe result: %#v", msg, pr)
+	klog.V(4).Infof("%s: probe result: %#v", msg, pr)
+	return nil
 }
 
 func retry(msg string, fn func() error, retries int) error {
@@ -268,6 +281,9 @@ func retry(msg string, fn func() error, retries int) error {
 	return err
 }
 
+// scaleTo tries to scale the dependants to replicas if checkFn approves.
+// It returns non-nil error only some non-recoverable error occurred that
+// is unlikely to be resolved by simple retries.
 func (p *prober) scaleTo(msg string, replicas int32, checkFn func(oReplicas, nReplicas int32) bool) error {
 	klog.V(4).Infof("%s: replicas=%d: in progress...", msg, replicas)
 
@@ -309,7 +325,7 @@ func (p *prober) scaleTo(msg string, replicas int32, checkFn func(oReplicas, nRe
 
 		if err == nil {
 			if !checkFn(s.Spec.Replicas, replicas) {
-				klog.V(3).Infof("%s: skipped because desired=%d and current=%d", msg, replicas, s.Spec.Replicas)
+				klog.V(4).Infof("%s: skipped because desired=%d and current=%d", msg, replicas, s.Spec.Replicas)
 				continue
 			}
 
