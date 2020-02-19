@@ -51,6 +51,12 @@ func init() {
 
 func runProbe(cmd *cobra.Command, args []string) {
 	klog.V(5).Info("Running probe command")
+	klog.V(2).Infoln("Running probe command with the following parameters:")
+	klog.V(2).Infoln("config-file: ", configFile)
+	klog.V(2).Infoln("kubeconfig: ", kubeconfig)
+	klog.V(2).Infoln("master: ", deployedNamespace)
+	klog.V(2).Infoln("deployed-namespace: ", masterURL)
+	klog.V(2).Infoln("concurrent-syncs: ", concurrentSyncs)
 
 	// set up signals so we handle the first shutdown signal gracefully
 	stopCh := setupSignalHandler()
@@ -58,6 +64,9 @@ func runProbe(cmd *cobra.Command, args []string) {
 	if err != nil {
 		klog.Fatalf("Error parsing config file: %s", err.Error())
 	}
+
+	configContent, err := scaler.EncodeConfigFile(deps)
+	klog.V(2).Infof("Probe configuration: \n %s", configContent)
 
 	config, err := clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
 	if err != nil {
