@@ -38,3 +38,12 @@ func DecodeConfigFile(data []byte) (*ProbeDependantsList, error) {
 	}
 	return dependants, nil
 }
+
+// EncodeConfigFile encodes the ProbeDependantsList objects into a string.
+func EncodeConfigFile(dependants *ProbeDependantsList) (string, error) {
+	data, err := yaml.Marshal(dependants)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}

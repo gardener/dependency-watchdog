@@ -106,6 +106,13 @@ func init() {
 
 func runRoot(cmd *cobra.Command, args []string) {
 	klog.V(5).Info("Running root command")
+	klog.V(2).Infoln("Running root command with the following parameters:")
+	klog.V(2).Infoln("config-file: ", configFile)
+	klog.V(2).Infoln("kubeconfig: ", kubeconfig)
+	klog.V(2).Infoln("master: ", deployedNamespace)
+	klog.V(2).Infoln("deployed-namespace: ", masterURL)
+	klog.V(2).Infoln("concurrent-syncs: ", concurrentSyncs)
+	klog.V(2).Infoln("watch-duration: ", strWatchDuration)
 
 	watchDuration, err := time.ParseDuration(strWatchDuration)
 	if err != nil {
@@ -118,6 +125,9 @@ func runRoot(cmd *cobra.Command, args []string) {
 	if err != nil {
 		klog.Fatalf("Error parsing config file: %s", err.Error())
 	}
+
+	configContent, err := restarter.EncodeConfigFile(deps)
+	klog.V(2).Infof("Endpoints configuration: \n %s", configContent)
 
 	config, err := clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
 	if err != nil {

@@ -42,6 +42,15 @@ func DecodeConfigFile(data []byte) (*ServiceDependants, error) {
 	return dependants, nil
 }
 
+// EncodeConfigFile encodes the ServiceDependants objects into a string.
+func EncodeConfigFile(dependants *ServiceDependants) (string, error) {
+	data, err := yaml.Marshal(dependants)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
 // IsPodAvailable returns true if a pod is available; false otherwise.
 // Precondition for an available pod is that it must be ready. On top
 // of that, there are two cases when a pod can be considered available:
