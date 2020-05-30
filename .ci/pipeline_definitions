@@ -20,11 +20,11 @@ dependency-watchdog:
                 build: ~
     steps:
       check:
-        image: 'golang:1.12.0'
+        image: 'golang:1.13.11'
       test:
-        image: 'golang:1.12.0'
+        image: 'golang:1.13.11'
       build:
-        image: 'golang:1.12.0'
+        image: 'golang:1.13.11'
         output_dir: 'binary'
 
   jobs:
