@@ -45,7 +45,8 @@ func New() *Multicontext {
 // and register the new cancel function for the future.
 // This is to ensure that there is only one active context for any given key.
 func (m *Multicontext) Start(stopCh <-chan struct{}) {
-	defer close(m.ContextCh)
+	// m.ContextCh is never closed to avoid the possibility of senders sending to a closed channel
+	// m.ContextCh is anyway not the channel to co-ordinate closing of goroutines.
 
 	klog.Info("Starting to listen for context start messages")
 	for {

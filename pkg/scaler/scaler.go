@@ -21,11 +21,11 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	componentbaseconfigv1alpha1 "k8s.io/component-base/config/v1alpha1"
 
 	"github.com/gardener/dependency-watchdog/pkg/multicontext"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
@@ -49,8 +49,6 @@ func NewController(clientset kubernetes.Interface,
 		mapper:              mapper,
 		scalesGetter:        scalesGetter,
 		informerFactory:     sharedInformerFactory,
-		nsInformer:          sharedInformerFactory.Core().V1().Namespaces().Informer(),
-		nsLister:            sharedInformerFactory.Core().V1().Namespaces().Lister(),
 		secretsInformer:     sharedInformerFactory.Core().V1().Secrets().Informer(),
 		secretsLister:       sharedInformerFactory.Core().V1().Secrets().Lister(),
 		workqueue:           workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Namespaces"),
@@ -59,20 +57,6 @@ func NewController(clientset kubernetes.Interface,
 		Multicontext:        multicontext.New(),
 	}
 	componentbaseconfigv1alpha1.RecommendedDefaultLeaderElectionConfiguration(&c.LeaderElection)
-	c.nsInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: c.enqueueProbe,
-		UpdateFunc: func(old, new interface{}) {
-			newNS := new.(*v1.Namespace)
-			oldNS := old.(*v1.Namespace)
-			if newNS.ResourceVersion == oldNS.ResourceVersion {
-				// Periodic resync will send update events for all known Deployments.
-				// Two different versions of the same Deployment will always have different RVs.
-				return
-			}
-			c.enqueueProbe(new)
-		},
-		DeleteFunc: c.enqueueProbe,
-	})
 	c.secretsInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: c.enqueueProbe,
 		UpdateFunc: func(old, new interface{}) {
@@ -87,7 +71,6 @@ func NewController(clientset kubernetes.Interface,
 		},
 		DeleteFunc: c.enqueueProbe,
 	})
-	c.hasNamespacesSynced = c.nsInformer.HasSynced
 	c.hasSecretsSynced = c.secretsInformer.HasSynced
 	return c
 }
@@ -103,10 +86,35 @@ func (c *Controller) enqueueProbe(obj interface{}) {
 	}
 
 	ns := meta.GetNamespace()
-	if ns == "" {
-		ns = meta.GetName()
+	name := meta.GetName()
+
+	if c.probeDependantsList.Namespace != "" && ns != c.probeDependantsList.Namespace {
+		// skip reconciling other namespaces if a namespace was already configured
+		return
 	}
-	c.workqueue.AddRateLimited(ns)
+
+	var found = false
+	for i := range c.probeDependantsList.Probes {
+		var probe = &(c.probeDependantsList.Probes[i])
+		if probe.Probe == nil {
+			continue
+		}
+
+		if probe.Probe.External != nil && probe.Probe.External.KubeconfigSecretName == name {
+			found = true
+			break
+		}
+
+		if probe.Probe.Internal != nil && probe.Probe.Internal.KubeconfigSecretName == name {
+			found = true
+			break
+		}
+	}
+
+	// Enqueue for reconciliation only if the secret name is one of the names configured.
+	if found {
+		c.workqueue.AddRateLimited(ns)
+	}
 }
 
 // Run will set up the handlers for the probes we are interested in,
@@ -125,7 +133,7 @@ func (c *Controller) Run(threadiness int) error {
 
 	// Wait for the caches to be synced before starting workers
 	klog.Info("Waiting for informer caches to sync")
-	if ok := cache.WaitForCacheSync(c.stopCh, c.hasNamespacesSynced, c.hasSecretsSynced); !ok {
+	if ok := cache.WaitForCacheSync(c.stopCh, c.hasSecretsSynced); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
@@ -187,13 +195,6 @@ func (c *Controller) processNextWorkItem() bool {
 	return true
 }
 
-func (c *Controller) cancelNamespace(ns string) {
-	c.Multicontext.ContextCh <- &multicontext.ContextMessage{
-		Key:      ns,
-		CancelFn: nil,
-	}
-}
-
 func (c *Controller) processNamespace(key string) error {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if namespace == "" {
@@ -201,48 +202,107 @@ func (c *Controller) processNamespace(key string) error {
 	}
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("invalid resource key: %s", key))
-		return nil
+		return err
 	}
 	if c.probeDependantsList.Namespace != "" && namespace != c.probeDependantsList.Namespace {
 		return nil
 	}
 
-	// Cancel earlier probes
-	c.cancelNamespace(namespace)
-
-	ns, err := c.client.CoreV1().Namespaces().Get(namespace, metav1.GetOptions{})
-	if err != nil || ns == nil || ns.DeletionTimestamp != nil {
-		klog.Infof("Error getting namespace %s. Stopping probes for it. %s", namespace, err)
-		return nil
-	}
-
-	klog.Infof("Starting probes for namespace: %s", namespace)
-	ctx, cancelFn := context.WithCancel(context.Background())
-	c.Multicontext.ContextCh <- &multicontext.ContextMessage{
-		Key:      namespace,
-		CancelFn: cancelFn,
-	}
-
 	for i := range c.probeDependantsList.Probes {
 		probeDeps := &c.probeDependantsList.Probes[i]
 
-		p := &prober{
-			namespace:       namespace,
-			mapper:          c.mapper,
-			secretInterface: c.client.CoreV1().Secrets(namespace),
-			scaleInterface:  c.scalesGetter.Scales(namespace),
-			probeDeps:       probeDeps,
-		}
-
-		go func() {
-			klog.Infof("Starting the probe in the namespace %s: %v", namespace, p.probeDeps)
-			err := p.run(ctx.Done())
-			if err != nil {
-				klog.Errorf("Probe for namespace %s returned error: %s, %v", namespace, err, p.probeDeps)
+		go func(ns string, pd *probeDependants) {
+			p := &prober{
+				namespace:      ns,
+				mapper:         c.mapper,
+				secretLister:   c.secretsLister,
+				scaleInterface: c.scalesGetter.Scales(ns),
+				probeDeps:      probeDeps,
 			}
-			klog.Infof("Finished the probe in the namespace %s: %v", namespace, p.probeDeps)
-		}()
+			err := p.tryAndRun(func() <-chan struct{} {
+				klog.Infof("Starting the probe in the namespace %s: %v", ns, pd)
+				ctx, cancelFn := c.newContext(ns, pd)
+
+				// Register the context's cancelFn. This also cancels the previous context if any.
+				c.Multicontext.ContextCh <- &multicontext.ContextMessage{
+					Key:      c.getKey(ns, pd),
+					CancelFn: cancelFn,
+				}
+
+				c.registerProber(p)
+				return ctx.Done()
+			})
+
+			if err == nil {
+				klog.Infof("Finished the probe in the namespace %s: %v", ns, pd)
+			} else if apierrors.IsAlreadyExists(err) {
+				klog.V(4).Infof("Probe already exists for the namespace %s: %v", ns, pd)
+			} else {
+				klog.Errorf("Probe for namespace %s returned error: %s, %v", ns, err, pd)
+			}
+		}(namespace, probeDeps)
 	}
 
 	return nil
+}
+
+func (c *Controller) getKey(ns string, probeDeps *probeDependants) string {
+	return ns + "/" + probeDeps.Name
+}
+
+// registerProber registers the prober in the probers map, replacing any pre-existing registration.
+func (c *Controller) registerProber(p *prober) *prober {
+	var (
+		ns        = p.namespace
+		probeDeps = p.probeDeps
+	)
+
+	if probeDeps == nil {
+		return nil
+	}
+
+	key := c.getKey(ns, probeDeps)
+
+	c.mux.Lock() // serialize access to c.probers
+	defer c.mux.Unlock()
+
+	if c.probers == nil {
+		c.probers = make(map[string]*prober)
+	}
+
+	pb, ok := c.probers[key]
+	if ok && pb != nil {
+		return pb
+	}
+
+	pb = &prober{
+		namespace:      ns,
+		mapper:         c.mapper,
+		secretLister:   c.secretsLister,
+		scaleInterface: c.scalesGetter.Scales(ns),
+		probeDeps:      probeDeps,
+	}
+	c.probers[key] = pb
+	return pb
+}
+
+func (c *Controller) deleteProber(key string) {
+	c.mux.Lock() // serialize access to c.probers
+	defer c.mux.Unlock()
+
+	if c.probers == nil {
+		return
+	}
+
+	delete(c.probers, key)
+}
+
+func (c *Controller) newContext(ns string, probeDeps *probeDependants) (context.Context, context.CancelFunc) {
+	key := c.getKey(ns, probeDeps)
+
+	ctx, cancelFn := context.WithCancel(context.Background())
+	return ctx, func() {
+		defer cancelFn()
+		c.deleteProber(key)
+	}
 }
