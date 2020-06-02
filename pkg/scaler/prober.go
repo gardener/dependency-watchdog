@@ -15,9 +15,13 @@
 package scaler
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
+
+	"crypto/sha256"
 
 	autoscalingapi "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -26,7 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
-	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	listerv1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/scale"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
@@ -49,13 +53,15 @@ const (
 type prober struct {
 	namespace         string
 	mapper            apimeta.RESTMapper
-	secretInterface   typedcorev1.SecretInterface
+	secretLister      listerv1.SecretLister
 	scaleInterface    scale.ScaleInterface
 	probeDeps         *probeDependants
 	initialDelay      time.Duration
 	initialDelayTimer *time.Timer
 	successThreshold  int32
 	failureThreshold  int32
+	internalSHA       []byte
+	externalSHA       []byte
 	internalClient    kubernetes.Interface
 	externalClient    kubernetes.Interface
 	internalResult    probeResult
@@ -68,16 +74,20 @@ type probeResult struct {
 	resultRun int32
 }
 
-func (p *prober) getClientFromSecret(secretName string) (kubernetes.Interface, error) {
+// getClientFromSecret constructs a Kubernetes client based on the supplied secret and
+// return it along with the SHA256 checksum of the kubeconfig in the secret
+// but only if the SHA256 checksum of the kubeconfig in the secret differs from oldSHA.
+func (p *prober) getClientFromSecret(secretName string, oldSHA []byte) (kubernetes.Interface, []byte, error) {
 	var (
 		secret *corev1.Secret
 		err    error
 	)
 
+	snl := p.secretLister.Secrets(p.namespace)
 	for i := 0; i < maxRetries; i++ {
-		secret, err = p.secretInterface.Get(secretName, metav1.GetOptions{})
+		secret, err = snl.Get(secretName)
 		if apierrors.IsNotFound(err) {
-			return nil, err
+			return nil, nil, err
 		}
 		if err == nil {
 			break
@@ -85,33 +95,43 @@ func (p *prober) getClientFromSecret(secretName string) (kubernetes.Interface, e
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	kubeconfig := secret.Data["kubeconfig"]
 	if kubeconfig == nil {
-		return nil, errors.New("Invalid empry kubeconfig")
+		return nil, nil, errors.New("Invalid empty kubeconfig")
+	}
+
+	newSHAArr := (sha256.Sum256(kubeconfig))
+	newSHA := newSHAArr[:]
+	if reflect.DeepEqual(oldSHA, newSHA) {
+		return nil, nil, apierrors.NewAlreadyExists(schema.GroupResource{Resource: "secret"}, secretName)
 	}
 
 	clientConfig, err := clientcmd.NewClientConfigFromBytes(kubeconfig)
 	if err != nil {
-		return nil, err
+		return nil, newSHA, err
 	}
 
 	config, err := clientConfig.ClientConfig()
 	if err != nil {
-		return nil, err
+		return nil, newSHA, err
 	}
 
 	config.Timeout = toDuration(p.probeDeps.Probe.TimeoutSeconds, defaultTimeoutSeconds)
 
-	return kubernetes.NewForConfig(config)
+	client, err := kubernetes.NewForConfig(config)
+	return client, newSHA, err
 }
 
-// runWorker is a long-running function that will continually call the
-// processNextWorkItem function in order to read and process a message on the
-// workqueue.
-func (p *prober) run(stopCh <-chan struct{}) error {
+// tryAndRun runs a fresh prober only if either of the internal or external secrets changed.
+// It updates the client and SHA checksums in the prober if a fresh prober was indeed run.
+// It calls the prepareRun callback function to stop previous prober if any and to create a
+// fresh context or stop channel for the fresh prober.
+// prepareRun is called only if a fresh prober is run.
+// It is a blocking function.
+func (p *prober) tryAndRun(prepareRun func() (stopCh <-chan struct{})) error {
 	if p == nil || p.probeDeps == nil || p.probeDeps.Probe == nil {
 		return errors.New("Invalid empty probe dependants configuration")
 	}
@@ -122,6 +142,32 @@ func (p *prober) run(stopCh <-chan struct{}) error {
 		return errors.New("Invalid empty internal probe configuration")
 	}
 
+	internalClient, internalSHA, internalErr := p.getClientFromSecret(p.probeDeps.Probe.Internal.KubeconfigSecretName, p.internalSHA)
+	externalClient, externalSHA, externalErr := p.getClientFromSecret(p.probeDeps.Probe.External.KubeconfigSecretName, p.externalSHA)
+
+	// Run a fresh prober goroutine if any one of the secrets changed
+	if internalErr == nil || externalErr == nil {
+		var stopCh = prepareRun()
+
+		// prepareRun should have stopped previous prober goroutine.
+		// So, there is no need for any synchronization here.
+		p.internalClient = internalClient
+		p.internalSHA = internalSHA
+		p.externalClient = externalClient
+		p.externalSHA = externalSHA
+
+		return p.run(stopCh)
+	}
+
+	if internalErr != nil {
+		return internalErr
+	}
+
+	return externalErr
+}
+
+// run actually runs the prober logic. It is a blocking function. It should be called only via tryAndRun.
+func (p *prober) run(stopCh <-chan struct{}) error {
 	p.initialDelay = toDuration(p.probeDeps.Probe.InitialDelaySeconds, defaultInitialDelaySeconds)
 
 	if p.probeDeps.Probe.SuccessThreshold != nil {
@@ -135,22 +181,6 @@ func (p *prober) run(stopCh <-chan struct{}) error {
 	} else {
 		p.failureThreshold = defaultFailureThreshold
 	}
-
-	var err error
-	p.internalClient, err = p.getClientFromSecret(p.probeDeps.Probe.Internal.KubeconfigSecretName)
-	if err != nil {
-		return err
-	}
-	p.externalClient, err = p.getClientFromSecret(p.probeDeps.Probe.External.KubeconfigSecretName)
-	if err != nil {
-		return err
-	}
-
-	if p.resultCh != nil {
-		close(p.resultCh)
-	}
-
-	p.resultCh = make(chan *probeResult)
 
 	ticker := time.NewTicker(toDuration(p.probeDeps.Probe.PeriodSeconds, defaultPeriodSeconds))
 	defer ticker.Stop()
@@ -252,7 +282,7 @@ func (p *prober) doProbe(msg string, client kubernetes.Interface, pr *probeResul
 		pr.resultRun++
 	}
 
-	klog.V(3).Infof("%s: probe result: %#v", msg, pr)
+	klog.V(4).Infof("%s: probe result: %#v", msg, pr)
 }
 
 func retry(msg string, fn func() error, retries int) error {
@@ -271,6 +301,7 @@ func retry(msg string, fn func() error, retries int) error {
 func (p *prober) scaleTo(msg string, replicas int32, checkFn func(oReplicas, nReplicas int32) bool) error {
 	klog.V(4).Infof("%s: replicas=%d: in progress...", msg, replicas)
 
+	timeout := toDuration(p.probeDeps.Probe.TimeoutSeconds, defaultTimeoutSeconds)
 	for _, dsd := range p.probeDeps.DependantScales {
 		if dsd == nil {
 			continue
@@ -301,7 +332,9 @@ func (p *prober) scaleTo(msg string, replicas int32, checkFn func(oReplicas, nRe
 		)
 		for _, m := range ms {
 			gr = m.Resource.GroupResource()
-			s, err = p.scaleInterface.Get(gr, ds.Name)
+			ctx, cancelFn := context.WithTimeout(context.Background(), timeout)
+			s, err = p.scaleInterface.Get(ctx, gr, ds.Name, metav1.GetOptions{})
+			cancelFn()
 			if err != nil {
 				klog.Errorf("%s: error getting %v/%s: %s", msg, gr, ds.Name, err)
 			}
@@ -309,7 +342,7 @@ func (p *prober) scaleTo(msg string, replicas int32, checkFn func(oReplicas, nRe
 
 		if err == nil {
 			if !checkFn(s.Spec.Replicas, replicas) {
-				klog.V(3).Infof("%s: skipped because desired=%d and current=%d", msg, replicas, s.Spec.Replicas)
+				klog.V(4).Infof("%s: skipped because desired=%d and current=%d", msg, replicas, s.Spec.Replicas)
 				continue
 			}
 
@@ -330,13 +363,17 @@ func (p *prober) getScalingFn(gr schema.GroupResource, s *autoscalingapi.Scale, 
 	return func() error {
 		s = s.DeepCopy()
 		s.Spec.Replicas = replicas
-		_, err := p.scaleInterface.Update(gr, s)
+		timeout := toDuration(p.probeDeps.Probe.TimeoutSeconds, defaultTimeoutSeconds)
+		ctx, cancelFn := context.WithTimeout(context.Background(), timeout)
+		defer cancelFn()
+
+		_, err := p.scaleInterface.Update(ctx, gr, s, metav1.UpdateOptions{})
 		return err
 	}
 }
 
 func (p *prober) scaleDown() error {
-	return p.scaleTo(fmt.Sprintf("Scaling up %s/%s", p.probeDeps.Name, p.namespace), 0, func(o, n int32) bool {
+	return p.scaleTo(fmt.Sprintf("Scaling down %s/%s", p.probeDeps.Name, p.namespace), 0, func(o, n int32) bool {
 		return o > n // scale to at most n
 	})
 }

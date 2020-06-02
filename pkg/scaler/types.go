@@ -15,6 +15,8 @@
 package scaler
 
 import (
+	"sync"
+
 	"github.com/gardener/dependency-watchdog/pkg/multicontext"
 	autoscaling "k8s.io/api/autoscaling/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -33,15 +35,14 @@ type Controller struct {
 	mapper              apimeta.RESTMapper
 	scalesGetter        scale.ScalesGetter
 	informerFactory     informers.SharedInformerFactory
-	nsInformer          cache.SharedIndexInformer
-	nsLister            listerv1.NamespaceLister
 	secretsInformer     cache.SharedIndexInformer
 	secretsLister       listerv1.SecretLister
 	workqueue           workqueue.RateLimitingInterface
-	hasNamespacesSynced cache.InformerSynced
 	hasSecretsSynced    cache.InformerSynced
 	stopCh              <-chan struct{}
 	probeDependantsList *ProbeDependantsList
+	probers             map[string]*prober // the key is <namespace>/<probeDependents.Name>
+	mux                 sync.Mutex
 	*multicontext.Multicontext
 	// LeaderElection defines the configuration of leader election client.
 	LeaderElection componentbaseconfig.LeaderElectionConfiguration
