@@ -9,6 +9,7 @@ require (
 	github.com/imdario/mergo v0.3.8 // indirect
 	github.com/onsi/ginkgo v1.12.2
 	github.com/onsi/gomega v1.10.1
+	github.com/prometheus/client_golang v1.0.0
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5
 	golang.org/x/sys v0.0.0-20200523222454-059865788121 // indirect

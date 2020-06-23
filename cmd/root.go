@@ -20,12 +20,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/gardener/dependency-watchdog/pkg/restarter"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	v1 "k8s.io/api/core/v1"
@@ -44,6 +46,7 @@ import (
 const (
 	defaultWatchDuration   = "2m"
 	defaultConcurrentSyncs = 1
+	defaultPort            = 9643
 )
 
 var (
@@ -55,6 +58,9 @@ var (
 	dependencyWatchdogAgentName = "dependency-watchdog"
 	defaultSyncDuration         = 30 * time.Second
 	concurrentSyncs             = defaultConcurrentSyncs
+	qps                         float32
+	burst                       int
+	port                        int
 
 	onlyOneSignalHandler = make(chan struct{})
 	shutdownSignals      = []os.Signal{os.Interrupt, syscall.SIGTERM}
@@ -97,6 +103,9 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&deployedNamespace, "deployed-namespace", "default", "namespace into which the dependency-watchdog is deployed")
 	rootCmd.PersistentFlags().StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
 	rootCmd.PersistentFlags().IntVar(&concurrentSyncs, "concurrent-syncs", defaultConcurrentSyncs, "The number of workers performing reconcilation concurrently.")
+	rootCmd.PersistentFlags().Float32Var(&qps, "qps", rest.DefaultQPS, "Throttling QPS configuration for the client to host apiserver.")
+	rootCmd.PersistentFlags().IntVar(&burst, "burst", rest.DefaultBurst, "Throttling burst configuration for the client to host apiserver.")
+	rootCmd.PersistentFlags().IntVar(&port, "port", defaultPort, "The port on which health and prometheus metrics are exposed.")
 	rootCmd.Flags().StringVar(&strWatchDuration, "watch-duration", defaultWatchDuration, "The duration to watch dependencies after the service is ready.")
 
 	klog.InitFlags(nil)
@@ -113,6 +122,9 @@ func runRoot(cmd *cobra.Command, args []string) {
 	klog.V(2).Infoln("deployed-namespace: ", masterURL)
 	klog.V(2).Infoln("concurrent-syncs: ", concurrentSyncs)
 	klog.V(2).Infoln("watch-duration: ", strWatchDuration)
+	klog.V(2).Infoln("qps: ", qps)
+	klog.V(2).Infoln("burst: ", burst)
+	klog.V(2).Infoln("port: ", port)
 
 	watchDuration, err := time.ParseDuration(strWatchDuration)
 	if err != nil {
@@ -134,6 +146,9 @@ func runRoot(cmd *cobra.Command, args []string) {
 		klog.Fatalf("Error parsing kubeconfig file: %s", err.Error())
 	}
 
+	config.QPS = qps
+	config.Burst = burst
+
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		klog.Fatalf("Error creating k8s clientset: %s", err.Error())
@@ -151,7 +166,7 @@ func runRoot(cmd *cobra.Command, args []string) {
 	leaderElectionClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, "dependency-watchdog-election"))
 	recorder := createRecorder(leaderElectionClient)
 	run := func(ctx context.Context) {
-
+		go serveMetrics()
 		klog.Info("Starting endpoint controller.")
 		if err = controller.Run(concurrentSyncs); err != nil {
 			klog.Fatalf("Error running controller: %s", err.Error())
@@ -220,4 +235,9 @@ func setupSignalHandler() (stopCh <-chan struct{}) {
 	}()
 
 	return stop
+}
+
+func serveMetrics() error {
+	http.Handle("/metrics", promhttp.Handler())
+	return http.ListenAndServe(fmt.Sprintf("%s%d", ":", port), nil)
 }
