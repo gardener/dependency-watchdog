@@ -51,6 +51,8 @@ func NewController(clientset kubernetes.Interface,
 		informerFactory:     sharedInformerFactory,
 		secretsInformer:     sharedInformerFactory.Core().V1().Secrets().Informer(),
 		secretsLister:       sharedInformerFactory.Core().V1().Secrets().Lister(),
+		deploymentsInformer: sharedInformerFactory.Apps().V1().Deployments().Informer(),
+		deploymentsLister:   sharedInformerFactory.Apps().V1().Deployments().Lister(),
 		workqueue:           workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Namespaces"),
 		stopCh:              stopCh,
 		probeDependantsList: probeDependantsList,
@@ -72,6 +74,7 @@ func NewController(clientset kubernetes.Interface,
 		DeleteFunc: c.enqueueProbe,
 	})
 	c.hasSecretsSynced = c.secretsInformer.HasSynced
+	c.hasDeploymentsSynced = c.deploymentsInformer.HasSynced
 	return c
 }
 
@@ -133,7 +136,7 @@ func (c *Controller) Run(threadiness int) error {
 
 	// Wait for the caches to be synced before starting workers
 	klog.Info("Waiting for informer caches to sync")
-	if ok := cache.WaitForCacheSync(c.stopCh, c.hasSecretsSynced); !ok {
+	if ok := cache.WaitForCacheSync(c.stopCh, c.hasSecretsSynced, c.hasDeploymentsSynced); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
@@ -213,11 +216,12 @@ func (c *Controller) processNamespace(key string) error {
 
 		go func(ns string, pd *probeDependants) {
 			p := &prober{
-				namespace:      ns,
-				mapper:         c.mapper,
-				secretLister:   c.secretsLister,
-				scaleInterface: c.scalesGetter.Scales(ns),
-				probeDeps:      probeDeps,
+				namespace:         ns,
+				mapper:            c.mapper,
+				secretLister:      c.secretsLister,
+				deploymentsLister: c.deploymentsLister,
+				scaleInterface:    c.scalesGetter.Scales(ns),
+				probeDeps:         probeDeps,
 			}
 			err := p.tryAndRun(func() <-chan struct{} {
 				klog.Infof("Starting the probe in the namespace %s: %v", ns, pd)

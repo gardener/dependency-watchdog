@@ -57,6 +57,9 @@ func runProbe(cmd *cobra.Command, args []string) {
 	klog.V(2).Infoln("master: ", deployedNamespace)
 	klog.V(2).Infoln("deployed-namespace: ", masterURL)
 	klog.V(2).Infoln("concurrent-syncs: ", concurrentSyncs)
+	klog.V(2).Infoln("qps: ", qps)
+	klog.V(2).Infoln("burst: ", burst)
+	klog.V(2).Infoln("port: ", port)
 
 	// set up signals so we handle the first shutdown signal gracefully
 	stopCh := setupSignalHandler()
@@ -72,6 +75,9 @@ func runProbe(cmd *cobra.Command, args []string) {
 	if err != nil {
 		klog.Fatalf("Error parsing kubeconfig file: %s", err.Error())
 	}
+
+	config.QPS = qps
+	config.Burst = burst
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
@@ -94,7 +100,7 @@ func runProbe(cmd *cobra.Command, args []string) {
 	leaderElectionClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, "dependency-watchdog-election"))
 	recorder := createRecorder(leaderElectionClient)
 	run := func(ctx context.Context) {
-
+		go serveMetrics()
 		klog.Info("Starting endpoint controller.")
 		if err = controller.Run(concurrentSyncs); err != nil {
 			klog.Fatalf("Error running controller: %s", err.Error())

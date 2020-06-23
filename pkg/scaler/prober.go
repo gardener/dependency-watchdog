@@ -23,13 +23,17 @@ import (
 
 	"crypto/sha256"
 
+	"github.com/prometheus/client_golang/prometheus"
+	appsv1 "k8s.io/api/apps/v1"
 	autoscalingapi "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	listerappsv1 "k8s.io/client-go/listers/apps/v1"
 	listerv1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/scale"
 	"k8s.io/client-go/tools/clientcmd"
@@ -47,13 +51,18 @@ const (
 	defaultTimeoutSeconds      = 10
 	defaultSuccessThreshold    = 1
 	defaultFailureThreshold    = 3
-	maxRetries                 = 3
+	defaultMaxRetries          = 3
+	defaultJitterMaxFactor     = 0.2
+	defaultJitterSliding       = true
+
+	kindDeployment = "Deployment"
 )
 
 type prober struct {
 	namespace         string
 	mapper            apimeta.RESTMapper
 	secretLister      listerv1.SecretLister
+	deploymentsLister listerappsv1.DeploymentLister
 	scaleInterface    scale.ScaleInterface
 	probeDeps         *probeDependants
 	initialDelay      time.Duration
@@ -83,8 +92,10 @@ func (p *prober) getClientFromSecret(secretName string, oldSHA []byte) (kubernet
 		err    error
 	)
 
+	dwdGetTargetFromCacheTotal.With(prometheus.Labels{labelResource: resourceSecrets}).Inc()
+
 	snl := p.secretLister.Secrets(p.namespace)
-	for i := 0; i < maxRetries; i++ {
+	for i := 0; i < defaultMaxRetries; i++ {
 		secret, err = snl.Get(secretName)
 		if apierrors.IsNotFound(err) {
 			return nil, nil, err
@@ -182,24 +193,30 @@ func (p *prober) run(stopCh <-chan struct{}) error {
 		p.failureThreshold = defaultFailureThreshold
 	}
 
-	ticker := time.NewTicker(toDuration(p.probeDeps.Probe.PeriodSeconds, defaultPeriodSeconds))
-	defer ticker.Stop()
+	dwdProbersTotal.With(nil).Inc()
 
-	for {
+	var err error
+	d := toDuration(p.probeDeps.Probe.PeriodSeconds, defaultPeriodSeconds)
+	ctx, cancelFn := context.WithCancel(context.Background())
+	defer cancelFn()
+	wait.JitterUntilWithContext(ctx, func(ctx context.Context) {
 		select {
 		case <-stopCh:
-			return nil
-		case <-ticker.C:
+			return
+		default:
 			if p.initialDelayTimer != nil {
 				<-p.initialDelayTimer.C
 				p.initialDelayTimer.Stop()
 				p.initialDelayTimer = nil
 			}
-			if err := p.probe(); err != nil {
-				return err
+			if err = p.probe(ctx); err != nil {
+				cancelFn()
+				return
 			}
 		}
-	}
+	}, d, defaultJitterMaxFactor, defaultJitterSliding)
+
+	return err
 }
 
 func toDuration(seconds *int32, defaultSeconds int32) time.Duration {
@@ -217,6 +234,17 @@ func (p *prober) isUnhealthy(pr *probeResult) bool {
 	return pr.lastError != nil && pr.resultRun >= p.failureThreshold
 }
 
+func (p *prober) getProbeResultLabels(pr *probeResult) prometheus.Labels {
+	labels := prometheus.Labels{}
+	if pr.lastError != nil {
+		labels[labelResult] = resultFailure
+	} else {
+		labels[labelResult] = resultSuccess
+	}
+
+	return labels
+}
+
 // probe probes the internal and external endpoints scales the dependents
 // according to the following logic.
 // 1. A probe (internal or external) is considered HEALTHY only if the last
@@ -231,8 +259,10 @@ func (p *prober) isUnhealthy(pr *probeResult) bool {
 // no actions are taken on the dependants.
 // 6. If the external probe is HEALTHY then the dependants are scaled up.
 // 7. If the external probe is UNHEALTHY then the dependants are scaled down.
-func (p *prober) probe() error {
+func (p *prober) probe(ctx context.Context) error {
 	p.doProbe(fmt.Sprintf("%s/%s/internal", p.probeDeps.Name, p.namespace), p.internalClient, &p.internalResult)
+	dwdInternalProbesTotal.With(p.getProbeResultLabels(&p.internalResult)).Inc()
+
 	if p.isUnhealthy(&p.internalResult) {
 		klog.V(3).Infof("%s/%s/internal is unhealthy. Activating initial delay.", p.probeDeps.Name, p.namespace)
 		if p.initialDelayTimer != nil {
@@ -253,18 +283,23 @@ func (p *prober) probe() error {
 	}
 
 	p.doProbe(fmt.Sprintf("%s/%s/external", p.probeDeps.Name, p.namespace), p.externalClient, &p.externalResult)
+	dwdExternalProbesTotal.With(p.getProbeResultLabels(&p.externalResult)).Inc()
+
 	if p.isHealthy(&p.externalResult) {
-		return p.scaleUp()
+		return p.scaleUp(ctx)
 	}
 	if p.isUnhealthy(&p.externalResult) {
-		return p.scaleDown()
+		return p.scaleDown(ctx)
 	}
 
 	return nil
 }
 
 func (p *prober) doProbe(msg string, client kubernetes.Interface, pr *probeResult) {
-	var err error
+	var (
+		err        error
+		maxRetries = 1 // override defaultMaxRetries
+	)
 	for i := 0; i < maxRetries; i++ {
 		if _, err = client.Discovery().ServerVersion(); err == nil {
 			klog.V(4).Infof("%s: probe succeeded", msg)
@@ -298,7 +333,7 @@ func retry(msg string, fn func() error, retries int) error {
 	return err
 }
 
-func (p *prober) scaleTo(msg string, replicas int32, checkFn func(oReplicas, nReplicas int32) bool) error {
+func (p *prober) scaleTo(parentContext context.Context, msg string, replicas int32, checkFn func(oReplicas, nReplicas int32) bool) error {
 	klog.V(4).Infof("%s: replicas=%d: in progress...", msg, replicas)
 
 	timeout := toDuration(p.probeDeps.Probe.TimeoutSeconds, defaultTimeoutSeconds)
@@ -312,6 +347,27 @@ func (p *prober) scaleTo(msg string, replicas int32, checkFn func(oReplicas, nRe
 			replicas = *dsd.Replicas
 		}
 
+		// if possible check from the cache if the target needs to be scaled
+		if ds.APIVersion == appsv1.SchemeGroupVersion.String() && ds.Kind == kindDeployment {
+			dwdGetTargetFromCacheTotal.With(prometheus.Labels{labelResource: resourceDeployments}).Inc()
+
+			if d, err := p.deploymentsLister.Deployments(p.namespace).Get(ds.Name); err != nil {
+				klog.Errorf("%s: Could not find  %s: %s", msg, ds, err)
+				klog.Errorf("%s: replicas=%d: failed", msg, replicas)
+			} else {
+				var specReplicas = int32(0)
+				if d.Spec.Replicas != nil {
+					specReplicas = *(d.Spec.Replicas)
+				}
+				if !checkFn(specReplicas, replicas) {
+					klog.V(4).Infof("%s: skipped because desired=%d and current=%d", msg, replicas, specReplicas)
+					continue
+				}
+			}
+		}
+
+		// load the target scale subresource
+		// TODO avoid the second get
 		gv, err := schema.ParseGroupVersion(ds.APIVersion)
 		if err != nil {
 			return err
@@ -321,8 +377,13 @@ func (p *prober) scaleTo(msg string, replicas int32, checkFn func(oReplicas, nRe
 			Group: gv.Group,
 			Kind:  ds.Kind,
 		}
+
+		dwdScaleRequestsTotal.With(prometheus.Labels{labelVerb: verbDiscovery}).Inc()
 		ms, err := p.mapper.RESTMappings(gk)
 		if err != nil {
+			if isRateLimited(err) {
+				dwdThrottledScaleRequestsTotal.With(prometheus.Labels{labelVerb: verbDiscovery}).Inc()
+			}
 			return err
 		}
 
@@ -332,11 +393,17 @@ func (p *prober) scaleTo(msg string, replicas int32, checkFn func(oReplicas, nRe
 		)
 		for _, m := range ms {
 			gr = m.Resource.GroupResource()
-			ctx, cancelFn := context.WithTimeout(context.Background(), timeout)
+			ctx, cancelFn := context.WithTimeout(parentContext, timeout)
 			s, err = p.scaleInterface.Get(ctx, gr, ds.Name, metav1.GetOptions{})
 			cancelFn()
+
+			dwdScaleRequestsTotal.With(prometheus.Labels{labelVerb: verbGet}).Inc()
+
 			if err != nil {
 				klog.Errorf("%s: error getting %v/%s: %s", msg, gr, ds.Name, err)
+				if isRateLimited(err) {
+					dwdThrottledScaleRequestsTotal.With(prometheus.Labels{labelVerb: verbGet}).Inc()
+				}
 			}
 		}
 
@@ -346,7 +413,7 @@ func (p *prober) scaleTo(msg string, replicas int32, checkFn func(oReplicas, nRe
 				continue
 			}
 
-			if err = retry(msg, p.getScalingFn(gr, s, replicas), maxRetries); err != nil {
+			if err = retry(msg, p.getScalingFn(parentContext, gr, s, replicas), defaultMaxRetries); err != nil {
 				klog.Errorf("%s: Error scaling %s/%s: %s", msg, s, ds.Name, err)
 			}
 			klog.Infof("%s: replicas=%d: successful", msg, replicas)
@@ -359,27 +426,34 @@ func (p *prober) scaleTo(msg string, replicas int32, checkFn func(oReplicas, nRe
 	return nil
 }
 
-func (p *prober) getScalingFn(gr schema.GroupResource, s *autoscalingapi.Scale, replicas int32) func() error {
+func (p *prober) getScalingFn(parentContext context.Context, gr schema.GroupResource, s *autoscalingapi.Scale, replicas int32) func() error {
 	return func() error {
 		s = s.DeepCopy()
 		s.Spec.Replicas = replicas
 		timeout := toDuration(p.probeDeps.Probe.TimeoutSeconds, defaultTimeoutSeconds)
-		ctx, cancelFn := context.WithTimeout(context.Background(), timeout)
+		ctx, cancelFn := context.WithTimeout(parentContext, timeout)
 		defer cancelFn()
 
+		dwdScaleRequestsTotal.With(prometheus.Labels{labelVerb: verbUpdate}).Inc()
+
 		_, err := p.scaleInterface.Update(ctx, gr, s, metav1.UpdateOptions{})
+
+		if err != nil && isRateLimited(err) {
+			dwdThrottledScaleRequestsTotal.With(prometheus.Labels{labelVerb: verbGet}).Inc()
+		}
+
 		return err
 	}
 }
 
-func (p *prober) scaleDown() error {
-	return p.scaleTo(fmt.Sprintf("Scaling down %s/%s", p.probeDeps.Name, p.namespace), 0, func(o, n int32) bool {
+func (p *prober) scaleDown(ctx context.Context) error {
+	return p.scaleTo(ctx, fmt.Sprintf("Scaling down %s/%s", p.probeDeps.Name, p.namespace), 0, func(o, n int32) bool {
 		return o > n // scale to at most n
 	})
 }
 
-func (p *prober) scaleUp() error {
-	return p.scaleTo(fmt.Sprintf("Scaling up %s/%s", p.probeDeps.Name, p.namespace), 1, func(o, n int32) bool {
+func (p *prober) scaleUp(ctx context.Context) error {
+	return p.scaleTo(ctx, fmt.Sprintf("Scaling up %s/%s", p.probeDeps.Name, p.namespace), 1, func(o, n int32) bool {
 		return n > o // scale to at least n
 	})
 }

@@ -16,6 +16,7 @@ package scaler
 
 import (
 	"io/ioutil"
+	"strings"
 
 	"github.com/ghodss/yaml"
 )
@@ -46,4 +47,13 @@ func EncodeConfigFile(dependants *ProbeDependantsList) (string, error) {
 		return "", err
 	}
 	return string(data), nil
+}
+
+func isRateLimited(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	const prefix = "rate: "
+	return strings.HasPrefix(err.Error(), prefix)
 }
