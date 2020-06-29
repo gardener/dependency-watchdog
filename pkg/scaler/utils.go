@@ -18,6 +18,8 @@ import (
 	"io/ioutil"
 	"strings"
 
+	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
+	gardenerv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/ghodss/yaml"
 )
 
@@ -56,4 +58,26 @@ func isRateLimited(err error) bool {
 
 	const prefix = "rate: "
 	return strings.HasPrefix(err.Error(), prefix)
+}
+
+func shootWokeUp(old, new *gardenerv1alpha1.Cluster) bool {
+	decoder, err := extensionscontroller.NewGardenDecoder()
+	if err != nil {
+		return false
+	}
+
+	oldShoot, err := extensionscontroller.ShootFromCluster(decoder, old)
+	if err != nil {
+		return false
+	}
+	newShoot, err := extensionscontroller.ShootFromCluster(decoder, new)
+	if err != nil {
+		return false
+	}
+
+	if oldShoot.Status.IsHibernated == true && newShoot.Status.IsHibernated == false {
+		return true
+	}
+
+	return false
 }

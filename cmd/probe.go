@@ -21,6 +21,8 @@ import (
 	"os"
 
 	"github.com/gardener/dependency-watchdog/pkg/scaler"
+	gardenerclientset "github.com/gardener/gardener/pkg/client/extensions/clientset/versioned"
+	gardenerinformer "github.com/gardener/gardener/pkg/client/extensions/informers/externalversions"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/dynamic"
@@ -94,9 +96,19 @@ func runProbe(cmd *cobra.Command, args []string) {
 		defaultSyncDuration,
 		opts...)
 
+	gardenerClientSet, err := gardenerclientset.NewForConfig(config)
+	if err != nil {
+		klog.Fatalf("Error creating k8s clientset: %s", err.Error())
+	}
+
+	gardenerInformerFactory := gardenerinformer.NewSharedInformerFactory(
+		gardenerClientSet,
+		defaultSyncDuration,
+	)
+
 	scaleKindResolver := scale.NewDiscoveryScaleKindResolver(clientset.Discovery()) // DiscoveryScaleKindResolver does the caching
 	scaleGetter := scale.New(clientset.RESTClient(), mapper, dynamic.LegacyAPIPathResolverFunc, scaleKindResolver)
-	controller := scaler.NewController(clientset, mapper, scaleGetter, factory, deps, stopCh)
+	controller := scaler.NewController(clientset, mapper, scaleGetter, factory, gardenerInformerFactory, deps, stopCh)
 	leaderElectionClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, "dependency-watchdog-election"))
 	recorder := createRecorder(leaderElectionClient)
 	run := func(ctx context.Context) {
