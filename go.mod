@@ -18,3 +18,12 @@ require (
 	k8s.io/klog v1.0.0
 	sigs.k8s.io/controller-runtime v0.6.0
 )
+
+replace (
+	github.com/prometheus/client_golang => github.com/prometheus/client_golang v0.9.2
+	k8s.io/api => k8s.io/api v0.17.6
+	k8s.io/apimachinery => k8s.io/apimachinery v0.17.6
+	k8s.io/client-go => k8s.io/client-go v0.17.6
+	k8s.io/component-base => k8s.io/component-base v0.17.6
+	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.5.5
+)
