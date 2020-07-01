@@ -68,20 +68,26 @@ func NewController(clientset kubernetes.Interface,
 	c.clusterInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		UpdateFunc: func(old, new interface{}) {
 			newCluster := new.(*gardenerv1alpha1.Cluster)
-			oldCluster := new.(*gardenerv1alpha1.Cluster)
+			oldCluster := old.(*gardenerv1alpha1.Cluster)
+			klog.V(4).Infof("Update event on cluster: %v", newCluster.Name)
 			if newCluster.ResourceVersion == oldCluster.ResourceVersion {
-				// Periodic resync will send update events.
-				// Two different versions will always have different RVs.
+				// Periodic resync will send update events for all known Deployments.
+				// Two different versions of the same Deployment will always have different RVs.
 				return
 			}
+
 			if shootWokeUp(oldCluster, newCluster) {
 				// namespace is same as cluster's name
 				ns := newCluster.Name
+				klog.V(4).Infof("Requeueing namespace: %v", ns)
 				if c.probeDependantsList.Namespace != "" && ns != c.probeDependantsList.Namespace {
 					// skip reconciling other namespaces if a namespace was already configured
 					return
 				}
 				c.workqueue.AddRateLimited(ns)
+				klog.V(4).Infof("Requeued namespace: %v", ns)
+			} else {
+				klog.V(5).Infof("Ignore update event on cluster: %v", newCluster.Name)
 			}
 			return
 		},

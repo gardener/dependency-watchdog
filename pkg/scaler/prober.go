@@ -188,6 +188,7 @@ func (p *prober) tryAndRun(prepareRun func() (stopCh <-chan struct{}), cancelFn 
 
 	shootNotReady, err := p.shootNotReady()
 	if shootNotReady || apierrors.IsNotFound(internalErr) || apierrors.IsNotFound(externalErr) {
+		klog.V(4).Infof("Cluster not ready: %v, internal err %v, external err %v", shootNotReady, internalErr, externalErr)
 		// If shoot is not ready or secrets are not found, cancel any probe that might be running
 		// No need to enqueqe; the key will be enqueued again when any of the above condition changes anyway
 		if internalErr != nil {
@@ -199,6 +200,7 @@ func (p *prober) tryAndRun(prepareRun func() (stopCh <-chan struct{}), cancelFn 
 
 	if err != nil || (internalErr != nil && !apierrors.IsAlreadyExists(internalErr)) || (externalErr != nil && !apierrors.IsAlreadyExists(externalErr)) {
 		// There is an error, and it is not "AlreadyExists" - cancel running probe and requeue
+		klog.V(4).Infof("Cluster err %v, internal err %v, external err %v", err, internalErr, externalErr)
 		enqueueFn()
 		if err != nil {
 			return err
