@@ -138,13 +138,41 @@ func (p *prober) getClientFromSecret(secretName string, oldSHA []byte) (kubernet
 	return client, newSHA, err
 }
 
-// tryAndRun runs a fresh prober only if either of the internal or external secrets changed.
+func (p *prober) shootNotReady() (bool, error) {
+	// The name of cluster is same as shoot's namespace
+	clusterName := p.namespace
+	cluster, err := p.clusterLister.Get(clusterName)
+	if err != nil {
+		klog.Errorf("Error getting cluster: %s, Err: %s", clusterName, err.Error())
+		return true, err
+	}
+	decoder, err := extensionscontroller.NewGardenDecoder()
+	if err != nil {
+		klog.Errorf("Error getting gardener decoder. Cluster: %s, Err: %s", clusterName, err.Error())
+		return true, err
+	}
+
+	shoot, err := extensionscontroller.ShootFromCluster(decoder, cluster)
+	if err != nil {
+		klog.Errorf("Error extracting shoot from cluster. Cluster: %s, Err: %s", clusterName, err.Error())
+		return true, err
+	}
+	if (shoot.Spec.Hibernation == nil || shoot.Spec.Hibernation.Enabled == nil || *shoot.Spec.Hibernation.Enabled == false) && shoot.Status.IsHibernated == false {
+		return false, nil
+	}
+	return true, nil
+}
+
+// tryAndRun runs a fresh prober only if either of the internal or external secrets changed and the shoot is in ready state.
 // It updates the client and SHA checksums in the prober if a fresh prober was indeed run.
 // It calls the prepareRun callback function to stop previous prober if any and to create a
 // fresh context or stop channel for the fresh prober.
 // prepareRun is called only if a fresh prober is run.
-// It is a blocking function.
-func (p *prober) tryAndRun(prepareRun func() (stopCh <-chan struct{}), cancelFn func()) error {
+// It is a blocking function. When it returns, it cancels the probe, and removes the namespace key from probers memory map
+func (p *prober) tryAndRun(prepareRun func() (stopCh <-chan struct{}), cancelFn func(), enqueueFn func()) error {
+	// This will also delete prober from memory map if present
+	defer cancelFn()
+
 	if p == nil || p.probeDeps == nil || p.probeDeps.Probe == nil {
 		return errors.New("Invalid empty probe dependants configuration")
 	}
@@ -158,33 +186,42 @@ func (p *prober) tryAndRun(prepareRun func() (stopCh <-chan struct{}), cancelFn 
 	internalClient, internalSHA, internalErr := p.getClientFromSecret(p.probeDeps.Probe.Internal.KubeconfigSecretName, p.internalSHA)
 	externalClient, externalSHA, externalErr := p.getClientFromSecret(p.probeDeps.Probe.External.KubeconfigSecretName, p.externalSHA)
 
-	if apierrors.IsNotFound(internalErr) || apierrors.IsNotFound(externalErr) {
-		cancelFn()
-
+	shootNotReady, err := p.shootNotReady()
+	if shootNotReady || apierrors.IsNotFound(internalErr) || apierrors.IsNotFound(externalErr) {
+		// If shoot is not ready or secrets are not found, cancel any probe that might be running
+		// No need to enqueqe; the key will be enqueued again when any of the above condition changes anyway
 		if internalErr != nil {
 			return internalErr
 		}
 
 		return externalErr
-	} else if internalErr == nil || externalErr == nil {
-		// Run a fresh prober goroutine if any one of the secrets changed
-		var stopCh = prepareRun()
-
-		// prepareRun should have stopped previous prober goroutine.
-		// So, there is no need for any synchronization here.
-		p.internalClient = internalClient
-		p.internalSHA = internalSHA
-		p.externalClient = externalClient
-		p.externalSHA = externalSHA
-
-		return p.run(stopCh)
 	}
 
-	if internalErr != nil {
-		return internalErr
+	if err != nil || (internalErr != nil && !apierrors.IsAlreadyExists(internalErr)) || (externalErr != nil && !apierrors.IsAlreadyExists(externalErr)) {
+		// There is an error, and it is not "AlreadyExists" - cancel running probe and requeue
+		enqueueFn()
+		if err != nil {
+			return err
+		}
+		if internalErr != nil && !apierrors.IsAlreadyExists(internalErr) {
+			return internalErr
+		}
+
+		return externalErr
 	}
 
-	return externalErr
+	// Since this function is called only if the secrets were created/updated, or the cluster woke up from hibernation
+	// Run a fresh prober goroutine
+	stopCh := prepareRun()
+
+	// prepareRun should have stopped previous prober goroutine.
+	// So, there is no need for any synchronization here.
+	p.internalClient = internalClient
+	p.internalSHA = internalSHA
+	p.externalClient = externalClient
+	p.externalSHA = externalSHA
+
+	return p.run(stopCh)
 }
 
 // run actually runs the prober logic. It is a blocking function. It should be called only via tryAndRun.
@@ -270,29 +307,18 @@ func (p *prober) getProbeResultLabels(pr *probeResult) prometheus.Labels {
 // 6. If the external probe is HEALTHY then the dependants are scaled up.
 // 7. If the external probe is UNHEALTHY then the dependants are scaled down.
 func (p *prober) probe(ctx context.Context) error {
-	// Check state of the cluster. The name of cluster is same as shoot's namespace
-	clusterName := p.namespace
-	if cluster, err := p.clusterLister.Get(clusterName); apierrors.IsNotFound(err) {
-		klog.Errorf("Could not find cluster: %s, Stopping probe", clusterName)
+	shootNotReady, err := p.shootNotReady()
+	if shootNotReady && err == nil {
+		return fmt.Errorf("shoot is not ready. Will stop probe for namespace: %s", p.namespace)
+	}
+	if apierrors.IsNotFound(err) {
+		klog.Errorf("Could not find cluster for namespace: %s, Stopping probe", p.namespace)
 		return err
-	} else if err != nil {
-		klog.Errorf("Error fetching cluster: %s. Err: %s", clusterName, err)
+	}
+	if err != nil {
+		// Could be some transient error, will retry
+		klog.V(4).Infof("Error fetching shoot status. Will retry namespace: %s. Err: %s", p.namespace, err.Error())
 		return nil
-	} else {
-		decoder, err := extensionscontroller.NewGardenDecoder()
-		if err != nil {
-			return nil
-		}
-
-		shoot, err := extensionscontroller.ShootFromCluster(decoder, cluster)
-		if err != nil {
-			return nil
-		}
-		if shoot.Spec.Hibernation == nil || shoot.Spec.Hibernation.Enabled == nil || (*shoot.Spec.Hibernation.Enabled == false && shoot.Status.IsHibernated == false) {
-			klog.V(4).Infof("Running probe for cluster: %s", clusterName)
-		} else {
-			return fmt.Errorf("shoot is not ready. Will stop probe for cluster: %s", clusterName)
-		}
 	}
 
 	p.doProbe(fmt.Sprintf("%s/%s/internal", p.probeDeps.Name, p.namespace), p.internalClient, &p.internalResult)

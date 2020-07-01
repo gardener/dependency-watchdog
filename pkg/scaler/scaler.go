@@ -270,6 +270,8 @@ func (c *Controller) processNamespace(key string) error {
 					Key:      c.getKey(ns, pd),
 					CancelFn: nil,
 				}
+			}, func() {
+				c.workqueue.AddAfter(ns, 10*time.Minute)
 			})
 
 			if err == nil {
