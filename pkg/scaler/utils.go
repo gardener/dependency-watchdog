@@ -61,7 +61,7 @@ func isRateLimited(err error) bool {
 	return strings.HasPrefix(err.Error(), prefix)
 }
 
-func shootWokeUp(old, new *gardenerv1alpha1.Cluster) bool {
+func shootHibernationStateChanged(old, new *gardenerv1alpha1.Cluster) bool {
 	decoder, err := extensionscontroller.NewGardenDecoder()
 	if err != nil {
 		klog.V(4).Infof("Error getting gardener decoder for cluster %v. Err: %v", new.Name, err)
@@ -79,10 +79,17 @@ func shootWokeUp(old, new *gardenerv1alpha1.Cluster) bool {
 		return false
 	}
 
-	if oldShoot.Status.IsHibernated == true && newShoot.Status.IsHibernated == false {
+	if oldShoot.Status.IsHibernated != newShoot.Status.IsHibernated {
 		return true
 	}
 
-	klog.V(4).Infof("Cluster: %v, Old shoot hibernation state: %v. New shoot hibernation state: %v", new.Name, oldShoot.Status.IsHibernated, newShoot.Status.IsHibernated)
+	if (oldShoot.Spec.Hibernation == nil && newShoot.Spec.Hibernation != nil) ||
+		(oldShoot.Spec.Hibernation != nil && newShoot.Spec.Hibernation == nil) ||
+		(oldShoot.Spec.Hibernation.Enabled == nil && newShoot.Spec.Hibernation.Enabled != nil) ||
+		(oldShoot.Spec.Hibernation.Enabled != nil && newShoot.Spec.Hibernation.Enabled == nil) ||
+		(oldShoot.Spec.Hibernation.Enabled != newShoot.Spec.Hibernation.Enabled) {
+		return true
+	}
+
 	return false
 }

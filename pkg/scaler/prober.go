@@ -169,10 +169,7 @@ func (p *prober) shootNotReady() (bool, error) {
 // fresh context or stop channel for the fresh prober.
 // prepareRun is called only if a fresh prober is run.
 // It is a blocking function. When it returns, it cancels the probe, and removes the namespace key from probers memory map
-func (p *prober) tryAndRun(prepareRun func() (stopCh <-chan struct{}), cancelFn func(), enqueueFn func()) error {
-	// This will also delete prober from memory map if present
-	defer cancelFn()
-
+func (p *prober) tryAndRun(prepareRun func() (stopCh <-chan struct{}), cancelFn func(), enqueueFn func(), probeRunningFn func() bool) error {
 	if p == nil || p.probeDeps == nil || p.probeDeps.Probe == nil {
 		return errors.New("Invalid empty probe dependants configuration")
 	}
@@ -187,10 +184,11 @@ func (p *prober) tryAndRun(prepareRun func() (stopCh <-chan struct{}), cancelFn 
 	externalClient, externalSHA, externalErr := p.getClientFromSecret(p.probeDeps.Probe.External.KubeconfigSecretName, p.externalSHA)
 
 	shootNotReady, err := p.shootNotReady()
-	if shootNotReady || apierrors.IsNotFound(internalErr) || apierrors.IsNotFound(externalErr) {
+	if (shootNotReady && err == nil) || apierrors.IsNotFound(internalErr) || apierrors.IsNotFound(externalErr) {
 		klog.V(4).Infof("Cluster not ready: %v, internal err %v, external err %v", shootNotReady, internalErr, externalErr)
 		// If shoot is not ready or secrets are not found, cancel any probe that might be running
 		// No need to enqueqe; the key will be enqueued again when any of the above condition changes anyway
+		cancelFn()
 		if internalErr != nil {
 			return internalErr
 		}
@@ -201,6 +199,7 @@ func (p *prober) tryAndRun(prepareRun func() (stopCh <-chan struct{}), cancelFn 
 	if err != nil || (internalErr != nil && !apierrors.IsAlreadyExists(internalErr)) || (externalErr != nil && !apierrors.IsAlreadyExists(externalErr)) {
 		// There is an error, and it is not "AlreadyExists" - cancel running probe and requeue
 		klog.V(4).Infof("Cluster err %v, internal err %v, external err %v", err, internalErr, externalErr)
+		cancelFn()
 		enqueueFn()
 		if err != nil {
 			return err
@@ -212,9 +211,16 @@ func (p *prober) tryAndRun(prepareRun func() (stopCh <-chan struct{}), cancelFn 
 		return externalErr
 	}
 
-	// Since this function is called only if the secrets were created/updated, or the cluster woke up from hibernation
+	if apierrors.IsAlreadyExists(internalErr) && apierrors.IsAlreadyExists(externalErr) && probeRunningFn() {
+		// No change in kubeconfig. Probe is already running. No need to restart probe
+		return internalErr
+	}
+
+	// If we are here, then either secrets were created/updated, or the cluster woke up from hibernation
 	// Run a fresh prober goroutine
 	stopCh := prepareRun()
+	// This will also delete prober from memory map if present
+	defer cancelFn()
 
 	// prepareRun should have stopped previous prober goroutine.
 	// So, there is no need for any synchronization here.
@@ -309,20 +315,6 @@ func (p *prober) getProbeResultLabels(pr *probeResult) prometheus.Labels {
 // 6. If the external probe is HEALTHY then the dependants are scaled up.
 // 7. If the external probe is UNHEALTHY then the dependants are scaled down.
 func (p *prober) probe(ctx context.Context) error {
-	shootNotReady, err := p.shootNotReady()
-	if shootNotReady && err == nil {
-		return fmt.Errorf("shoot is not ready. Will stop probe for namespace: %s", p.namespace)
-	}
-	if apierrors.IsNotFound(err) {
-		klog.Errorf("Could not find cluster for namespace: %s, Stopping probe", p.namespace)
-		return err
-	}
-	if err != nil {
-		// Could be some transient error, will retry
-		klog.V(4).Infof("Error fetching shoot status. Will retry namespace: %s. Err: %s", p.namespace, err.Error())
-		return nil
-	}
-
 	p.doProbe(fmt.Sprintf("%s/%s/internal", p.probeDeps.Name, p.namespace), p.internalClient, &p.internalResult)
 	dwdInternalProbesTotal.With(p.getProbeResultLabels(&p.internalResult)).Inc()
 

@@ -76,7 +76,7 @@ func NewController(clientset kubernetes.Interface,
 				return
 			}
 
-			if shootWokeUp(oldCluster, newCluster) {
+			if shootHibernationStateChanged(oldCluster, newCluster) {
 				// namespace is same as cluster's name
 				ns := newCluster.Name
 				klog.V(4).Infof("Requeueing namespace: %v", ns)
@@ -278,6 +278,9 @@ func (c *Controller) processNamespace(key string) error {
 				}
 			}, func() {
 				c.workqueue.AddAfter(ns, 10*time.Minute)
+			}, func() bool {
+				_, ok := c.probers[ns]
+				return ok
 			})
 
 			if err == nil {
