@@ -18,6 +18,8 @@ import (
 	"sync"
 
 	"github.com/gardener/dependency-watchdog/pkg/multicontext"
+	gardnerinformer "github.com/gardener/gardener/pkg/client/extensions/informers/externalversions"
+	gardenerlisterv1alpha1 "github.com/gardener/gardener/pkg/client/extensions/listers/extensions/v1alpha1"
 	"github.com/prometheus/client_golang/prometheus"
 	autoscaling "k8s.io/api/autoscaling/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -33,21 +35,25 @@ import (
 
 // Controller looks at ServiceDependants and reconciles the dependantPods once the service becomes available.
 type Controller struct {
-	client               kubernetes.Interface
-	mapper               apimeta.RESTMapper
-	scalesGetter         scale.ScalesGetter
-	informerFactory      informers.SharedInformerFactory
-	secretsInformer      cache.SharedIndexInformer
-	secretsLister        listerv1.SecretLister
-	deploymentsInformer  cache.SharedIndexInformer
-	deploymentsLister    listerappsv1.DeploymentLister
-	workqueue            workqueue.RateLimitingInterface
-	hasSecretsSynced     cache.InformerSynced
-	hasDeploymentsSynced cache.InformerSynced
-	stopCh               <-chan struct{}
-	probeDependantsList  *ProbeDependantsList
-	probers              map[string]*prober // the key is <namespace>/<probeDependents.Name>
-	mux                  sync.Mutex
+	client                 kubernetes.Interface
+	mapper                 apimeta.RESTMapper
+	scalesGetter           scale.ScalesGetter
+	informerFactory        informers.SharedInformerFactory
+	secretsInformer        cache.SharedIndexInformer
+	secretsLister          listerv1.SecretLister
+	clusterInformerFactory gardnerinformer.SharedInformerFactory
+	clusterInformer        cache.SharedIndexInformer
+	clusterLister          gardenerlisterv1alpha1.ClusterLister
+	deploymentsInformer    cache.SharedIndexInformer
+	deploymentsLister      listerappsv1.DeploymentLister
+	workqueue              workqueue.RateLimitingInterface
+	hasSecretsSynced       cache.InformerSynced
+	hasClustersSynced      cache.InformerSynced
+	hasDeploymentsSynced   cache.InformerSynced
+	stopCh                 <-chan struct{}
+	probeDependantsList    *ProbeDependantsList
+	probers                map[string]*prober // the key is <namespace>/<probeDependents.Name>
+	mux                    sync.Mutex
 	*multicontext.Multicontext
 	// LeaderElection defines the configuration of leader election client.
 	LeaderElection componentbaseconfig.LeaderElectionConfiguration

@@ -18,7 +18,10 @@ import (
 	"io/ioutil"
 	"strings"
 
+	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
+	gardenerv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/ghodss/yaml"
+	"k8s.io/klog"
 )
 
 // LoadProbeDependantsListFile creates the ProbeDependantsList from a config-file.
@@ -56,4 +59,37 @@ func isRateLimited(err error) bool {
 
 	const prefix = "rate: "
 	return strings.HasPrefix(err.Error(), prefix)
+}
+
+func shootHibernationStateChanged(old, new *gardenerv1alpha1.Cluster) bool {
+	decoder, err := extensionscontroller.NewGardenDecoder()
+	if err != nil {
+		klog.V(4).Infof("Error getting gardener decoder for cluster %v. Err: %v", new.Name, err)
+		return false
+	}
+
+	oldShoot, err := extensionscontroller.ShootFromCluster(decoder, old)
+	if err != nil {
+		klog.V(4).Infof("Error getting old shoot version from cluster: %v. Err: %v", old.Name, err)
+		return false
+	}
+	newShoot, err := extensionscontroller.ShootFromCluster(decoder, new)
+	if err != nil {
+		klog.V(4).Infof("Error getting new shoot version from cluster: %v. Err: %v", new.Name, err)
+		return false
+	}
+
+	if oldShoot.Status.IsHibernated != newShoot.Status.IsHibernated {
+		return true
+	}
+
+	if (oldShoot.Spec.Hibernation == nil && newShoot.Spec.Hibernation != nil) ||
+		(oldShoot.Spec.Hibernation != nil && newShoot.Spec.Hibernation == nil) ||
+		(oldShoot.Spec.Hibernation.Enabled == nil && newShoot.Spec.Hibernation.Enabled != nil) ||
+		(oldShoot.Spec.Hibernation.Enabled != nil && newShoot.Spec.Hibernation.Enabled == nil) ||
+		(oldShoot.Spec.Hibernation.Enabled != newShoot.Spec.Hibernation.Enabled) {
+		return true
+	}
+
+	return false
 }

@@ -25,6 +25,8 @@ import (
 	componentbaseconfigv1alpha1 "k8s.io/component-base/config/v1alpha1"
 
 	"github.com/gardener/dependency-watchdog/pkg/multicontext"
+	gardenerv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	gardenerinformers "github.com/gardener/gardener/pkg/client/extensions/informers/externalversions"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -41,24 +43,55 @@ func NewController(clientset kubernetes.Interface,
 	mapper apimeta.RESTMapper,
 	scalesGetter scale.ScalesGetter,
 	sharedInformerFactory informers.SharedInformerFactory,
+	gardenerInformerFactory gardenerinformers.SharedInformerFactory,
 	probeDependantsList *ProbeDependantsList,
 	stopCh <-chan struct{}) *Controller {
 
 	c := &Controller{
-		client:              clientset,
-		mapper:              mapper,
-		scalesGetter:        scalesGetter,
-		informerFactory:     sharedInformerFactory,
-		secretsInformer:     sharedInformerFactory.Core().V1().Secrets().Informer(),
-		secretsLister:       sharedInformerFactory.Core().V1().Secrets().Lister(),
-		deploymentsInformer: sharedInformerFactory.Apps().V1().Deployments().Informer(),
-		deploymentsLister:   sharedInformerFactory.Apps().V1().Deployments().Lister(),
-		workqueue:           workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Namespaces"),
-		stopCh:              stopCh,
-		probeDependantsList: probeDependantsList,
-		Multicontext:        multicontext.New(),
+		client:                 clientset,
+		mapper:                 mapper,
+		scalesGetter:           scalesGetter,
+		informerFactory:        sharedInformerFactory,
+		secretsInformer:        sharedInformerFactory.Core().V1().Secrets().Informer(),
+		secretsLister:          sharedInformerFactory.Core().V1().Secrets().Lister(),
+		clusterInformerFactory: gardenerInformerFactory,
+		clusterInformer:        gardenerInformerFactory.Extensions().V1alpha1().Clusters().Informer(),
+		clusterLister:          gardenerInformerFactory.Extensions().V1alpha1().Clusters().Lister(),
+		deploymentsInformer:    sharedInformerFactory.Apps().V1().Deployments().Informer(),
+		deploymentsLister:      sharedInformerFactory.Apps().V1().Deployments().Lister(),
+		workqueue:              workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Namespaces"),
+		stopCh:                 stopCh,
+		probeDependantsList:    probeDependantsList,
+		Multicontext:           multicontext.New(),
 	}
 	componentbaseconfigv1alpha1.RecommendedDefaultLeaderElectionConfiguration(&c.LeaderElection)
+	c.clusterInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		UpdateFunc: func(old, new interface{}) {
+			newCluster := new.(*gardenerv1alpha1.Cluster)
+			oldCluster := old.(*gardenerv1alpha1.Cluster)
+			klog.V(4).Infof("Update event on cluster: %v", newCluster.Name)
+			if newCluster.ResourceVersion == oldCluster.ResourceVersion {
+				// Periodic resync will send update events for all known Deployments.
+				// Two different versions of the same Deployment will always have different RVs.
+				return
+			}
+
+			if shootHibernationStateChanged(oldCluster, newCluster) {
+				// namespace is same as cluster's name
+				ns := newCluster.Name
+				klog.V(4).Infof("Requeueing namespace: %v", ns)
+				if c.probeDependantsList.Namespace != "" && ns != c.probeDependantsList.Namespace {
+					// skip reconciling other namespaces if a namespace was already configured
+					return
+				}
+				c.workqueue.AddRateLimited(ns)
+				klog.V(4).Infof("Requeued namespace: %v", ns)
+			} else {
+				klog.V(5).Infof("Ignore update event on cluster: %v", newCluster.Name)
+			}
+			return
+		},
+	})
 	c.secretsInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: c.enqueueProbe,
 		UpdateFunc: func(old, new interface{}) {
@@ -75,6 +108,7 @@ func NewController(clientset kubernetes.Interface,
 	})
 	c.hasSecretsSynced = c.secretsInformer.HasSynced
 	c.hasDeploymentsSynced = c.deploymentsInformer.HasSynced
+	c.hasClustersSynced = c.clusterInformer.HasSynced
 	return c
 }
 
@@ -131,12 +165,13 @@ func (c *Controller) Run(threadiness int) error {
 
 	klog.Info("Starting informer factory.")
 	c.informerFactory.Start(c.stopCh)
+	c.clusterInformerFactory.Start(c.stopCh)
 
 	go c.Multicontext.Start(c.stopCh)
 
 	// Wait for the caches to be synced before starting workers
 	klog.Info("Waiting for informer caches to sync")
-	if ok := cache.WaitForCacheSync(c.stopCh, c.hasSecretsSynced, c.hasDeploymentsSynced); !ok {
+	if ok := cache.WaitForCacheSync(c.stopCh, c.hasSecretsSynced, c.hasDeploymentsSynced, c.hasClustersSynced); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
@@ -219,6 +254,7 @@ func (c *Controller) processNamespace(key string) error {
 				namespace:         ns,
 				mapper:            c.mapper,
 				secretLister:      c.secretsLister,
+				clusterLister:     c.clusterLister,
 				deploymentsLister: c.deploymentsLister,
 				scaleInterface:    c.scalesGetter.Scales(ns),
 				probeDeps:         probeDeps,
@@ -235,6 +271,16 @@ func (c *Controller) processNamespace(key string) error {
 
 				c.registerProber(p)
 				return ctx.Done()
+			}, func() {
+				c.Multicontext.ContextCh <- &multicontext.ContextMessage{
+					Key:      c.getKey(ns, pd),
+					CancelFn: nil,
+				}
+			}, func() {
+				c.workqueue.AddAfter(ns, 10*time.Minute)
+			}, func() bool {
+				_, ok := c.probers[ns]
+				return ok
 			})
 
 			if err == nil {

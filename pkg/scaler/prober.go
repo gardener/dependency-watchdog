@@ -23,13 +23,14 @@ import (
 
 	"crypto/sha256"
 
+	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
+	gardenerlisterv1alpha1 "github.com/gardener/gardener/pkg/client/extensions/listers/extensions/v1alpha1"
 	"github.com/prometheus/client_golang/prometheus"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingapi "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -62,6 +63,7 @@ type prober struct {
 	namespace         string
 	mapper            apimeta.RESTMapper
 	secretLister      listerv1.SecretLister
+	clusterLister     gardenerlisterv1alpha1.ClusterLister
 	deploymentsLister listerappsv1.DeploymentLister
 	scaleInterface    scale.ScaleInterface
 	probeDeps         *probeDependants
@@ -136,13 +138,38 @@ func (p *prober) getClientFromSecret(secretName string, oldSHA []byte) (kubernet
 	return client, newSHA, err
 }
 
-// tryAndRun runs a fresh prober only if either of the internal or external secrets changed.
+func (p *prober) shootNotReady() (bool, error) {
+	// The name of cluster is same as shoot's namespace
+	clusterName := p.namespace
+	cluster, err := p.clusterLister.Get(clusterName)
+	if err != nil {
+		klog.Errorf("Error getting cluster: %s, Err: %s", clusterName, err.Error())
+		return true, err
+	}
+	decoder, err := extensionscontroller.NewGardenDecoder()
+	if err != nil {
+		klog.Errorf("Error getting gardener decoder. Cluster: %s, Err: %s", clusterName, err.Error())
+		return true, err
+	}
+
+	shoot, err := extensionscontroller.ShootFromCluster(decoder, cluster)
+	if err != nil {
+		klog.Errorf("Error extracting shoot from cluster. Cluster: %s, Err: %s", clusterName, err.Error())
+		return true, err
+	}
+	if (shoot.Spec.Hibernation == nil || shoot.Spec.Hibernation.Enabled == nil || *shoot.Spec.Hibernation.Enabled == false) && shoot.Status.IsHibernated == false {
+		return false, nil
+	}
+	return true, nil
+}
+
+// tryAndRun runs a fresh prober only if either of the internal or external secrets changed and the shoot is in ready state.
 // It updates the client and SHA checksums in the prober if a fresh prober was indeed run.
 // It calls the prepareRun callback function to stop previous prober if any and to create a
 // fresh context or stop channel for the fresh prober.
 // prepareRun is called only if a fresh prober is run.
-// It is a blocking function.
-func (p *prober) tryAndRun(prepareRun func() (stopCh <-chan struct{})) error {
+// It is a blocking function. When it returns, it cancels the probe, and removes the namespace key from probers memory map
+func (p *prober) tryAndRun(prepareRun func() (stopCh <-chan struct{}), cancelFn func(), enqueueFn func(), probeRunningFn func() bool) error {
 	if p == nil || p.probeDeps == nil || p.probeDeps.Probe == nil {
 		return errors.New("Invalid empty probe dependants configuration")
 	}
@@ -156,25 +183,53 @@ func (p *prober) tryAndRun(prepareRun func() (stopCh <-chan struct{})) error {
 	internalClient, internalSHA, internalErr := p.getClientFromSecret(p.probeDeps.Probe.Internal.KubeconfigSecretName, p.internalSHA)
 	externalClient, externalSHA, externalErr := p.getClientFromSecret(p.probeDeps.Probe.External.KubeconfigSecretName, p.externalSHA)
 
-	// Run a fresh prober goroutine if any one of the secrets changed
-	if internalErr == nil || externalErr == nil {
-		var stopCh = prepareRun()
+	shootNotReady, err := p.shootNotReady()
+	if (shootNotReady && err == nil) || apierrors.IsNotFound(internalErr) || apierrors.IsNotFound(externalErr) {
+		klog.V(4).Infof("Cluster not ready: %v, internal err %v, external err %v", shootNotReady, internalErr, externalErr)
+		// If shoot is not ready or secrets are not found, cancel any probe that might be running
+		// No need to enqueqe; the key will be enqueued again when any of the above condition changes anyway
+		cancelFn()
+		if internalErr != nil {
+			return internalErr
+		}
 
-		// prepareRun should have stopped previous prober goroutine.
-		// So, there is no need for any synchronization here.
-		p.internalClient = internalClient
-		p.internalSHA = internalSHA
-		p.externalClient = externalClient
-		p.externalSHA = externalSHA
-
-		return p.run(stopCh)
+		return externalErr
 	}
 
-	if internalErr != nil {
+	if err != nil || (internalErr != nil && !apierrors.IsAlreadyExists(internalErr)) || (externalErr != nil && !apierrors.IsAlreadyExists(externalErr)) {
+		// There is an error, and it is not "AlreadyExists" - cancel running probe and requeue
+		klog.V(4).Infof("Cluster err %v, internal err %v, external err %v", err, internalErr, externalErr)
+		cancelFn()
+		enqueueFn()
+		if err != nil {
+			return err
+		}
+		if internalErr != nil && !apierrors.IsAlreadyExists(internalErr) {
+			return internalErr
+		}
+
+		return externalErr
+	}
+
+	if apierrors.IsAlreadyExists(internalErr) && apierrors.IsAlreadyExists(externalErr) && probeRunningFn() {
+		// No change in kubeconfig. Probe is already running. No need to restart probe
 		return internalErr
 	}
 
-	return externalErr
+	// If we are here, then either secrets were created/updated, or the cluster woke up from hibernation
+	// Run a fresh prober goroutine
+	stopCh := prepareRun()
+	// This will also delete prober from memory map if present
+	defer cancelFn()
+
+	// prepareRun should have stopped previous prober goroutine.
+	// So, there is no need for any synchronization here.
+	p.internalClient = internalClient
+	p.internalSHA = internalSHA
+	p.externalClient = externalClient
+	p.externalSHA = externalSHA
+
+	return p.run(stopCh)
 }
 
 // run actually runs the prober logic. It is a blocking function. It should be called only via tryAndRun.
@@ -393,8 +448,8 @@ func (p *prober) scaleTo(parentContext context.Context, msg string, replicas int
 		)
 		for _, m := range ms {
 			gr = m.Resource.GroupResource()
-			ctx, cancelFn := context.WithTimeout(parentContext, timeout)
-			s, err = p.scaleInterface.Get(ctx, gr, ds.Name, metav1.GetOptions{})
+			_, cancelFn := context.WithTimeout(parentContext, timeout)
+			s, err = p.scaleInterface.Get(gr, ds.Name)
 			cancelFn()
 
 			dwdScaleRequestsTotal.With(prometheus.Labels{labelVerb: verbGet}).Inc()
@@ -431,12 +486,12 @@ func (p *prober) getScalingFn(parentContext context.Context, gr schema.GroupReso
 		s = s.DeepCopy()
 		s.Spec.Replicas = replicas
 		timeout := toDuration(p.probeDeps.Probe.TimeoutSeconds, defaultTimeoutSeconds)
-		ctx, cancelFn := context.WithTimeout(parentContext, timeout)
+		_, cancelFn := context.WithTimeout(parentContext, timeout)
 		defer cancelFn()
 
 		dwdScaleRequestsTotal.With(prometheus.Labels{labelVerb: verbUpdate}).Inc()
 
-		_, err := p.scaleInterface.Update(ctx, gr, s, metav1.UpdateOptions{})
+		_, err := p.scaleInterface.Update(gr, s)
 
 		if err != nil && isRateLimited(err) {
 			dwdThrottledScaleRequestsTotal.With(prometheus.Labels{labelVerb: verbGet}).Inc()
