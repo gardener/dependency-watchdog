@@ -389,8 +389,6 @@ func retry(msg string, fn func() error, retries int) error {
 }
 
 func (p *prober) scaleTo(parentContext context.Context, msg string, replicas int32, checkFn func(oReplicas, nReplicas int32) bool) error {
-	klog.V(4).Infof("%s: replicas=%d: in progress...", msg, replicas)
-
 	timeout := toDuration(p.probeDeps.Probe.TimeoutSeconds, defaultTimeoutSeconds)
 	for _, dsd := range p.probeDeps.DependantScales {
 		if dsd == nil {
@@ -402,20 +400,24 @@ func (p *prober) scaleTo(parentContext context.Context, msg string, replicas int
 			replicas = *dsd.Replicas
 		}
 
+		prefix := fmt.Sprintf("%s: %s.%s/%s", msg, ds.APIVersion, ds.Kind, ds.Name)
+
+		klog.V(4).Infof("%s: replicas=%d: in progress...", prefix, replicas)
+
 		// if possible check from the cache if the target needs to be scaled
 		if ds.APIVersion == appsv1.SchemeGroupVersion.String() && ds.Kind == kindDeployment {
 			dwdGetTargetFromCacheTotal.With(prometheus.Labels{labelResource: resourceDeployments}).Inc()
 
 			if d, err := p.deploymentsLister.Deployments(p.namespace).Get(ds.Name); err != nil {
-				klog.Errorf("%s: Could not find  %s: %s", msg, ds, err)
-				klog.Errorf("%s: replicas=%d: failed", msg, replicas)
+				klog.Errorf("%s: Could not find the target reference: %s", prefix, err)
+				klog.Errorf("%s: replicas=%d: failed", prefix, replicas)
 			} else {
 				var specReplicas = int32(0)
 				if d.Spec.Replicas != nil {
 					specReplicas = *(d.Spec.Replicas)
 				}
 				if !checkFn(specReplicas, replicas) {
-					klog.V(4).Infof("%s: skipped because desired=%d and current=%d", msg, replicas, specReplicas)
+					klog.V(4).Infof("%s: skipped because desired=%d and current=%d", prefix, replicas, specReplicas)
 					continue
 				}
 			}
@@ -455,7 +457,7 @@ func (p *prober) scaleTo(parentContext context.Context, msg string, replicas int
 			dwdScaleRequestsTotal.With(prometheus.Labels{labelVerb: verbGet}).Inc()
 
 			if err != nil {
-				klog.Errorf("%s: error getting %v/%s: %s", msg, gr, ds.Name, err)
+				klog.Errorf("%s: error getting %v: %s", prefix, gr, err)
 				if isRateLimited(err) {
 					dwdThrottledScaleRequestsTotal.With(prometheus.Labels{labelVerb: verbGet}).Inc()
 				}
@@ -464,17 +466,17 @@ func (p *prober) scaleTo(parentContext context.Context, msg string, replicas int
 
 		if err == nil {
 			if !checkFn(s.Spec.Replicas, replicas) {
-				klog.V(4).Infof("%s: skipped because desired=%d and current=%d", msg, replicas, s.Spec.Replicas)
+				klog.V(4).Infof("%s: skipped because desired=%d and current=%d", prefix, replicas, s.Spec.Replicas)
 				continue
 			}
 
 			if err = retry(msg, p.getScalingFn(parentContext, gr, s, replicas), defaultMaxRetries); err != nil {
-				klog.Errorf("%s: Error scaling %s/%s: %s", msg, s, ds.Name, err)
+				klog.Errorf("%s: Error scaling : %s", prefix, err)
 			}
-			klog.Infof("%s: replicas=%d: successful", msg, replicas)
+			klog.Infof("%s: replicas=%d: successful", prefix, replicas)
 		} else {
-			klog.Errorf("%s: Could not find  %s: %s", msg, ds, err)
-			klog.Errorf("%s: replicas=%d: failed", msg, replicas)
+			klog.Errorf("%s: Could not get target reference: %s", prefix, err)
+			klog.Errorf("%s: replicas=%d: failed", prefix, replicas)
 		}
 	}
 
@@ -502,13 +504,13 @@ func (p *prober) getScalingFn(parentContext context.Context, gr schema.GroupReso
 }
 
 func (p *prober) scaleDown(ctx context.Context) error {
-	return p.scaleTo(ctx, fmt.Sprintf("Scaling down %s/%s", p.probeDeps.Name, p.namespace), 0, func(o, n int32) bool {
+	return p.scaleTo(ctx, fmt.Sprintf("Scaling down dependents of %s/%s", p.probeDeps.Name, p.namespace), 0, func(o, n int32) bool {
 		return o > n // scale to at most n
 	})
 }
 
 func (p *prober) scaleUp(ctx context.Context) error {
-	return p.scaleTo(ctx, fmt.Sprintf("Scaling up %s/%s", p.probeDeps.Name, p.namespace), 1, func(o, n int32) bool {
+	return p.scaleTo(ctx, fmt.Sprintf("Scaling up dependents of %s/%s", p.probeDeps.Name, p.namespace), 1, func(o, n int32) bool {
 		return n > o // scale to at least n
 	})
 }
