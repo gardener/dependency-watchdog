@@ -19,6 +19,8 @@ import (
 	"strings"
 
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	gardencorev1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	gardenerv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/ghodss/yaml"
 	"k8s.io/klog"
@@ -79,17 +81,9 @@ func shootHibernationStateChanged(old, new *gardenerv1alpha1.Cluster) bool {
 		return false
 	}
 
-	if oldShoot.Status.IsHibernated != newShoot.Status.IsHibernated {
-		return true
-	}
+	return doCheckShootHibernationStateChanged(oldShoot, newShoot)
+}
 
-	if (oldShoot.Spec.Hibernation == nil && newShoot.Spec.Hibernation != nil) ||
-		(oldShoot.Spec.Hibernation != nil && newShoot.Spec.Hibernation == nil) ||
-		(oldShoot.Spec.Hibernation.Enabled == nil && newShoot.Spec.Hibernation.Enabled != nil) ||
-		(oldShoot.Spec.Hibernation.Enabled != nil && newShoot.Spec.Hibernation.Enabled == nil) ||
-		(oldShoot.Spec.Hibernation.Enabled != newShoot.Spec.Hibernation.Enabled) {
-		return true
-	}
-
-	return false
+func doCheckShootHibernationStateChanged(oldShoot, newShoot *gardencorev1beta1.Shoot) bool {
+	return oldShoot.Status.IsHibernated != newShoot.Status.IsHibernated || gardencorev1beta1helper.HibernationIsEnabled(oldShoot) != gardencorev1beta1helper.HibernationIsEnabled(newShoot)
 }
