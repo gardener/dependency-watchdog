@@ -44,6 +44,7 @@ github.com/gardener/gardener/pkg/apis/core/install
 github.com/gardener/gardener/pkg/apis/core/v1alpha1
 github.com/gardener/gardener/pkg/apis/core/v1beta1
 github.com/gardener/gardener/pkg/apis/core/v1beta1/constants
+github.com/gardener/gardener/pkg/apis/core/v1beta1/helper
 github.com/gardener/gardener/pkg/apis/extensions
 github.com/gardener/gardener/pkg/apis/extensions/v1alpha1
 github.com/gardener/gardener/pkg/chartrenderer
