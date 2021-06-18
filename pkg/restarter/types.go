@@ -40,15 +40,15 @@ type Controller struct {
 // ServiceDependants holds the service and the label selectors of the pods which has to be restarted when
 // the service becomes ready and the pods are in CrashloopBackoff.
 type ServiceDependants struct {
-	Services  map[string]service `json:"services"`
+	Services  map[string]Service `json:"services"`
 	Namespace string             `json:"namespace"`
 }
 
-type service struct {
-	Dependants []dependantPods `json:"dependantPods"`
+type Service struct {
+	Dependants []DependantPods `json:"dependantPods"`
 }
 
-type dependantPods struct {
+type DependantPods struct {
 	Name     string                `json:"name,omitempty"`
 	Selector *metav1.LabelSelector `json:"selector"`
 }
