@@ -54,19 +54,19 @@ type Controller struct {
 // corresponding dependant Scales are scaled down to `zero`. They are scaled back to their
 // original scale when the external probe succeeds again.
 type ProbeDependantsList struct {
-	Probes    []probeDependants `json:"probes"`
+	Probes    []ProbeDependants `json:"probes"`
 	Namespace string            `json:"namespace"`
 }
 
-type probeDependants struct {
+type ProbeDependants struct {
 	Name            string                   `json:"name"`
-	Probe           *probeConfig             `json:"probe"`
-	DependantScales []*dependantScaleDetails `json:"dependantScales"`
+	Probe           *ProbeConfig             `json:"probe"`
+	DependantScales []*DependantScaleDetails `json:"dependantScales"`
 }
 
-type probeConfig struct {
-	External            *probeDetails `json:"external,omitempty"`
-	Internal            *probeDetails `json:"internal,omitempty"`
+type ProbeConfig struct {
+	External            *ProbeDetails `json:"external,omitempty"`
+	Internal            *ProbeDetails `json:"internal,omitempty"`
 	InitialDelaySeconds *int32        `json:"initialDelaySeconds,omitempty"`
 	TimeoutSeconds      *int32        `json:"timeoutSeconds,omitempty"`
 	PeriodSeconds       *int32        `json:"periodSeconds,omitempty"`
@@ -74,11 +74,11 @@ type probeConfig struct {
 	FailureThreshold    *int32        `json:"failureThreshold,omitempty"`
 }
 
-type probeDetails struct {
+type ProbeDetails struct {
 	KubeconfigSecretName string `json:"kubeconfigSecretName"`
 }
 
-type dependantScaleDetails struct {
+type DependantScaleDetails struct {
 	ScaleRef autoscaling.CrossVersionObjectReference `json:"scaleRef"`
 	Replicas *int32                                  `json:"replicas"`
 }
