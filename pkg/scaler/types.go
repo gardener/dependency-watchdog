@@ -81,6 +81,7 @@ type ProbeDetails struct {
 	KubeconfigSecretName string `json:"kubeconfigSecretName"`
 }
 
+// DependantScaleDetails has the details about the dependant scale sub-resource.
 type DependantScaleDetails struct {
 	ScaleRef autoscaling.CrossVersionObjectReference `json:"scaleRef"`
 	Replicas *int32                                  `json:"replicas"`
