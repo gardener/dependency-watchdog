@@ -76,6 +76,7 @@ type ProbeConfig struct {
 	FailureThreshold    *int32        `json:"failureThreshold,omitempty"`
 }
 
+// ProbeDetails captures the kubeconfig secret details to probe a Kubernetes apiserver.
 type ProbeDetails struct {
 	KubeconfigSecretName string `json:"kubeconfigSecretName"`
 }
