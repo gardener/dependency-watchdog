@@ -58,6 +58,7 @@ type ProbeDependantsList struct {
 	Namespace string            `json:"namespace"`
 }
 
+// ProbeDependants struct captures the details about a probe and its dependant scale sub-resources.
 type ProbeDependants struct {
 	Name            string                   `json:"name"`
 	Probe           *ProbeConfig             `json:"probe"`
