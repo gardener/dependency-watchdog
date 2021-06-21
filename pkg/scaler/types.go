@@ -65,6 +65,7 @@ type ProbeDependants struct {
 	DependantScales []*DependantScaleDetails `json:"dependantScales"`
 }
 
+// ProbeConfig struct captures the details for probing a Kubernetes apiserver.
 type ProbeConfig struct {
 	External            *ProbeDetails `json:"external,omitempty"`
 	Internal            *ProbeDetails `json:"internal,omitempty"`
