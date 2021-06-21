@@ -44,6 +44,7 @@ type ServiceDependants struct {
 	Namespace string             `json:"namespace"`
 }
 
+// Service struct defines the dependent pods of a service.
 type Service struct {
 	Dependants []DependantPods `json:"dependantPods"`
 }
