@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gardener/dependency-watchdog/pkg/restarter"
+	restarterapi "github.com/gardener/dependency-watchdog/pkg/restarter/api"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -128,7 +129,7 @@ func runRoot(cmd *cobra.Command, args []string) {
 		klog.Fatalf("Error parsing config file: %s", err.Error())
 	}
 
-	configContent, err := restarter.EncodeConfigFile(deps)
+	configContent, err := restarterapi.Encode(deps)
 	klog.V(2).Infof("Endpoints configuration: \n %s", configContent)
 
 	config, err := clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)

@@ -8,11 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gardener/dependency-watchdog/pkg/restarter/api"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
-	watch "k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/informers"
 	kubeclient "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
@@ -164,7 +165,7 @@ func noResyncPeriodFunc() time.Duration {
 	return 0
 }
 
-func (f *fixture) newController(deps *ServiceDependants, stopCh chan struct{}) (*Controller, informers.SharedInformerFactory, error) {
+func (f *fixture) newController(deps *api.ServiceDependants, stopCh chan struct{}) (*Controller, informers.SharedInformerFactory, error) {
 
 	informers := informers.NewSharedInformerFactoryWithOptions(
 		f.client,
@@ -181,7 +182,7 @@ func (f *fixture) newController(deps *ServiceDependants, stopCh chan struct{}) (
 
 func TestDeleteOnlyCrashloopBackoffPods(t *testing.T) {
 	f := newFixture(t)
-	deps, err := DecodeConfigFile([]byte(dep))
+	deps, err := api.Decode([]byte(dep))
 	if err != nil {
 		t.Fatalf("error decoding file: %v", err)
 	}
@@ -257,7 +258,7 @@ func TestDeleteOnlyCrashloopBackoffPods(t *testing.T) {
 
 func TestDeletePodTransitioningToCrashloopBackoff(t *testing.T) {
 	f := newFixture(t)
-	deps, err := DecodeConfigFile([]byte(dep))
+	deps, err := api.Decode([]byte(dep))
 	if err != nil {
 		t.Fatalf("error decoding file: %v", err)
 	}

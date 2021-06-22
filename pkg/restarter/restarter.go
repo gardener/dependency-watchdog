@@ -9,11 +9,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gardener/dependency-watchdog/pkg/restarter/api"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	watch "k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apimachinery/pkg/watch"
 	componentbaseconfigv1alpha1 "k8s.io/component-base/config/v1alpha1"
 
 	"github.com/gardener/dependency-watchdog/pkg/multicontext"
@@ -28,7 +29,7 @@ import (
 // NewController initializes a new K8s dependency-watchdog controller with restarter.
 func NewController(clientset kubernetes.Interface,
 	sharedInformerFactory informers.SharedInformerFactory,
-	serviceDependants *ServiceDependants,
+	serviceDependants *api.ServiceDependants,
 	watchDuration time.Duration,
 	stopCh <-chan struct{}) *Controller {
 	c := &Controller{
@@ -236,9 +237,9 @@ func (c *Controller) processEndpoint(ctx context.Context, key string) error {
 	return nil
 }
 
-func (c *Controller) shootPodsIfNecessary(ctx context.Context, namespace string, srv Service) error {
+func (c *Controller) shootPodsIfNecessary(ctx context.Context, namespace string, srv api.Service) error {
 	for _, dependantPod := range srv.Dependants {
-		go func(depPods DependantPods) {
+		go func(depPods api.DependantPods) {
 			err := c.shootDependentPodsIfNecessary(ctx, namespace, &depPods)
 			if err != nil {
 				klog.Errorf("Error processing dependents pods: %s", err)
@@ -248,7 +249,7 @@ func (c *Controller) shootPodsIfNecessary(ctx context.Context, namespace string,
 	return nil
 }
 
-func (c *Controller) shootDependentPodsIfNecessary(ctx context.Context, namespace string, depPods *DependantPods) error {
+func (c *Controller) shootDependentPodsIfNecessary(ctx context.Context, namespace string, depPods *api.DependantPods) error {
 	selector, err := metav1.LabelSelectorAsSelector(depPods.Selector)
 	if err != nil {
 		return fmt.Errorf("error converting label selector to selector %s", depPods.Selector.String())
