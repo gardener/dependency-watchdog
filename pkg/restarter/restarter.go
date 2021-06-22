@@ -236,9 +236,9 @@ func (c *Controller) processEndpoint(ctx context.Context, key string) error {
 	return nil
 }
 
-func (c *Controller) shootPodsIfNecessary(ctx context.Context, namespace string, srv service) error {
+func (c *Controller) shootPodsIfNecessary(ctx context.Context, namespace string, srv Service) error {
 	for _, dependantPod := range srv.Dependants {
-		go func(depPods dependantPods) {
+		go func(depPods DependantPods) {
 			err := c.shootDependentPodsIfNecessary(ctx, namespace, &depPods)
 			if err != nil {
 				klog.Errorf("Error processing dependents pods: %s", err)
@@ -248,7 +248,7 @@ func (c *Controller) shootPodsIfNecessary(ctx context.Context, namespace string,
 	return nil
 }
 
-func (c *Controller) shootDependentPodsIfNecessary(ctx context.Context, namespace string, depPods *dependantPods) error {
+func (c *Controller) shootDependentPodsIfNecessary(ctx context.Context, namespace string, depPods *DependantPods) error {
 	selector, err := metav1.LabelSelectorAsSelector(depPods.Selector)
 	if err != nil {
 		return fmt.Errorf("error converting label selector to selector %s", depPods.Selector.String())

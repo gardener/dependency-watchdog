@@ -77,8 +77,8 @@ var _ = Describe("prober", func() {
 		p := &prober{
 			namespace:    ns,
 			secretLister: listerv1.NewSecretLister(indexer),
-			probeDeps: &probeDependants{
-				Probe: &probeConfig{
+			probeDeps: &ProbeDependants{
+				Probe: &ProbeConfig{
 					TimeoutSeconds: &timeout,
 				},
 			},

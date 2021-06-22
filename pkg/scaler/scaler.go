@@ -239,7 +239,7 @@ func (c *Controller) processNamespace(key string) error {
 	for i := range c.probeDependantsList.Probes {
 		probeDeps := &c.probeDependantsList.Probes[i]
 
-		go func(ns string, pd *probeDependants) {
+		go func(ns string, pd *ProbeDependants) {
 			p := &prober{
 				namespace:         ns,
 				mapper:            c.mapper,
@@ -286,7 +286,7 @@ func (c *Controller) processNamespace(key string) error {
 	return nil
 }
 
-func (c *Controller) getKey(ns string, probeDeps *probeDependants) string {
+func (c *Controller) getKey(ns string, probeDeps *ProbeDependants) string {
 	return ns + "/" + probeDeps.Name
 }
 
@@ -337,7 +337,7 @@ func (c *Controller) deleteProber(key string) {
 	delete(c.probers, key)
 }
 
-func (c *Controller) newContext(ns string, probeDeps *probeDependants) (context.Context, context.CancelFunc) {
+func (c *Controller) newContext(ns string, probeDeps *ProbeDependants) (context.Context, context.CancelFunc) {
 	key := c.getKey(ns, probeDeps)
 
 	ctx, cancelFn := context.WithCancel(context.Background())

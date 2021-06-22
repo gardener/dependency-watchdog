@@ -56,7 +56,7 @@ type prober struct {
 	clusterLister     gardenerlisterv1alpha1.ClusterLister
 	deploymentsLister listerappsv1.DeploymentLister
 	scaleInterface    scale.ScaleInterface
-	probeDeps         *probeDependants
+	probeDeps         *ProbeDependants
 	initialDelay      time.Duration
 	initialDelayTimer *time.Timer
 	successThreshold  int32

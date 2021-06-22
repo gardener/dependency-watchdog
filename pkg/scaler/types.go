@@ -54,19 +54,21 @@ type Controller struct {
 // corresponding dependant Scales are scaled down to `zero`. They are scaled back to their
 // original scale when the external probe succeeds again.
 type ProbeDependantsList struct {
-	Probes    []probeDependants `json:"probes"`
+	Probes    []ProbeDependants `json:"probes"`
 	Namespace string            `json:"namespace"`
 }
 
-type probeDependants struct {
+// ProbeDependants struct captures the details about a probe and its dependant scale sub-resources.
+type ProbeDependants struct {
 	Name            string                   `json:"name"`
-	Probe           *probeConfig             `json:"probe"`
-	DependantScales []*dependantScaleDetails `json:"dependantScales"`
+	Probe           *ProbeConfig             `json:"probe"`
+	DependantScales []*DependantScaleDetails `json:"dependantScales"`
 }
 
-type probeConfig struct {
-	External            *probeDetails `json:"external,omitempty"`
-	Internal            *probeDetails `json:"internal,omitempty"`
+// ProbeConfig struct captures the details for probing a Kubernetes apiserver.
+type ProbeConfig struct {
+	External            *ProbeDetails `json:"external,omitempty"`
+	Internal            *ProbeDetails `json:"internal,omitempty"`
 	InitialDelaySeconds *int32        `json:"initialDelaySeconds,omitempty"`
 	TimeoutSeconds      *int32        `json:"timeoutSeconds,omitempty"`
 	PeriodSeconds       *int32        `json:"periodSeconds,omitempty"`
@@ -74,11 +76,13 @@ type probeConfig struct {
 	FailureThreshold    *int32        `json:"failureThreshold,omitempty"`
 }
 
-type probeDetails struct {
+// ProbeDetails captures the kubeconfig secret details to probe a Kubernetes apiserver.
+type ProbeDetails struct {
 	KubeconfigSecretName string `json:"kubeconfigSecretName"`
 }
 
-type dependantScaleDetails struct {
+// DependantScaleDetails has the details about the dependant scale sub-resource.
+type DependantScaleDetails struct {
 	ScaleRef autoscaling.CrossVersionObjectReference `json:"scaleRef"`
 	Replicas *int32                                  `json:"replicas"`
 }
