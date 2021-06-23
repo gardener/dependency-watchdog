@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gardener/dependency-watchdog/pkg/multicontext"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/gardener/dependency-watchdog/pkg/restarter/api"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	listerv1 "k8s.io/client-go/listers/core/v1"
@@ -30,27 +30,9 @@ type Controller struct {
 	workqueue         workqueue.RateLimitingInterface
 	hasSynced         cache.InformerSynced
 	stopCh            <-chan struct{}
-	serviceDependants *ServiceDependants
+	serviceDependants *api.ServiceDependants
 	watchDuration     time.Duration
 	// LeaderElection defines the configuration of leader election client.
 	LeaderElection componentbaseconfig.LeaderElectionConfiguration
 	*multicontext.Multicontext
-}
-
-// ServiceDependants holds the service and the label selectors of the pods which has to be restarted when
-// the service becomes ready and the pods are in CrashloopBackoff.
-type ServiceDependants struct {
-	Services  map[string]Service `json:"services"`
-	Namespace string             `json:"namespace"`
-}
-
-// Service struct defines the dependent pods of a service.
-type Service struct {
-	Dependants []DependantPods `json:"dependantPods"`
-}
-
-// DependantPods struct captures the details needed to identify dependant pods.
-type DependantPods struct {
-	Name     string                `json:"name,omitempty"`
-	Selector *metav1.LabelSelector `json:"selector"`
 }

@@ -8,40 +8,21 @@ import (
 	"io/ioutil"
 	"strings"
 
+	"github.com/gardener/dependency-watchdog/pkg/scaler/api"
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardencorev1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	gardenerv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
-	"github.com/ghodss/yaml"
 	"k8s.io/klog"
 )
 
 // LoadProbeDependantsListFile creates the ProbeDependantsList from a config-file.
-func LoadProbeDependantsListFile(file string) (*ProbeDependantsList, error) {
+func LoadProbeDependantsListFile(file string) (*api.ProbeDependantsList, error) {
 	data, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
-	return DecodeConfigFile(data)
-}
-
-// DecodeConfigFile decodes the byte stream to ServiceDependants objects.
-func DecodeConfigFile(data []byte) (*ProbeDependantsList, error) {
-	dependants := new(ProbeDependantsList)
-	err := yaml.Unmarshal(data, dependants)
-	if err != nil {
-		return nil, err
-	}
-	return dependants, nil
-}
-
-// EncodeConfigFile encodes the ProbeDependantsList objects into a string.
-func EncodeConfigFile(dependants *ProbeDependantsList) (string, error) {
-	data, err := yaml.Marshal(dependants)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
+	return api.Decode(data)
 }
 
 func isRateLimited(err error) bool {

@@ -8,37 +8,18 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/ghodss/yaml"
+	"github.com/gardener/dependency-watchdog/pkg/restarter/api"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // LoadServiceDependants creates the ServiceDependants from a config-file.
-func LoadServiceDependants(file string) (*ServiceDependants, error) {
+func LoadServiceDependants(file string) (*api.ServiceDependants, error) {
 	data, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
-	return DecodeConfigFile(data)
-}
-
-// DecodeConfigFile decodes the byte stream to ServiceDependants objects.
-func DecodeConfigFile(data []byte) (*ServiceDependants, error) {
-	dependants := new(ServiceDependants)
-	err := yaml.Unmarshal(data, dependants)
-	if err != nil {
-		return nil, err
-	}
-	return dependants, nil
-}
-
-// EncodeConfigFile encodes the ServiceDependants objects into a string.
-func EncodeConfigFile(dependants *ServiceDependants) (string, error) {
-	data, err := yaml.Marshal(dependants)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
+	return api.Decode(data)
 }
 
 // IsPodAvailable returns true if a pod is available; false otherwise.

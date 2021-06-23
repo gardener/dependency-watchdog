@@ -7,6 +7,7 @@ package scaler
 import (
 	"crypto/sha256"
 
+	"github.com/gardener/dependency-watchdog/pkg/scaler/api"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -77,8 +78,8 @@ var _ = Describe("prober", func() {
 		p := &prober{
 			namespace:    ns,
 			secretLister: listerv1.NewSecretLister(indexer),
-			probeDeps: &ProbeDependants{
-				Probe: &ProbeConfig{
+			probeDeps: &api.ProbeDependants{
+				Probe: &api.ProbeConfig{
 					TimeoutSeconds: &timeout,
 				},
 			},

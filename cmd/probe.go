@@ -11,6 +11,7 @@ import (
 	"os"
 
 	"github.com/gardener/dependency-watchdog/pkg/scaler"
+	scalerapi "github.com/gardener/dependency-watchdog/pkg/scaler/api"
 	gardenerclientset "github.com/gardener/gardener/pkg/client/extensions/clientset/versioned"
 	gardenerinformer "github.com/gardener/gardener/pkg/client/extensions/informers/externalversions"
 	"github.com/spf13/cobra"
@@ -60,7 +61,7 @@ func runProbe(cmd *cobra.Command, args []string) {
 		klog.Fatalf("Error parsing config file: %s", err.Error())
 	}
 
-	configContent, err := scaler.EncodeConfigFile(deps)
+	configContent, err := scalerapi.Encode(deps)
 	klog.V(2).Infof("Probe configuration: \n %s", configContent)
 
 	config, err := clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)

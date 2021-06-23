@@ -6,13 +6,13 @@ package scaler
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"reflect"
 	"time"
 
-	"crypto/sha256"
-
+	"github.com/gardener/dependency-watchdog/pkg/scaler/api"
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	gardenerlisterv1alpha1 "github.com/gardener/gardener/pkg/client/extensions/listers/extensions/v1alpha1"
 	"github.com/prometheus/client_golang/prometheus"
@@ -56,7 +56,7 @@ type prober struct {
 	clusterLister     gardenerlisterv1alpha1.ClusterLister
 	deploymentsLister listerappsv1.DeploymentLister
 	scaleInterface    scale.ScaleInterface
-	probeDeps         *ProbeDependants
+	probeDeps         *api.ProbeDependants
 	initialDelay      time.Duration
 	initialDelayTimer *time.Timer
 	successThreshold  int32
