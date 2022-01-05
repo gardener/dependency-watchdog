@@ -13,6 +13,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	componentbaseconfigv1alpha1 "k8s.io/component-base/config/v1alpha1"
 
 	"github.com/gardener/dependency-watchdog/pkg/multicontext"
@@ -54,6 +55,9 @@ func NewController(clientset kubernetes.Interface,
 		stopCh:                 stopCh,
 		probeDependantsList:    probeDependantsList,
 		Multicontext:           multicontext.New(),
+		LeaderElection: componentbaseconfigv1alpha1.LeaderElectionConfiguration{
+			ResourceLock: resourcelock.EndpointsLeasesResourceLock,
+		},
 	}
 	componentbaseconfigv1alpha1.RecommendedDefaultLeaderElectionConfiguration(&c.LeaderElection)
 	c.clusterInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{

@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	componentbaseconfigv1alpha1 "k8s.io/component-base/config/v1alpha1"
 
 	"github.com/gardener/dependency-watchdog/pkg/multicontext"
@@ -42,6 +43,9 @@ func NewController(clientset kubernetes.Interface,
 		serviceDependants: serviceDependants,
 		watchDuration:     watchDuration,
 		Multicontext:      multicontext.New(),
+		LeaderElection: componentbaseconfigv1alpha1.LeaderElectionConfiguration{
+			ResourceLock: resourcelock.EndpointsLeasesResourceLock,
+		},
 	}
 	componentbaseconfigv1alpha1.RecommendedDefaultLeaderElectionConfiguration(&c.LeaderElection)
 	c.endpointInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
