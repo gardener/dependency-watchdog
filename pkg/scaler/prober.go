@@ -172,6 +172,8 @@ func (p *prober) tryAndRun(prepareRun func() (stopCh <-chan struct{}), cancelFn 
 
 	internalClient, internalSHA, internalErr := p.getClientFromSecret(p.probeDeps.Probe.Internal.KubeconfigSecretName, p.internalSHA)
 	externalClient, externalSHA, externalErr := p.getClientFromSecret(p.probeDeps.Probe.External.KubeconfigSecretName, p.externalSHA)
+	klog.V(4).Infof("Secret fetch completed with internalErr: %v", internalErr)
+	klog.V(4).Infof("Secret fetch completed with externalErr: %v", externalErr)
 
 	shootNotReady, err := p.shootNotReady()
 	if (shootNotReady && err == nil) || apierrors.IsNotFound(internalErr) || apierrors.IsNotFound(externalErr) {
@@ -459,6 +461,26 @@ func (p *prober) scaleTo(parentContext context.Context, msg string, replicas int
 				klog.V(4).Infof("%s: skipped because desired=%d and current=%d", prefix, replicas, s.Spec.Replicas)
 				continue
 			}
+			/*
+				Check if the scaled objects has defined any delays for the operation.
+				scaleUpDelay is the delay in seconds to wait before initiating scaleUp to ensures that the resource is scaled up after allowing sufficient time for system to recover.
+				scaleDownDelay is the dealy in seconds to wait before initiaing scaleDown to ensure that the resource is scaled down after allowing its dependents room to react.
+			*/
+			// Check for scaleUp delays
+			if replicas > 0 {
+				if dsd.ScaleUpDelay != nil {
+					klog.V(4).Infof("Delaying scale up of %s by %d seconds \n", dsd.ScaleRef.Name, *dsd.ScaleUpDelay)
+					time.Sleep(toDuration(dsd.ScaleUpDelay, 0))
+				}
+			}
+			// Check for scaleDown delays
+			if replicas == 0 {
+				if dsd.ScaleDownDelay != nil {
+					klog.V(4).Infof("Delaying scale down of %s by %d seconds \n", dsd.ScaleRef.Name, *dsd.ScaleUpDelay)
+					time.Sleep(toDuration(dsd.ScaleDownDelay, 0))
+				}
+
+			}
 
 			if err = retry(msg, p.getScalingFn(parentContext, gr, s, replicas), defaultMaxRetries); err != nil {
 				klog.Errorf("%s: Error scaling : %s", prefix, err)
@@ -477,6 +499,7 @@ func (p *prober) getScalingFn(parentContext context.Context, gr schema.GroupReso
 	return func() error {
 		s = s.DeepCopy()
 		s.Spec.Replicas = replicas
+
 		timeout := toDuration(p.probeDeps.Probe.TimeoutSeconds, defaultTimeoutSeconds)
 		_, cancelFn := context.WithTimeout(parentContext, timeout)
 		defer cancelFn()
