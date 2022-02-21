@@ -466,26 +466,36 @@ func (p *prober) scaleTo(parentContext context.Context, msg string, replicas int
 				scaleUpDelay is the delay in seconds to wait before initiating scaleUp to ensures that the resource is scaled up after allowing sufficient time for system to recover.
 				scaleDownDelay is the dealy in seconds to wait before initiaing scaleDown to ensure that the resource is scaled down after allowing its dependents room to react.
 			*/
+			var depChecked bool
 			// Check for scaleUp delays
 			if replicas > 0 {
 				if dsd.ScaleUpDelay != nil {
 					klog.V(4).Infof("Delaying scale up of %s by %d seconds \n", dsd.ScaleRef.Name, *dsd.ScaleUpDelay)
 					time.Sleep(toDuration(dsd.ScaleUpDelay, 0))
 				}
+				depChecked = p.checkScaleRefDependsOn(parentContext, fmt.Sprintf("Checking depenendents of %s before scaleUp", dsd.ScaleRef.Name), dsd.ScaleRefDependsOn, replicas, checkFn)
+				klog.V(4).Infof("Check for Scaleref depends on returned %t\n", depChecked)
+
 			}
 			// Check for scaleDown delays
 			if replicas == 0 {
 				if dsd.ScaleDownDelay != nil {
-					klog.V(4).Infof("Delaying scale down of %s by %d seconds \n", dsd.ScaleRef.Name, *dsd.ScaleUpDelay)
+					klog.V(4).Infof("Delaying scale down of %s by %d seconds \n", dsd.ScaleRef.Name, *dsd.ScaleDownDelay)
 					time.Sleep(toDuration(dsd.ScaleDownDelay, 0))
 				}
+				depChecked = p.checkScaleRefDependsOn(parentContext, fmt.Sprintf("Checking depenendents of %s before scaleDown", dsd.ScaleRef.Name), dsd.ScaleRefDependsOn, replicas, checkFn)
+				klog.V(4).Infof("Check for Scaleref depends on returned %t\n", depChecked)
 
 			}
+			if depChecked {
 
-			if err = retry(msg, p.getScalingFn(parentContext, gr, s, replicas), defaultMaxRetries); err != nil {
-				klog.Errorf("%s: Error scaling : %s", prefix, err)
+				if err = retry(msg, p.getScalingFn(parentContext, gr, s, replicas), defaultMaxRetries); err != nil {
+					klog.Errorf("%s: Error scaling : %s", prefix, err)
+				}
+				klog.Infof("%s: replicas=%d: successful", prefix, replicas)
+			} else {
+				klog.V(4).Infof("Check for dependents returned false. Skipping scaling")
 			}
-			klog.Infof("%s: replicas=%d: successful", prefix, replicas)
 		} else {
 			klog.Errorf("%s: Could not get target reference: %s", prefix, err)
 			klog.Errorf("%s: replicas=%d: failed", prefix, replicas)
@@ -526,4 +536,34 @@ func (p *prober) scaleUp(ctx context.Context) error {
 	return p.scaleTo(ctx, fmt.Sprintf("Scaling up dependents of %s/%s", p.probeDeps.Name, p.namespace), 1, func(o, n int32) bool {
 		return n > o // scale to at least n
 	})
+}
+
+// verifies if for the for the respecitve scale operations the depenendent deployments are in desired state before scaling the actual deployments
+func (p *prober) checkScaleRefDependsOn(ctx context.Context, prefix string, dependsOnScaleRefs []autoscalingapi.CrossVersionObjectReference, replicas int32, checkFn func(oReplicas, nReplicas int32) bool) bool {
+	// if possible check from the cache if the target needs to be scaled
+	klog.V(4).Infof("Check scale for dependents with prefix %s and dependendents %v", prefix, dependsOnScaleRefs)
+	if len(dependsOnScaleRefs) != 0 {
+		for _, dependsOnScaleRef := range dependsOnScaleRefs {
+			klog.V(4).Infof("Checking if the depenendent scaleRef %v  has the desired replicas %d\n ", dependsOnScaleRef, replicas)
+			if dependsOnScaleRef.APIVersion == appsv1.SchemeGroupVersion.String() && dependsOnScaleRef.Kind == kindDeployment {
+				dwdGetTargetFromCacheTotal.With(prometheus.Labels{labelResource: resourceDeployments}).Inc()
+				d, err := p.deploymentsLister.Deployments(p.namespace).Get(dependsOnScaleRef.Name)
+				if err != nil {
+					klog.Errorf("%s: Could not find the target reference for %s: %s", prefix, dependsOnScaleRef.Name, err)
+					return false
+				}
+				var availableReplicas = int32(0)
+				availableReplicas = d.Status.AvailableReplicas //check if available replicas is as desired
+				if !checkFn(availableReplicas, replicas) {
+					klog.V(4).Infof("%s: skipped because desired=%d and available=%d", prefix, replicas, availableReplicas)
+					return true // can continue with scale operation of the parent
+				}
+				klog.V(4).Infof("%s: check for dependent failed as desired=%d and available=%d", prefix, replicas, availableReplicas)
+				return false // stop the scale operation of parent as dependent has not yet scaled
+			}
+
+		}
+	}
+	klog.V(4).Infof("%s skipped as there are no dependents to process.", prefix)
+	return true
 }

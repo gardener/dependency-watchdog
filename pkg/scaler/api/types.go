@@ -42,8 +42,9 @@ type ProbeDetails struct {
 
 // DependantScaleDetails has the details about the dependant scale sub-resource.
 type DependantScaleDetails struct {
-	ScaleRef       autoscalingv1.CrossVersionObjectReference `json:"scaleRef"`
-	Replicas       *int32                                    `json:"replicas"`
-	ScaleUpDelay   *int32                                    `json:"scaleUpDelay,omitempty"`
-	ScaleDownDelay *int32                                    `json:"scaleDowndDelay,omitempty"`
+	ScaleRef          autoscalingv1.CrossVersionObjectReference   `json:"scaleRef"`
+	Replicas          *int32                                      `json:"replicas"`
+	ScaleUpDelay      *int32                                      `json:"scaleUpDelay,omitempty"`
+	ScaleDownDelay    *int32                                      `json:"scaleDownDelay,omitempty"`
+	ScaleRefDependsOn []autoscalingv1.CrossVersionObjectReference `json:"scaleRefDependsOn,omitempty"`
 }

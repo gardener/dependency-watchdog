@@ -20,6 +20,10 @@ probes:
       apiVersion: extensions/v1beta1
       kind: Deployment
       name: machine-controller-manager
+      scaleRefDependsOn:
+      - apiVersion: extensions/v1beta1
+        kind: Deployment
+        name: kube-controller-manager
     replicas: 1
     scaleUpDelay: 10
     scaleDownDelay: 0
