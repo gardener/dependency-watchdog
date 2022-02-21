@@ -8,5 +8,5 @@ package main
 import "github.com/gardener/dependency-watchdog/cmd"
 
 func main() {
-  cmd.Execute()
+	cmd.Execute()
 }

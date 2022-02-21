@@ -10,7 +10,8 @@ require (
 	github.com/prometheus/client_golang v1.3.0
 	github.com/spf13/cobra v0.0.6
 	github.com/spf13/pflag v1.0.5
-	golang.org/x/sys v0.0.0-20200523222454-059865788121 // indirect
+	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
+	golang.org/x/tools v0.1.9 // indirect
 	k8s.io/api v0.18.2
 	k8s.io/apimachinery v0.18.2
 	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
