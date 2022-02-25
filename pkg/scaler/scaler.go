@@ -152,7 +152,7 @@ func (c *Controller) enqueueProbe(obj interface{}) {
 
 	// Enqueue for reconciliation only if the secret name is one of the names configured.
 	if found {
-		klog.V(4).Infof("Enque probe recieved in namespace %s for name %s", ns, name)
+		klog.V(4).Infof("Enque probe received in namespace %s for name %s", ns, name)
 		c.workqueue.AddRateLimited(ns)
 	}
 }
@@ -247,7 +247,7 @@ func (c *Controller) processNamespace(key string) error {
 		return err
 	}
 	if c.probeDependantsList.Namespace != "" && namespace != c.probeDependantsList.Namespace {
-		klog.V(5).Infof("Namespace %s is not in the list probe depenendant namespace \n", namespace)
+		klog.V(5).Infof("Namespace %s is not in the list probe dependant namespace \n", namespace)
 		return nil
 	}
 
@@ -265,7 +265,7 @@ func (c *Controller) processNamespace(key string) error {
 				probeDeps:         probeDeps,
 			}
 			err := p.tryAndRun(func() <-chan struct{} {
-				klog.Infof("Starting the probe in the namespace %s: %v", ns, pd)
+				klog.Infof("Starting the probe in the namespace %s: %v", ns, pd.Name)
 				ctx, cancelFn := c.newContext(ns, pd)
 				klog.V(5).Infof("Created the context %v with cancelFun %v\n", ctx, cancelFn)
 				// Register the context's cancelFn. This also cancels the previous context if any.
@@ -277,7 +277,7 @@ func (c *Controller) processNamespace(key string) error {
 				c.registerProber(p)
 				return ctx.Done()
 			}, func() {
-				klog.V(4).Infof("Setting the context nil for ns %s and probe depenent %v\n", ns, probeDeps)
+				klog.V(4).Infof("Setting the context nil for ns %s and probe dependent %v\n", ns, probeDeps)
 				c.Multicontext.ContextCh <- &multicontext.ContextMessage{
 					Key:      c.getKey(ns, pd),
 					CancelFn: nil,
@@ -315,23 +315,24 @@ func (c *Controller) registerProber(p *prober) *prober {
 		ns        = p.namespace
 		probeDeps = p.probeDeps
 	)
-	klog.V(4).Infof("Registering Probe \n")
 	if probeDeps == nil {
 		return nil
 	}
 
 	key := c.getKey(ns, probeDeps)
+	klog.V(4).Infof("Registering Probe for key %s\n", key)
 
 	c.mux.Lock() // serialize access to c.probers
 	defer c.mux.Unlock()
 
 	if c.probers == nil {
+		klog.V(4).Infof("No probers are running yet. Adding key %s to the probers list\n", key)
 		c.probers = make(map[string]*prober)
 	}
 
 	pb, ok := c.probers[key]
 	if ok && pb != nil {
-		klog.V(4).Infof("Found and existing probe for key %s so returning the probe with ok code %v \n", key, ok)
+		klog.V(4).Infof("Found and existing probe for key %s so using existing probe %v \n", key, pb)
 		return pb
 	}
 

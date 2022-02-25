@@ -25,5 +25,5 @@ probes:
         kind: Deployment
         name: kube-controller-manager
     replicas: 1
-    scaleUpDelay: 10
-    scaleDownDelay: 0
+    scaleUpDelaySeconds: 10
+    scaleDownDelaySeconds: 0
