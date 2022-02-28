@@ -88,7 +88,10 @@ func NewController(clientset kubernetes.Interface,
 		},
 	})
 	c.secretsInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: c.enqueueProbe,
+		AddFunc: func(new interface{}) {
+			klog.V(4).Infof("Secret Added\n")
+			c.enqueueProbe(new)
+		},
 		UpdateFunc: func(old, new interface{}) {
 			newSecret := new.(*v1.Secret)
 			oldSecret := old.(*v1.Secret)
@@ -97,9 +100,13 @@ func NewController(clientset kubernetes.Interface,
 				// Two different versions of the same Deployment will always have different RVs.
 				return
 			}
+			klog.V(4).Info("Secret changed")
 			c.enqueueProbe(new)
 		},
-		DeleteFunc: c.enqueueProbe,
+		DeleteFunc: func(old interface{}) {
+			klog.V(4).Infof("Secret deleted\n")
+			c.enqueueProbe(old)
+		},
 	})
 	c.hasSecretsSynced = c.secretsInformer.HasSynced
 	c.hasDeploymentsSynced = c.deploymentsInformer.HasSynced
@@ -145,6 +152,7 @@ func (c *Controller) enqueueProbe(obj interface{}) {
 
 	// Enqueue for reconciliation only if the secret name is one of the names configured.
 	if found {
+		klog.V(4).Infof("Enque probe received in namespace %s for name %s", ns, name)
 		c.workqueue.AddRateLimited(ns)
 	}
 }
@@ -196,6 +204,7 @@ func (c *Controller) processNextWorkItem() bool {
 	obj, shutdown := c.workqueue.Get()
 
 	if shutdown {
+		klog.V(4).Infof("Received shutdown signal from worker queue\n")
 		return false
 	}
 
@@ -238,6 +247,7 @@ func (c *Controller) processNamespace(key string) error {
 		return err
 	}
 	if c.probeDependantsList.Namespace != "" && namespace != c.probeDependantsList.Namespace {
+		klog.V(5).Infof("Namespace %s is not in the list probe dependant namespace \n", namespace)
 		return nil
 	}
 
@@ -255,9 +265,9 @@ func (c *Controller) processNamespace(key string) error {
 				probeDeps:         probeDeps,
 			}
 			err := p.tryAndRun(func() <-chan struct{} {
-				klog.Infof("Starting the probe in the namespace %s: %v", ns, pd)
+				klog.Infof("Starting the probe in the namespace %s: %v", ns, pd.Name)
 				ctx, cancelFn := c.newContext(ns, pd)
-
+				klog.V(5).Infof("Created the context %v with cancelFun %v\n", ctx, cancelFn)
 				// Register the context's cancelFn. This also cancels the previous context if any.
 				c.Multicontext.ContextCh <- &multicontext.ContextMessage{
 					Key:      c.getKey(ns, pd),
@@ -267,14 +277,18 @@ func (c *Controller) processNamespace(key string) error {
 				c.registerProber(p)
 				return ctx.Done()
 			}, func() {
+				klog.V(4).Infof("Setting the context nil for ns %s and probe dependent %v\n", ns, probeDeps)
 				c.Multicontext.ContextCh <- &multicontext.ContextMessage{
 					Key:      c.getKey(ns, pd),
 					CancelFn: nil,
 				}
 			}, func() {
+				klog.V(4).Infof("Enqueuing with a delay of 10 mins\n")
 				c.workqueue.AddAfter(ns, 10*time.Minute)
 			}, func() bool {
+
 				_, ok := c.probers[ns]
+				klog.V(4).Infof("Prober ran with ok code %v\n", ok)
 				return ok
 			})
 
@@ -301,22 +315,24 @@ func (c *Controller) registerProber(p *prober) *prober {
 		ns        = p.namespace
 		probeDeps = p.probeDeps
 	)
-
 	if probeDeps == nil {
 		return nil
 	}
 
 	key := c.getKey(ns, probeDeps)
+	klog.V(4).Infof("Registering Probe for key %s\n", key)
 
 	c.mux.Lock() // serialize access to c.probers
 	defer c.mux.Unlock()
 
 	if c.probers == nil {
+		klog.V(4).Infof("No probers are running yet. Adding key %s to the probers list\n", key)
 		c.probers = make(map[string]*prober)
 	}
 
 	pb, ok := c.probers[key]
 	if ok && pb != nil {
+		klog.V(4).Infof("Found and existing probe for key %s so using existing probe %v \n", key, pb)
 		return pb
 	}
 
@@ -328,6 +344,7 @@ func (c *Controller) registerProber(p *prober) *prober {
 		probeDeps:      probeDeps,
 	}
 	c.probers[key] = pb
+	klog.V(4).Infof("Created a new probe and added for key %v \n", key)
 	return pb
 }
 
@@ -336,16 +353,19 @@ func (c *Controller) deleteProber(key string) {
 	defer c.mux.Unlock()
 
 	if c.probers == nil {
+		klog.V(4).Infof("No prober found returning\n")
 		return
 	}
 
 	delete(c.probers, key)
+	klog.V(4).Infof("Deleted probe for key %v \n", key)
 }
 
 func (c *Controller) newContext(ns string, probeDeps *api.ProbeDependants) (context.Context, context.CancelFunc) {
 	key := c.getKey(ns, probeDeps)
 
 	ctx, cancelFn := context.WithCancel(context.Background())
+	klog.V(4).Infof("Created new context %v with cancelFn %v \n", ctx, cancelFn)
 	return ctx, func() {
 		defer cancelFn()
 		c.deleteProber(key)
