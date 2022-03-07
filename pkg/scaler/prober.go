@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/scale"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
+	"k8s.io/utils/pointer"
 )
 
 type probeType int
@@ -394,15 +395,16 @@ func (p *prober) scaleTo(parentContext context.Context, msg string, replicas int
 
 		prefix := fmt.Sprintf("%s: %s.%s/%s", msg, ds.APIVersion, ds.Kind, ds.Name)
 
-		klog.V(4).Infof("%s: replicas=%d: in progress...", prefix, replicas)
+		klog.V(5).Infof("%s: replicas=%d: in progress...", prefix, replicas)
 
 		// if possible check from the cache if the target needs to be scaled
 		if ds.APIVersion == appsv1.SchemeGroupVersion.String() && ds.Kind == kindDeployment {
 			dwdGetTargetFromCacheTotal.With(prometheus.Labels{labelResource: resourceDeployments}).Inc()
 
 			if d, err := p.deploymentsLister.Deployments(p.namespace).Get(ds.Name); err != nil {
-				klog.Errorf("%s: Could not find the target reference: %s", prefix, err)
-				klog.Errorf("%s: replicas=%d: failed", prefix, replicas)
+				klog.Errorf("%s: Skipped as target reference: %s", prefix, err)
+				klog.V(5).Infof("%s: replicas=%d: failed", prefix, replicas)
+				continue
 			} else {
 				var specReplicas = int32(0)
 				if d.Spec.Replicas != nil {
@@ -474,7 +476,6 @@ func (p *prober) scaleTo(parentContext context.Context, msg string, replicas int
 					time.Sleep(toDuration(dsd.ScaleUpDelaySeconds, 0))
 				}
 				depChecked = p.checkScaleRefDependsOn(parentContext, fmt.Sprintf("Checking dependents of %s before scaleUp", dsd.ScaleRef.Name), dsd.ScaleRefDependsOn, replicas, checkFn)
-				klog.V(4).Infof("Check for Scaleref depends on returned %t\n", depChecked)
 
 			} else if replicas == 0 { // check for scaleDown delays
 				if dsd.ScaleDownDelaySeconds != nil {
@@ -482,7 +483,6 @@ func (p *prober) scaleTo(parentContext context.Context, msg string, replicas int
 					time.Sleep(toDuration(dsd.ScaleDownDelaySeconds, 0))
 				}
 				depChecked = p.checkScaleRefDependsOn(parentContext, fmt.Sprintf("Checking dependents of %s before scaleDown", dsd.ScaleRef.Name), dsd.ScaleRefDependsOn, replicas, checkFn)
-				klog.V(4).Infof("Check for Scaleref depends on returned %t\n", depChecked)
 
 			} else {
 				klog.Errorf("%s: Replicas has a unsupported value %d\n", prefix, replicas)
@@ -538,14 +538,18 @@ func (p *prober) scaleUp(ctx context.Context) error {
 	})
 }
 
-// Checks for a given resource considered for scale, if for the respecitve scale operations its dependent deployments are in desired state.
+// Checks for a given resource considered for scale, if for the respective scale operations its dependent deployments are in desired state.
 // If availableReplicas is not equal to desired then it fails the check and the scaling fo the parent is stopped
 func (p *prober) checkScaleRefDependsOn(ctx context.Context, prefix string, dependsOnScaleRefs []autoscalingapi.CrossVersionObjectReference, replicas int32, checkFn func(oReplicas, nReplicas int32) bool) bool {
+	// running this check immediately after scaling tends to fail as the parent resource might still be processing
+	// introduce a short delay to let the parent resource availability to reflect current state correctly
+	// TODO: We should replace this with a proper flag for DWD probe, this requires also to identify the currect default value.
+	time.Sleep(toDuration(pointer.Int32Ptr(2), 0))
 	// if possible check from the cache if the target needs to be scaled
-	klog.V(4).Infof("Check scale for dependents with prefix %s and dependendents %v", prefix, dependsOnScaleRefs)
+	klog.V(5).Infof("%s with dependents %v", prefix, dependsOnScaleRefs)
 	if len(dependsOnScaleRefs) != 0 {
 		for _, dependsOnScaleRef := range dependsOnScaleRefs {
-			klog.V(4).Infof("Checking if the dependent scaleRef %v  has the desired replicas %d\n ", dependsOnScaleRef, replicas)
+			klog.V(4).Infof("Checking if the dependent scaleRef %v  has the desired replicas %d", dependsOnScaleRef, replicas)
 			if dependsOnScaleRef.APIVersion == appsv1.SchemeGroupVersion.String() && dependsOnScaleRef.Kind == kindDeployment {
 				dwdGetTargetFromCacheTotal.With(prometheus.Labels{labelResource: resourceDeployments}).Inc()
 				d, err := p.deploymentsLister.Deployments(p.namespace).Get(dependsOnScaleRef.Name)
