@@ -44,7 +44,7 @@ func NewController(clientset kubernetes.Interface,
 		watchDuration:     watchDuration,
 		Multicontext:      multicontext.New(),
 		LeaderElection: componentbaseconfigv1alpha1.LeaderElectionConfiguration{
-			ResourceLock: resourcelock.EndpointsLeasesResourceLock,
+			ResourceLock: resourcelock.LeasesResourceLock,
 		},
 	}
 	componentbaseconfigv1alpha1.RecommendedDefaultLeaderElectionConfiguration(&c.LeaderElection)
