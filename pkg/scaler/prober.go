@@ -76,6 +76,41 @@ type probeResult struct {
 	resultRun int32
 }
 
+// get the internal and external client along with new SHA values for each one of them respectively
+func (p *prober) getClients() (internalClient, externalClient kubernetes.Interface, internalSHA, externalSHA []byte, internalErr, externalErr error) {
+	internalClient, internalSHA, internalErr = p.getClientFromSecret(p.probeDeps.Probe.Internal.KubeconfigSecretName, p.internalSHA)
+	if internalErr != nil {
+		klog.V(4).Infof("Secret fetch completed with internalErr: %v", internalErr)
+	}
+
+	externalClient, externalSHA, externalErr = p.getClientFromSecret(p.probeDeps.Probe.External.KubeconfigSecretName, p.externalSHA)
+	if externalErr != nil {
+		klog.V(4).Infof("Secret fetch completed with externalErr: %v", externalErr)
+	}
+
+	return internalClient, externalClient, internalSHA, externalSHA, internalErr, externalErr
+}
+
+// refreshes probers client and SHA with the newly fetched values
+func (p *prober) refreshClients(internalClient, externalClient kubernetes.Interface, internalSHA, externalSHA []byte) {
+	// As the function is called also from withing the doProbe,
+	// currently when called from doProbe only the changed clients are passed to the function which can mistakenly marked the others as nil.
+	// TODO: We need to evaluate if this section should be synchronized. Currently the only other place of call is when the doProbe fails due to secret rotation not being picked up.
+	// In this scenario there is no race condition as the probes are already running.
+	if internalClient != nil {
+		p.internalClient = internalClient
+	}
+	if internalSHA != nil {
+		p.internalSHA = internalSHA
+	}
+	if externalClient != nil {
+		p.externalClient = externalClient
+	}
+	if externalSHA != nil {
+		p.externalSHA = externalSHA
+	}
+}
+
 // getClientFromSecret constructs a Kubernetes client based on the supplied secret and
 // return it along with the SHA256 checksum of the kubeconfig in the secret
 // but only if the SHA256 checksum of the kubeconfig in the secret differs from oldSHA.
@@ -170,11 +205,9 @@ func (p *prober) tryAndRun(prepareRun func() (stopCh <-chan struct{}), cancelFn 
 	if p.probeDeps.Probe.Internal == nil {
 		return errors.New("Invalid empty internal probe configuration")
 	}
-
-	internalClient, internalSHA, internalErr := p.getClientFromSecret(p.probeDeps.Probe.Internal.KubeconfigSecretName, p.internalSHA)
-	externalClient, externalSHA, externalErr := p.getClientFromSecret(p.probeDeps.Probe.External.KubeconfigSecretName, p.externalSHA)
-	klog.V(4).Infof("Secret fetch completed with internalErr: %v", internalErr)
-	klog.V(4).Infof("Secret fetch completed with externalErr: %v", externalErr)
+	// Get internal and external clients along with calculated SHA to detect secret rotation
+	// Any errors returned shall be evaluated on checks defined in subsequent section.
+	internalClient, externalClient, internalSHA, externalSHA, internalErr, externalErr := p.getClients()
 
 	shootNotReady, err := p.shootNotReady()
 	if (shootNotReady && err == nil) || apierrors.IsNotFound(internalErr) || apierrors.IsNotFound(externalErr) {
@@ -217,10 +250,7 @@ func (p *prober) tryAndRun(prepareRun func() (stopCh <-chan struct{}), cancelFn 
 
 	// prepareRun should have stopped previous prober goroutine.
 	// So, there is no need for any synchronization here.
-	p.internalClient = internalClient
-	p.internalSHA = internalSHA
-	p.externalClient = externalClient
-	p.externalSHA = externalSHA
+	p.refreshClients(internalClient, externalClient, internalSHA, externalSHA)
 
 	return p.run(stopCh)
 }
@@ -350,22 +380,46 @@ func (p *prober) doProbe(msg string, client kubernetes.Interface, pr *probeResul
 	)
 	for i := 0; i < maxRetries; i++ {
 		if _, err = client.Discovery().ServerVersion(); err == nil {
-			klog.V(4).Infof("%s: probe succeeded", msg)
 			break
 		}
-		klog.V(3).Infof("%s: probe failed with error: %s. Will retry...", msg, err)
+		klog.V(5).Infof("%s: probe failed with error: %s. Will retry...", msg, err)
 	}
 
 	if (err == nil && pr.lastError != nil) || (err != nil && pr.lastError == nil) {
 		pr.resultRun = 0
 	}
 
+	// Check if err is unauthorized or is forbidden and if the failure threshold is not reach.
+	// In case its true try to fetch the secret again and refresh the prober
+	if (apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err) || apierrors.IsInvalid(err)) && pr.resultRun < p.failureThreshold {
+		// get the client to get the secret
+		internalClient, externalClient, internalSHA, externalSHA, internalErr, externalErr := p.getClients()
+		klog.V(5).Infof("Internal Client is - %s", internalClient)
+		klog.V(5).Infof("External Client is - %s", externalClient)
+		// For the scenarios where the kubeconfig secrets are rotated the internal will not change so it will result in Already exist error which should be ignored.
+		if externalErr != nil || (internalErr != nil && !apierrors.IsAlreadyExists(internalErr)) {
+			klog.Errorf("Secret re-fetch completed with internalErr as : %v and externalErr as %v", internalErr, externalErr)
+		} else {
+			klog.V(5).Infof("Refreshing the clients created with updated secrets")
+			p.refreshClients(internalClient, externalClient, internalSHA, externalSHA)
+			if _, err = p.externalClient.Discovery().ServerVersion(); err == nil {
+				klog.V(5).Infof("%s: Retry of probe succeeded", msg)
+			} else {
+				klog.V(3).Infof("%s: Retry probe failed with error: %s. Will retry...", msg, err)
+			}
+		}
+	}
+
 	pr.lastError = err
 	if pr.resultRun <= p.successThreshold || pr.resultRun <= p.failureThreshold { // Prevents overflow
 		pr.resultRun++
 	}
+	if pr.lastError != nil {
+		klog.V(4).Infof("%s: Probe finished with error %s for resultRun:%d", msg, pr.lastError.Error(), pr.resultRun)
+	} else {
+		klog.V(4).Infof("%s: Probe finished successfully for rusultRun:%d", msg, pr.resultRun)
+	}
 
-	klog.V(4).Infof("%s: probe result: %#v", msg, pr)
 }
 
 func retry(msg string, fn func() error, retries int) error {
@@ -472,14 +526,14 @@ func (p *prober) scaleTo(parentContext context.Context, msg string, replicas int
 			// Check for scaleUp delays
 			if replicas > 0 {
 				if dsd.ScaleUpDelaySeconds != nil {
-					klog.V(4).Infof("Delaying scale up of %s by %d seconds \n", dsd.ScaleRef.Name, *dsd.ScaleUpDelaySeconds)
+					klog.V(4).Infof("Delaying scale up of %s by %d seconds to allow state of resources it depends on to be updated. \n", dsd.ScaleRef.Name, *dsd.ScaleUpDelaySeconds)
 					time.Sleep(toDuration(dsd.ScaleUpDelaySeconds, 0))
 				}
 				depChecked = p.checkScaleRefDependsOn(parentContext, fmt.Sprintf("Checking dependents of %s before scaleUp", dsd.ScaleRef.Name), dsd.ScaleRefDependsOn, replicas, checkFn)
 
 			} else if replicas == 0 { // check for scaleDown delays
 				if dsd.ScaleDownDelaySeconds != nil {
-					klog.V(4).Infof("Delaying scale down of %s by %d seconds \n", dsd.ScaleRef.Name, *dsd.ScaleDownDelaySeconds)
+					klog.V(4).Infof("Delaying scale down of %s by %d seconds to allow state to resources it depends on to be updated. \n", dsd.ScaleRef.Name, *dsd.ScaleDownDelaySeconds)
 					time.Sleep(toDuration(dsd.ScaleDownDelaySeconds, 0))
 				}
 				depChecked = p.checkScaleRefDependsOn(parentContext, fmt.Sprintf("Checking dependents of %s before scaleDown", dsd.ScaleRef.Name), dsd.ScaleRefDependsOn, replicas, checkFn)
@@ -544,7 +598,7 @@ func (p *prober) checkScaleRefDependsOn(ctx context.Context, prefix string, depe
 	// running this check immediately after scaling tends to fail as the parent resource might still be processing
 	// introduce a short delay to let the parent resource availability to reflect current state correctly
 	// TODO: We should replace this with a proper flag for DWD probe, this requires also to identify the currect default value.
-	time.Sleep(toDuration(pointer.Int32Ptr(2), 0))
+	time.Sleep(toDuration(pointer.Int32Ptr(10), 0))
 	// if possible check from the cache if the target needs to be scaled
 	klog.V(5).Infof("%s with dependents %v", prefix, dependsOnScaleRefs)
 	if len(dependsOnScaleRefs) != 0 {
