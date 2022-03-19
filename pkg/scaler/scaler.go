@@ -89,7 +89,8 @@ func NewController(clientset kubernetes.Interface,
 	})
 	c.secretsInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(new interface{}) {
-			klog.V(4).Infof("Secret Added\n")
+			newSecret := new.(*v1.Secret)
+			klog.V(5).Infof("Secret %s added in %s namespace\n", newSecret.Name, newSecret.Namespace)
 			c.enqueueProbe(new)
 		},
 		UpdateFunc: func(old, new interface{}) {
@@ -100,11 +101,12 @@ func NewController(clientset kubernetes.Interface,
 				// Two different versions of the same Deployment will always have different RVs.
 				return
 			}
-			klog.V(4).Info("Secret changed")
+			klog.V(5).Infof("Old secret %s replaced in namespace %s is updated.", oldSecret.Name, oldSecret.Namespace)
 			c.enqueueProbe(new)
 		},
 		DeleteFunc: func(old interface{}) {
-			klog.V(4).Infof("Secret deleted\n")
+			oldSecret := old.(*v1.Secret)
+			klog.V(5).Infof("Secret %s deleted in %s namespace\n", oldSecret.Name, oldSecret.Namespace)
 			c.enqueueProbe(old)
 		},
 	})
