@@ -392,21 +392,20 @@ func (p *prober) doProbe(msg string, client kubernetes.Interface, pr *probeResul
 	// Check if err is unauthorized or is forbidden and if the failure threshold is not reach.
 	// In case its true try to fetch the secret again and refresh the prober
 	if (apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err) || apierrors.IsInvalid(err)) && pr.resultRun < p.failureThreshold {
+
 		// get the client to get the secret
 		internalClient, externalClient, internalSHA, externalSHA, internalErr, externalErr := p.getClients()
-		klog.V(5).Infof("Internal Client is - %s", internalClient)
-		klog.V(5).Infof("External Client is - %s", externalClient)
+		klog.V(5).Infof("Refetched Internal Client is -%s", internalClient)
+		klog.V(5).Infof("Refetched External Client is - %s", externalClient)
 		// For the scenarios where the kubeconfig secrets are rotated the internal will not change so it will result in Already exist error which should be ignored.
 		if externalErr != nil || (internalErr != nil && !apierrors.IsAlreadyExists(internalErr)) {
 			klog.Errorf("Secret re-fetch completed with internalErr as : %v and externalErr as %v", internalErr, externalErr)
 		} else {
-			klog.V(5).Infof("Refreshing the clients created with updated secrets")
+			// clients are refrehed with new rotated kubeconfigs to be retried in the next reconciliation.
+			// This is done to avoid DWD to continue with stale kubeconfigs which will never recover unless the DWD probe is restarted.
 			p.refreshClients(internalClient, externalClient, internalSHA, externalSHA)
-			if _, err = p.externalClient.Discovery().ServerVersion(); err == nil {
-				klog.V(5).Infof("%s: Retry of probe succeeded", msg)
-			} else {
-				klog.V(3).Infof("%s: Retry probe failed with error: %s. Will retry...", msg, err)
-			}
+			klog.V(4).Infof("Refreshed clients with updated secrets. Probe skipped to be retried...")
+			return
 		}
 	}
 
@@ -415,7 +414,7 @@ func (p *prober) doProbe(msg string, client kubernetes.Interface, pr *probeResul
 		pr.resultRun++
 	}
 	if pr.lastError != nil {
-		klog.V(4).Infof("%s: Probe finished with error %s for resultRun:%d", msg, pr.lastError.Error(), pr.resultRun)
+		klog.Errorf("%s: Probe finished with error %s for resultRun:%d", msg, pr.lastError.Error(), pr.resultRun)
 	} else {
 		klog.V(4).Infof("%s: Probe finished successfully for rusultRun:%d", msg, pr.resultRun)
 	}
