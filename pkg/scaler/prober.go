@@ -338,7 +338,10 @@ func (p *prober) getProbeResultLabels(pr *probeResult) prometheus.Labels {
 // 6. If the external probe is HEALTHY then the dependants are scaled up.
 // 7. If the external probe is UNHEALTHY then the dependants are scaled down.
 func (p *prober) probe(ctx context.Context) error {
-	p.doProbe(fmt.Sprintf("%s/%s/internal", p.probeDeps.Name, p.namespace), p.internalClient, &p.internalResult)
+	internalProbeMsg := fmt.Sprintf("%s/%s/internal", p.probeDeps.Name, p.namespace)
+	err := p.doProbe(internalProbeMsg, p.internalClient, &p.internalResult)
+	p.handleError(&p.internalResult, err, internalProbeMsg)
+
 	dwdInternalProbesTotal.With(p.getProbeResultLabels(&p.internalResult)).Inc()
 
 	if p.isUnhealthy(&p.internalResult) {
@@ -360,7 +363,10 @@ func (p *prober) probe(ctx context.Context) error {
 		p.initialDelayTimer = nil
 	}
 
-	p.doProbe(fmt.Sprintf("%s/%s/external", p.probeDeps.Name, p.namespace), p.externalClient, &p.externalResult)
+	externalProbeMsg := fmt.Sprintf("%s/%s/external", p.probeDeps.Name, p.namespace)
+	err = p.doProbe(externalProbeMsg, p.externalClient, &p.externalResult)
+	p.handleError(&p.externalResult, err, externalProbeMsg)
+
 	dwdExternalProbesTotal.With(p.getProbeResultLabels(&p.externalResult)).Inc()
 
 	if p.isHealthy(&p.externalResult) {
@@ -373,7 +379,7 @@ func (p *prober) probe(ctx context.Context) error {
 	return nil
 }
 
-func (p *prober) doProbe(msg string, client kubernetes.Interface, pr *probeResult) {
+func (p *prober) doProbe(msg string, client kubernetes.Interface, pr *probeResult) error {
 	var (
 		err        error
 		maxRetries = 1 // override defaultMaxRetries
@@ -385,28 +391,29 @@ func (p *prober) doProbe(msg string, client kubernetes.Interface, pr *probeResul
 		klog.V(5).Infof("%s: probe failed with error: %s. Will retry...", msg, err)
 	}
 
-	if (err == nil && pr.lastError != nil) || (err != nil && pr.lastError == nil) {
-		pr.resultRun = 0
+	if err != nil {
+		return err
 	}
 
-	// Check if err is unauthorized or is forbidden and if the failure threshold is not reach.
-	// In case its true try to fetch the secret again and refresh the prober
-	if (apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err) || apierrors.IsInvalid(err)) && pr.resultRun < p.failureThreshold {
+	return nil
 
-		// get the client to get the secret
-		internalClient, externalClient, internalSHA, externalSHA, internalErr, externalErr := p.getClients()
-		klog.V(5).Infof("Refetched Internal Client is -%s", internalClient)
-		klog.V(5).Infof("Refetched External Client is - %s", externalClient)
-		// For the scenarios where the kubeconfig secrets are rotated the internal will not change so it will result in Already exist error which should be ignored.
-		if externalErr != nil || (internalErr != nil && !apierrors.IsAlreadyExists(internalErr)) {
-			klog.Errorf("Secret re-fetch completed with internalErr as : %v and externalErr as %v", internalErr, externalErr)
-		} else {
-			// clients are refrehed with new rotated kubeconfigs to be retried in the next reconciliation.
-			// This is done to avoid DWD to continue with stale kubeconfigs which will never recover unless the DWD probe is restarted.
-			p.refreshClients(internalClient, externalClient, internalSHA, externalSHA)
-			klog.V(4).Infof("Refreshed clients with updated secrets. Probe skipped to be retried...")
-			return
-		}
+}
+
+// handleError processing the err message for a given probe and decides -
+// . 1. If the secrets are rotated it update the clients used by the probes
+// . 2. If the requests are throttled it doesn't mean the API Server is down so it just logs and relies on the next sync.
+//   3. If it is any other error then it logs the error and increments the result run if still under failure threshold configured.
+func (p *prober) handleError(pr *probeResult, err error, msg string) {
+	if p.checkSecretsRotated(err, &p.internalResult) {
+		p.updateClientsSecrets(&p.internalResult, msg)
+		return
+	} else if p.checkThrottled(err) {
+		klog.V(4).Infof("%s: Probe skipped as it experienced throttling. Will be retried..", msg)
+		return
+	}
+
+	if (err == nil && pr.lastError != nil) || (err != nil && pr.lastError == nil) {
+		pr.resultRun = 0
 	}
 
 	pr.lastError = err
@@ -417,6 +424,41 @@ func (p *prober) doProbe(msg string, client kubernetes.Interface, pr *probeResul
 		klog.Errorf("%s: Probe finished with error %s for resultRun:%d", msg, pr.lastError.Error(), pr.resultRun)
 	} else {
 		klog.V(4).Infof("%s: Probe finished successfully for rusultRun:%d", msg, pr.resultRun)
+	}
+
+}
+
+func (p *prober) checkSecretsRotated(err error, pr *probeResult) bool {
+	// Check if err is unauthorized or is forbidden and if the failure threshold is not reach.
+	// In case its true try to fetch the secret again and refresh the prober
+	if (apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err) || apierrors.IsInvalid(err)) && pr.resultRun < p.failureThreshold {
+		return true
+	}
+	return false
+
+}
+
+func (p *prober) checkThrottled(err error) bool {
+	if apierrors.IsTooManyRequests(err) {
+		return true
+	}
+	return false
+}
+
+func (p *prober) updateClientsSecrets(pr *probeResult, msg string) {
+	// get the client to get the secret
+	internalClient, externalClient, internalSHA, externalSHA, internalErr, externalErr := p.getClients()
+	klog.V(5).Infof("Refetched Internal Client is -%s", internalClient)
+	klog.V(5).Infof("Refetched External Client is - %s", externalClient)
+	// For the scenarios where the kubeconfig secrets are rotated the internal will not change so it will result in Already exist error which should be ignored.
+	if externalErr != nil || (internalErr != nil && !apierrors.IsAlreadyExists(internalErr)) {
+		klog.Errorf("Secret re-fetch completed with internalErr as : %v and externalErr as %v", internalErr, externalErr)
+		p.handleError(pr, fmt.Errorf("Secret re-fetch failed"), msg)
+	} else {
+		// clients are refreshed with new rotated kubeconfigs to be retried in the next reconciliation.
+		// This is done to avoid DWD to continue with stale kubeconfigs which will never recover unless the DWD probe is restarted.
+		p.refreshClients(internalClient, externalClient, internalSHA, externalSHA)
+		klog.V(4).Infof("Refreshed clients with updated secrets. Probe skipped to be retried...")
 	}
 
 }
