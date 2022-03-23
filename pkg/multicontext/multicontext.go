@@ -47,7 +47,7 @@ func (m *Multicontext) Start(stopCh <-chan struct{}) {
 			return
 		case cmsg := <-m.ContextCh:
 			oldCancelFn, ok := m.CancelFns[cmsg.Key]
-			klog.V(4).Infof("Checking the oldCancelFn for key %v in the multicontext map and recieved ok code %v", cmsg.Key, ok)
+			klog.V(4).Infof("Checking the oldCancelFn for key %v in the multicontext map and received ok code %v", cmsg.Key, ok)
 			if cmsg.CancelFn != nil {
 				klog.Infof("Registering the context for the key: %s", cmsg.Key)
 				m.CancelFns[cmsg.Key] = cmsg.CancelFn
