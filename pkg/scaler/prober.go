@@ -518,7 +518,7 @@ func (p *prober) scaleTo(parentContext context.Context, msg string, replicas int
 					klog.V(4).Infof("%s: skipped because desired=%d and current=%d", prefix, replicas, specReplicas)
 					continue
 				} else if hasIgnoreScalingAnnotation(d) {
-					klog.V(4).Infof("%s: skipped because ignore scaling annotation present on deployment", prefix, replicas, specReplicas)
+					klog.V(4).Infof("%s: skipped because ignore scaling annotation present on deployment", prefix)
 					continue
 				}
 			}
