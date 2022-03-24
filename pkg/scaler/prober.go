@@ -47,7 +47,8 @@ const (
 	defaultJitterMaxFactor     = 0.2
 	defaultJitterSliding       = true
 
-	kindDeployment = "Deployment"
+	kindDeployment             = "Deployment"
+	ignoreScalingAnnotationKey = "gardener.cloud/ignore-scaling"
 )
 
 type prober struct {
@@ -463,6 +464,14 @@ func (p *prober) updateClientsSecrets(pr *probeResult, msg string) {
 
 }
 
+func hasIgnoreScalingAnnotation(d *appsv1.Deployment) bool {
+	if val, ok := d.Annotations[ignoreScalingAnnotationKey]; ok {
+		return val == "true"
+	}
+
+	return false
+}
+
 func retry(msg string, fn func() error, retries int) error {
 	var err error
 	for ; retries > 0; retries-- {
@@ -507,6 +516,9 @@ func (p *prober) scaleTo(parentContext context.Context, msg string, replicas int
 				}
 				if !checkFn(specReplicas, replicas) {
 					klog.V(4).Infof("%s: skipped because desired=%d and current=%d", prefix, replicas, specReplicas)
+					continue
+				} else if hasIgnoreScalingAnnotation(d) {
+					klog.V(4).Infof("%s: skipped because ignore scaling annotation present on deployment", prefix, replicas, specReplicas)
 					continue
 				}
 			}
