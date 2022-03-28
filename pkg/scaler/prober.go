@@ -48,7 +48,7 @@ const (
 	defaultJitterSliding       = true
 
 	kindDeployment             = "Deployment"
-	ignoreScalingAnnotationKey = "gardener.cloud/ignore-scaling"
+	ignoreScalingAnnotationKey = "dependency-watchdog.gardener.cloud/ignore-scaling"
 )
 
 type prober struct {
