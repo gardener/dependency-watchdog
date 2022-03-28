@@ -47,7 +47,8 @@ const (
 	defaultJitterMaxFactor     = 0.2
 	defaultJitterSliding       = true
 
-	kindDeployment = "Deployment"
+	kindDeployment             = "Deployment"
+	ignoreScalingAnnotationKey = "dependency-watchdog.gardener.cloud/ignore-scaling"
 )
 
 type prober struct {
@@ -463,6 +464,14 @@ func (p *prober) updateClientsSecrets(pr *probeResult, msg string) {
 
 }
 
+// ignoreScalingDeployment checks if scaling for the deployment should be ignored
+func ignoreScalingDeployment(d *appsv1.Deployment) bool {
+	if val, ok := d.Annotations[ignoreScalingAnnotationKey]; ok {
+		return val == "true"
+	}
+	return false
+}
+
 func retry(msg string, fn func() error, retries int) error {
 	var err error
 	for ; retries > 0; retries-- {
@@ -501,6 +510,10 @@ func (p *prober) scaleTo(parentContext context.Context, msg string, replicas int
 				klog.V(5).Infof("%s: replicas=%d: failed", prefix, replicas)
 				continue
 			} else {
+				if ignoreScalingDeployment(d) {
+					klog.V(4).Infof("%s: skipped because annotation %s present on deployment", prefix, ignoreScalingAnnotationKey)
+					continue
+				}
 				var specReplicas = int32(0)
 				if d.Spec.Replicas != nil {
 					specReplicas = *(d.Spec.Replicas)
@@ -653,7 +666,7 @@ func (p *prober) checkScaleRefDependsOn(ctx context.Context, prefix string, depe
 					return false
 				}
 				var availableReplicas = int32(0)
-				availableReplicas = d.Status.AvailableReplicas //check if available replicas is as desired
+				availableReplicas = d.Status.AvailableReplicas // check if available replicas is as desired
 				if !checkFn(availableReplicas, replicas) {
 					klog.V(4).Infof("%s: check for dependent %s succeeded as desired=%d and available=%d", prefix, d.Name, replicas, availableReplicas)
 					return true // can continue with scale operation of the parent
