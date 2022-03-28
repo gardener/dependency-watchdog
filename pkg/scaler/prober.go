@@ -464,6 +464,7 @@ func (p *prober) updateClientsSecrets(pr *probeResult, msg string) {
 
 }
 
+// ignoreScalingDeployment checks if scaling for the deployment should be ignored
 func ignoreScalingDeployment(d *appsv1.Deployment) bool {
 	if val, ok := d.Annotations[ignoreScalingAnnotationKey]; ok {
 		return val == "true"
