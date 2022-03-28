@@ -468,7 +468,6 @@ func ignoreScalingDeployment(d *appsv1.Deployment) bool {
 	if val, ok := d.Annotations[ignoreScalingAnnotationKey]; ok {
 		return val == "true"
 	}
-
 	return false
 }
 
