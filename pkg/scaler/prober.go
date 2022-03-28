@@ -464,7 +464,7 @@ func (p *prober) updateClientsSecrets(pr *probeResult, msg string) {
 
 }
 
-func hasIgnoreScalingAnnotation(d *appsv1.Deployment) bool {
+func ignoreScalingDeployment(d *appsv1.Deployment) bool {
 	if val, ok := d.Annotations[ignoreScalingAnnotationKey]; ok {
 		return val == "true"
 	}
@@ -510,15 +510,16 @@ func (p *prober) scaleTo(parentContext context.Context, msg string, replicas int
 				klog.V(5).Infof("%s: replicas=%d: failed", prefix, replicas)
 				continue
 			} else {
+				if ignoreScalingDeployment(d) {
+					klog.V(4).Infof("%s: skipped because annotation %s present on deployment", prefix, ignoreScalingAnnotationKey)
+					continue
+				}
 				var specReplicas = int32(0)
 				if d.Spec.Replicas != nil {
 					specReplicas = *(d.Spec.Replicas)
 				}
 				if !checkFn(specReplicas, replicas) {
 					klog.V(4).Infof("%s: skipped because desired=%d and current=%d", prefix, replicas, specReplicas)
-					continue
-				} else if hasIgnoreScalingAnnotation(d) {
-					klog.V(4).Infof("%s: skipped because ignore scaling annotation present on deployment", prefix)
 					continue
 				}
 			}
@@ -665,7 +666,7 @@ func (p *prober) checkScaleRefDependsOn(ctx context.Context, prefix string, depe
 					return false
 				}
 				var availableReplicas = int32(0)
-				availableReplicas = d.Status.AvailableReplicas //check if available replicas is as desired
+				availableReplicas = d.Status.AvailableReplicas // check if available replicas is as desired
 				if !checkFn(availableReplicas, replicas) {
 					klog.V(4).Infof("%s: check for dependent %s succeeded as desired=%d and available=%d", prefix, d.Name, replicas, availableReplicas)
 					return true // can continue with scale operation of the parent
