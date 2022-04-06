@@ -31,9 +31,8 @@ type ClusterReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=gardener.cloud,resources=clusters,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=gardener.cloud,resources=clusters,verbs=get;list;watch
 //+kubebuilder:rbac:groups=gardener.cloud,resources=clusters/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=gardener.cloud,resources=clusters/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
