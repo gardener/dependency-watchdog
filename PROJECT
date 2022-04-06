@@ -1,0 +1,6 @@
+domain: gardener.cloud
+layout:
+- go.kubebuilder.io/v3
+projectName: dependency-watchdog
+repo: github.com/gardener/dependency-watchdog
+version: "3"
