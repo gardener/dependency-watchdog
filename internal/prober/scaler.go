@@ -10,6 +10,7 @@ import (
 	"github.com/gardener/gardener/pkg/utils/flow"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	scalev1 "k8s.io/client-go/scale"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -55,83 +56,6 @@ func (ds *deploymentScaler) ScaleUp(ctx context.Context) error {
 	return ds.scaleUpFlow.Run(ctx, flow.Opts{})
 }
 
-func (ds *deploymentScaler) doScale(ctx context.Context, resourceInfo ResourceInfo, mismatchReplicas mismatchReplicasCheckFn, waitOnResourceInfos []ResourceInfo) error {
-	deployment, err := util.GetDeploymentFor(ctx, ds.namespace, resourceInfo, ds.client)
-	if err != nil {
-		logger.Error(err, "error getting deployment for resource, skipping scaling operation", "namespace", ds.namespace, "resourceInfo", resourceInfo)
-		return err
-	}
-	// sleep for initial delay
-	err = util.SleepWithContext(ctx, *resourceInfo.InitialDelay)
-	if err != nil {
-		logger.Error(err, "looks like the context has been cancelled. exiting scaling operation", "namespace", ds.namespace, "resourceInfo", resourceInfo)
-		return err
-	}
-	if ds.shouldScale(ctx, deployment, *resourceInfo.Replicas, mismatchReplicas, waitOnResourceInfos) {
-		util.Retry(ctx, fmt.Sprintf(""), func() (*autoscalingv1.Scale, error) {
-			return ds.scaleResource(resourceInfo)
-		}, defaultMaxResourceScalingAttempts, defaultScaleResourceBackoff, util.AlwaysRetry)
-	}
-	return nil
-}
-
-func (ds *deploymentScaler) scaleResource(resourceInfo ResourceInfo) (*autoscalingv1.Scale, error) {
-	gr, err := ds.getGroupResource(resourceInfo.Ref)
-	if err != nil {
-		return nil, err
-	}
-	scale, err := ds.scaler.Get(gr, resourceInfo.Ref.Name)
-	if err != nil {
-		return nil, err
-	}
-	scale.Spec.Replicas = *resourceInfo.Replicas
-	return ds.scaler.Update(gr, scale)
-}
-
-func (ds *deploymentScaler) getGroupResource(resourceRef autoscalingv1.CrossVersionObjectReference) (schema.GroupResource, error) {
-	gv, _ := schema.ParseGroupVersion(resourceRef.APIVersion) // Ignoring the error as this validation has already been done when initially validating the Config
-	gk := schema.GroupKind{
-		Group: gv.Group,
-		Kind:  resourceRef.Kind,
-	}
-	mapping, err := ds.client.RESTMapper().RESTMapping(gk, gv.Version)
-	if err != nil {
-		logger.Error(err, "failed to get RESTMapping for resource", "resourceRef", resourceRef)
-		return schema.GroupResource{}, err
-	}
-	return mapping.Resource.GroupResource(), nil
-}
-
-func (ds *deploymentScaler) shouldScale(ctx context.Context, deployment *appsv1.Deployment, targetReplicas int32, mismatchReplicas mismatchReplicasCheckFn, waitOnResourceInfos []ResourceInfo) bool {
-	if isIgnoreScalingAnnotationSet(deployment) {
-		logger.V(4).Info("scaling ignored due to explicit instruction via annotation", "namespace", ds.namespace, "deploymentName", deployment.Name, "annotation", ignoreScalingAnnotationKey)
-		return false
-	}
-	// check the current replicas and compare it against the desired replicas
-	deploymentSpecReplicas := *deployment.Spec.Replicas
-	if !mismatchReplicas(deploymentSpecReplicas, targetReplicas) {
-		logger.V(4).Info("spec replicas matches the target replicas. scaling for this resource is skipped", "namespace", ds.namespace, "deploymentName", deployment.Name, "deploymentSpecReplicas", deploymentSpecReplicas, "targetReplicas", targetReplicas)
-		return false
-	}
-	// check if all resources this resource should wait on have been scaled, if not then we cannot scale this resource.
-	// Check for currently available replicas and not the desired replicas on the upstream resource dependencies.
-	if waitOnResourceInfos != nil {
-		for _, upstreamDependentResource := range waitOnResourceInfos {
-			upstreamDeployment, err := util.GetDeploymentFor(ctx, ds.namespace, upstreamDependentResource, ds.client)
-			if err != nil {
-				logger.Error(err, "failed to get deployment for upstream dependent resource, skipping scaling", "upstreamDependentResource", upstreamDependentResource)
-				return false
-			}
-			actualReplicas := upstreamDeployment.Status.Replicas
-			if mismatchReplicas(actualReplicas, *upstreamDependentResource.Replicas) {
-				logger.V(4).Info("upstream resource has still not been scaled to the desired replicas, skipping scaling of resource", "namespace", ds.namespace, "deploymentToScale", deployment.Name, "upstreamResourceInfo", upstreamDependentResource, "actualReplicas", actualReplicas)
-				return false
-			}
-		}
-	}
-	return true
-}
-
 func isIgnoreScalingAnnotationSet(deployment *appsv1.Deployment) bool {
 	if val, ok := deployment.Annotations[ignoreScalingAnnotationKey]; ok {
 		return val == "true"
@@ -175,7 +99,7 @@ func (ds *deploymentScaler) createScaleTaskFn(namespace string, resourceInfos []
 			result := util.Retry(ctx,
 				operation,
 				func() (interface{}, error) {
-					err := ds.doScale(ctx, resourceInfo, mismatchReplicasCheckFn, waitOnResourceInfos)
+					err := ds.scale(ctx, resourceInfo, mismatchReplicasCheckFn, waitOnResourceInfos)
 					return nil, err
 				},
 				defaultMaxResourceScalingAttempts,
@@ -190,6 +114,83 @@ func (ds *deploymentScaler) createScaleTaskFn(namespace string, resourceInfos []
 		return taskFns[0]
 	}
 	return flow.Parallel(taskFns...)
+}
+
+func (ds *deploymentScaler) scale(ctx context.Context, resourceInfo ResourceInfo, mismatchReplicas mismatchReplicasCheckFn, waitOnResourceInfos []ResourceInfo) error {
+	deployment, err := util.GetDeploymentFor(ctx, ds.namespace, resourceInfo, ds.client)
+	if err != nil {
+		logger.Error(err, "error getting deployment for resource, skipping scaling operation", "namespace", ds.namespace, "resourceInfo", resourceInfo)
+		return err
+	}
+	// sleep for initial delay
+	err = util.SleepWithContext(ctx, *resourceInfo.InitialDelay)
+	if err != nil {
+		logger.Error(err, "looks like the context has been cancelled. exiting scaling operation", "namespace", ds.namespace, "resourceInfo", resourceInfo)
+		return err
+	}
+	if ds.shouldScale(ctx, deployment, *resourceInfo.Replicas, mismatchReplicas, waitOnResourceInfos) {
+		util.Retry(ctx, fmt.Sprintf(""), func() (*autoscalingv1.Scale, error) {
+			return ds.doScale(ctx, resourceInfo)
+		}, defaultMaxResourceScalingAttempts, defaultScaleResourceBackoff, util.AlwaysRetry)
+	}
+	return nil
+}
+
+func (ds *deploymentScaler) shouldScale(ctx context.Context, deployment *appsv1.Deployment, targetReplicas int32, mismatchReplicas mismatchReplicasCheckFn, waitOnResourceInfos []ResourceInfo) bool {
+	if isIgnoreScalingAnnotationSet(deployment) {
+		logger.V(4).Info("scaling ignored due to explicit instruction via annotation", "namespace", ds.namespace, "deploymentName", deployment.Name, "annotation", ignoreScalingAnnotationKey)
+		return false
+	}
+	// check the current replicas and compare it against the desired replicas
+	deploymentSpecReplicas := *deployment.Spec.Replicas
+	if !mismatchReplicas(deploymentSpecReplicas, targetReplicas) {
+		logger.V(4).Info("spec replicas matches the target replicas. scaling for this resource is skipped", "namespace", ds.namespace, "deploymentName", deployment.Name, "deploymentSpecReplicas", deploymentSpecReplicas, "targetReplicas", targetReplicas)
+		return false
+	}
+	// check if all resources this resource should wait on have been scaled, if not then we cannot scale this resource.
+	// Check for currently available replicas and not the desired replicas on the upstream resource dependencies.
+	if waitOnResourceInfos != nil {
+		for _, upstreamDependentResource := range waitOnResourceInfos {
+			upstreamDeployment, err := util.GetDeploymentFor(ctx, ds.namespace, upstreamDependentResource, ds.client)
+			if err != nil {
+				logger.Error(err, "failed to get deployment for upstream dependent resource, skipping scaling", "upstreamDependentResource", upstreamDependentResource)
+				return false
+			}
+			actualReplicas := upstreamDeployment.Status.Replicas
+			if mismatchReplicas(actualReplicas, *upstreamDependentResource.Replicas) {
+				logger.V(4).Info("upstream resource has still not been scaled to the desired replicas, skipping scaling of resource", "namespace", ds.namespace, "deploymentToScale", deployment.Name, "upstreamResourceInfo", upstreamDependentResource, "actualReplicas", actualReplicas)
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (ds *deploymentScaler) doScale(ctx context.Context, resourceInfo ResourceInfo) (*autoscalingv1.Scale, error) {
+	gr, err := ds.getGroupResource(resourceInfo.Ref)
+	if err != nil {
+		return nil, err
+	}
+	scale, err := ds.scaler.Get(ctx, gr, resourceInfo.Ref.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	scale.Spec.Replicas = *resourceInfo.Replicas
+	return ds.scaler.Update(ctx, gr, scale, metav1.UpdateOptions{})
+}
+
+func (ds *deploymentScaler) getGroupResource(resourceRef autoscalingv1.CrossVersionObjectReference) (schema.GroupResource, error) {
+	gv, _ := schema.ParseGroupVersion(resourceRef.APIVersion) // Ignoring the error as this validation has already been done when initially validating the Config
+	gk := schema.GroupKind{
+		Group: gv.Group,
+		Kind:  resourceRef.Kind,
+	}
+	mapping, err := ds.client.RESTMapper().RESTMapping(gk, gv.Version)
+	if err != nil {
+		logger.Error(err, "failed to get RESTMapping for resource", "resourceRef", resourceRef)
+		return schema.GroupResource{}, err
+	}
+	return mapping.Resource.GroupResource(), nil
 }
 
 func collectResourceInfosByLevel(resourceInfos []ResourceInfo) map[int][]ResourceInfo {
