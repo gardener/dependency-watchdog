@@ -1,17 +1,16 @@
-package weederapp
+package cmd
 
 import (
 	"context"
 	"flag"
 
-	"github.com/gardener/dependency-watchdog/cmd"
 	"github.com/go-logr/logr"
 )
 
 const defaultWatchDuration = "2m"
 
 var (
-	WeederCmd = &cmd.Command{
+	WeederCmd = &Command{
 		Name:      "weeder",
 		UsageLine: "",
 		ShortDesc: "",
@@ -49,12 +48,12 @@ Flags:
 
 type weederOptions struct {
 	watchDuration string
-	cmd.SharedOpts
+	SharedOpts
 }
 
 func addWeederFlags(fs *flag.FlagSet) {
 	fs.StringVar(&weederOpts.watchDuration, "watch-duration", defaultWatchDuration, "max duration to watch for all dependent pods")
-	cmd.SetSharedOpts(fs, &weederOpts.SharedOpts)
+	SetSharedOpts(fs, &weederOpts.SharedOpts)
 }
 
 func startWeederControllerMgr(ctx context.Context, args []string, logger logr.Logger) error {

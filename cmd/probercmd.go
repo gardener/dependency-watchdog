@@ -1,19 +1,13 @@
-package proberapp
+package cmd
 
 import (
 	"context"
 	"flag"
-	"fmt"
-
-	"github.com/gardener/dependency-watchdog/cmd"
-	"github.com/gardener/dependency-watchdog/internal/prober"
 	gardenextensions "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/leaderelection/resourcelock"
-	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const (
@@ -21,7 +15,7 @@ const (
 )
 
 var (
-	ProberCmd = &cmd.Command{
+	ProberCmd = &Command{
 		Name:      "prober",
 		UsageLine: "",
 		ShortDesc: "Probes Kubernetes API and Scales Up/Down dependent resources based on its reachability",
@@ -55,7 +49,7 @@ Flags:
 )
 
 type proberOptions struct {
-	cmd.SharedOpts
+	SharedOpts
 }
 
 func init() {
@@ -67,30 +61,30 @@ func init() {
 }
 
 func addProbeFlags(fs *flag.FlagSet) {
-	cmd.SetSharedOpts(fs, &opts.SharedOpts)
+	SetSharedOpts(fs, &opts.SharedOpts)
 }
 
 func startProberControllerMgr(ctx context.Context, args []string, logger logr.Logger) error {
-	log := logger.WithName("prober")
-
-	proberConfig, err := prober.ReadAndUnmarshal(opts.SharedOpts.ConfigFile)
-	if err != nil {
-		return fmt.Errorf("failed to parse prober config file %s : %w", opts.SharedOpts.ConfigFile, err)
-	}
-
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                     scheme,
-		MetricsBindAddress:         opts.SharedOpts.MetricsBindAddress,
-		HealthProbeBindAddress:     opts.SharedOpts.HealthBindAddress,
-		LeaderElection:             opts.SharedOpts.EnableLeaderElection,
-		LeaderElectionID:           proberLeaderElectionID,
-		LeaderElectionNamespace:    opts.SharedOpts.LeaderElectionNamespace,
-		LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
-	})
-
-	if err != nil {
-		return fmt.Errorf("unable to start the prober controller manager %w", err)
-	}
+	//log := logger.WithName("prober")
+	//
+	//proberConfig, err := prober.ReadAndUnmarshal(opts.SharedOpts.ConfigFile)
+	//if err != nil {
+	//	return fmt.Errorf("failed to parse prober config file %s : %w", opts.SharedOpts.ConfigFile, err)
+	//}
+	//
+	//mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	//	Scheme:                     scheme,
+	//	MetricsBindAddress:         opts.SharedOpts.MetricsBindAddress,
+	//	HealthProbeBindAddress:     opts.SharedOpts.HealthBindAddress,
+	//	LeaderElection:             opts.SharedOpts.EnableLeaderElection,
+	//	LeaderElectionID:           proberLeaderElectionID,
+	//	LeaderElectionNamespace:    opts.SharedOpts.LeaderElectionNamespace,
+	//	LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
+	//})
+	//
+	//if err != nil {
+	//	return fmt.Errorf("unable to start the prober controller manager %w", err)
+	//}
 
 	return nil
 }

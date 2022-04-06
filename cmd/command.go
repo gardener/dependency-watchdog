@@ -4,8 +4,6 @@ import (
 	"context"
 	"flag"
 
-	"github.com/gardener/dependency-watchdog/cmd/proberapp"
-	"github.com/gardener/dependency-watchdog/cmd/weederapp"
 	"github.com/go-logr/logr"
 	"k8s.io/client-go/rest"
 )
@@ -18,8 +16,8 @@ const (
 
 var (
 	Commands = []*Command{
-		proberapp.ProberCmd,
-		weederapp.WeederCmd,
+		ProberCmd,
+		WeederCmd,
 	}
 )
 
