@@ -62,12 +62,18 @@ func main() {
 	flag.Parse()
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	err := command.Run(ctx, fs.Args(), logger)
+	mgr, err := command.Run(ctx, fs.Args(), logger)
 	if err != nil {
 		logger.Error(err, "failed to run command %s", command.Name)
 		os.Exit(1)
 	}
 
+	// starting manager
+	logger.Info("Starting manager")
+	if err = mgr.Start(ctx); err != nil {
+		logger.Error(err, "Failed to run the manager")
+		os.Exit(1)
+	}
 }
 
 func checkArgs(args []string) {

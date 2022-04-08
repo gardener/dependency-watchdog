@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"flag"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/go-logr/logr"
 )
@@ -56,6 +57,6 @@ func addWeederFlags(fs *flag.FlagSet) {
 	SetSharedOpts(fs, &weederOpts.SharedOpts)
 }
 
-func startWeederControllerMgr(ctx context.Context, args []string, logger logr.Logger) error {
-	return nil
+func startWeederControllerMgr(ctx context.Context, args []string, logger logr.Logger) (manager.Manager, error) {
+	return nil, nil
 }

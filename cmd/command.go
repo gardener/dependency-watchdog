@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"flag"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/go-logr/logr"
 	"k8s.io/client-go/rest"
@@ -27,7 +28,7 @@ type Command struct {
 	ShortDesc string
 	LongDesc  string
 	AddFlags  func(fs *flag.FlagSet)
-	Run       func(ctx context.Context, args []string, logger logr.Logger) error
+	Run       func(ctx context.Context, args []string, logger logr.Logger) (manager.Manager, error)
 }
 
 type SharedOpts struct {
