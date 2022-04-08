@@ -3,9 +3,8 @@ package util
 import (
 	"context"
 	"fmt"
-	"github.com/gardener/dependency-watchdog/internal/prober"
+
 	appsv1 "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery/cached/memory"
@@ -68,10 +67,10 @@ func CreateScalesGetter(config *rest.Config) (scale.ScalesGetter, error) {
 	return scale.New(clientSet.RESTClient(), mapper, dynamic.LegacyAPIPathResolverFunc, resolver), nil
 }
 
-func GetDeploymentFor(ctx context.Context, namespace string, resourceInfo prober.ResourceInfo, client client.Client) (*v1.Deployment, error) {
+func GetDeploymentFor(ctx context.Context, namespace string, name string, client client.Client) (*appsv1.Deployment, error) {
 	key := types.NamespacedName{
 		Namespace: namespace,
-		Name:      resourceInfo.Ref.Name,
+		Name:      name,
 	}
 	deployment := appsv1.Deployment{}
 	err := client.Get(ctx, key, &deployment)

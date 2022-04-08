@@ -117,7 +117,7 @@ func (ds *deploymentScaler) createScaleTaskFn(namespace string, resourceInfos []
 }
 
 func (ds *deploymentScaler) scale(ctx context.Context, resourceInfo ResourceInfo, mismatchReplicas mismatchReplicasCheckFn, waitOnResourceInfos []ResourceInfo) error {
-	deployment, err := util.GetDeploymentFor(ctx, ds.namespace, resourceInfo, ds.client)
+	deployment, err := util.GetDeploymentFor(ctx, ds.namespace, resourceInfo.Ref.Name, ds.client)
 	if err != nil {
 		logger.Error(err, "error getting deployment for resource, skipping scaling operation", "namespace", ds.namespace, "resourceInfo", resourceInfo)
 		return err
@@ -151,7 +151,7 @@ func (ds *deploymentScaler) shouldScale(ctx context.Context, deployment *appsv1.
 	// Check for currently available replicas and not the desired replicas on the upstream resource dependencies.
 	if waitOnResourceInfos != nil {
 		for _, upstreamDependentResource := range waitOnResourceInfos {
-			upstreamDeployment, err := util.GetDeploymentFor(ctx, ds.namespace, upstreamDependentResource, ds.client)
+			upstreamDeployment, err := util.GetDeploymentFor(ctx, ds.namespace, upstreamDependentResource.Ref.Name, ds.client)
 			if err != nil {
 				logger.Error(err, "failed to get deployment for upstream dependent resource, skipping scaling", "upstreamDependentResource", upstreamDependentResource)
 				return false

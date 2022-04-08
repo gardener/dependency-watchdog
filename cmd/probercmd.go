@@ -3,11 +3,22 @@ package cmd
 import (
 	"context"
 	"flag"
+	"fmt"
+
+	"github.com/gardener/dependency-watchdog/controllers"
+	"github.com/gardener/dependency-watchdog/internal/prober"
 	gardenextensions "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/discovery/cached/memory"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/restmapper"
+	"k8s.io/client-go/scale"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const (
@@ -65,26 +76,45 @@ func addProbeFlags(fs *flag.FlagSet) {
 }
 
 func startProberControllerMgr(ctx context.Context, args []string, logger logr.Logger) error {
-	//log := logger.WithName("prober")
-	//
-	//proberConfig, err := prober.ReadAndUnmarshal(opts.SharedOpts.ConfigFile)
-	//if err != nil {
-	//	return fmt.Errorf("failed to parse prober config file %s : %w", opts.SharedOpts.ConfigFile, err)
-	//}
-	//
-	//mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-	//	Scheme:                     scheme,
-	//	MetricsBindAddress:         opts.SharedOpts.MetricsBindAddress,
-	//	HealthProbeBindAddress:     opts.SharedOpts.HealthBindAddress,
-	//	LeaderElection:             opts.SharedOpts.EnableLeaderElection,
-	//	LeaderElectionID:           proberLeaderElectionID,
-	//	LeaderElectionNamespace:    opts.SharedOpts.LeaderElectionNamespace,
-	//	LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
-	//})
-	//
-	//if err != nil {
-	//	return fmt.Errorf("unable to start the prober controller manager %w", err)
-	//}
+
+	proberConfig, err := prober.ReadAndUnmarshal(opts.SharedOpts.ConfigFile)
+	if err != nil {
+		return fmt.Errorf("failed to parse prober config file %s : %w", opts.SharedOpts.ConfigFile, err)
+	}
+
+	proberMgr := prober.NewManager()
+
+	clientset, err := kubernetes.NewForConfig(ctrl.GetConfigOrDie())
+	if err != nil {
+		return fmt.Errorf("failed to create clientset for scalerGetter %w", err)
+	}
+
+	mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(clientset.Discovery()))
+	scaleKindResolver := scale.NewDiscoveryScaleKindResolver(clientset.Discovery())
+	scaleGetter := scale.New(clientset.RESTClient(), mapper, dynamic.LegacyAPIPathResolverFunc, scaleKindResolver)
+
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme:                     scheme,
+		MetricsBindAddress:         opts.SharedOpts.MetricsBindAddress,
+		HealthProbeBindAddress:     opts.SharedOpts.HealthBindAddress,
+		LeaderElection:             opts.SharedOpts.EnableLeaderElection,
+		LeaderElectionID:           proberLeaderElectionID,
+		LeaderElectionNamespace:    opts.SharedOpts.LeaderElectionNamespace,
+		LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to start the prober controller manager %w", err)
+	}
+
+	if err := (&controllers.ClusterReconciler{
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+		ScaleGetter: scaleGetter,
+		ProberMgr:   proberMgr,
+		ProbeConfig: proberConfig,
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("failed to register cluster reconciler with the prober controller manager %w", err)
+	}
 
 	return nil
 }

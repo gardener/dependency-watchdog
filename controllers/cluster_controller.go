@@ -19,7 +19,13 @@ package controllers
 import (
 	"context"
 
+	"github.com/gardener/dependency-watchdog/internal/prober"
+	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
+	gardenerv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/scale"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -28,11 +34,14 @@ import (
 // ClusterReconciler reconciles a Cluster object
 type ClusterReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme      *runtime.Scheme
+	ProberMgr   prober.Manager
+	ScaleGetter scale.ScalesGetter
+	ProbeConfig *prober.Config
 }
 
 //+kubebuilder:rbac:groups=gardener.cloud,resources=clusters,verbs=get;list;watch
-//+kubebuilder:rbac:groups=gardener.cloud,resources=clusters/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=gardener.cloud,resources=clusters/status,verbs=get
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -44,17 +53,65 @@ type ClusterReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.0/pkg/reconcile
 func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	cluster, notFound, err := r.getCluster(ctx, req.Namespace, req.Name)
+
+	if err != nil {
+		logger.Error(err, "Unable to get the cluster resource, requeing for reconciliation", "namespace", req.Namespace, "name", req.Name)
+		return ctrl.Result{}, err
+	}
+
+	if notFound || cluster.DeletionTimestamp != nil {
+		logger.V(4).Info("Cluster not found or marked for deletion, prober will be removed if present", "namespace", req.Namespace, "name", req.Name)
+		r.deleteProber(req.Name)
+		return ctrl.Result{}, nil
+	}
+
+	_, err = extensionscontroller.ShootFromCluster(cluster)
+	if err != nil {
+		logger.Error(err, "Error extracting shoot from cluster.", "namespace", req.Namespace, "name", req.Name)
+		return ctrl.Result{}, err
+	}
+
+	//TODO: update event part will come here.
+
+	r.startProber(req.Name)
 
 	return ctrl.Result{}, nil
+}
+
+func (r *ClusterReconciler) getCluster(ctx context.Context, namespace string, name string) (cluster *gardenerv1alpha1.Cluster, notFound bool, err error) {
+
+	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, cluster); err != nil {
+		if errors.IsNotFound(err) {
+			return nil, true, nil
+		}
+		return nil, false, err
+	}
+	return cluster, false, nil
+}
+
+func (r *ClusterReconciler) deleteProber(key string) {
+	_, ok := r.ProberMgr.GetProber(key)
+	if ok {
+		r.ProberMgr.Unregister(key)
+	}
+}
+
+func (r *ClusterReconciler) startProber(key string) {
+	_, ok := r.ProberMgr.GetProber(key)
+	if !ok {
+		deploymentScaler := prober.NewDeploymentScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter)
+		prober := prober.NewProber(key, r.ProbeConfig, r.Client, deploymentScaler)
+		r.ProberMgr.Register(prober)
+		prober.Run()
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		// Uncomment the following line adding a pointer to an instance of the controlled resource as an argument
-		// For().
+		For(&gardenerv1alpha1.Cluster{}).
 		Complete(r)
 }

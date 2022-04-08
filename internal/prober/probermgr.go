@@ -5,6 +5,7 @@ import "sync"
 type Manager interface {
 	Register(prober *Prober)
 	Unregister(key string)
+	GetProber(key string) (*Prober, bool)
 }
 
 func NewManager() Manager {
@@ -34,6 +35,11 @@ func (pm *manager) Register(prober *Prober) {
 	if _, ok := pm.probers[key]; !ok {
 		pm.probers[key] = prober
 	}
+}
+
+func (pm *manager) GetProber(key string) (*Prober, bool) {
+	prober, ok := pm.probers[key]
+	return prober, ok
 }
 
 func createKey(prober *Prober) string {
