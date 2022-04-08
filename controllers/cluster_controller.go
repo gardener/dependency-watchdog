@@ -54,17 +54,16 @@ type ClusterReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.0/pkg/reconcile
 func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-
 	cluster, notFound, err := r.getCluster(ctx, req.Namespace, req.Name)
-
 	if err != nil {
 		logger.Error(err, "Unable to get the cluster resource, requeing for reconciliation", "namespace", req.Namespace, "name", req.Name)
 		return ctrl.Result{}, err
 	}
 
+	// If cluster is not found or its deletion timestamp has been set then we will remove any existing probe
 	if notFound || cluster.DeletionTimestamp != nil {
 		logger.V(4).Info("Cluster not found or marked for deletion, prober will be removed if present", "namespace", req.Namespace, "name", req.Name)
-		r.deleteProber(req.Name)
+		r.ProberMgr.Unregister(req.Name)
 		return ctrl.Result{}, nil
 	}
 
@@ -81,8 +80,8 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	return ctrl.Result{}, nil
 }
 
+// getCluster will retrieve the cluster object given the namespace and name Not found is not treated as an error and is handled differently in the caller
 func (r *ClusterReconciler) getCluster(ctx context.Context, namespace string, name string) (cluster *gardenerv1alpha1.Cluster, notFound bool, err error) {
-
 	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, cluster); err != nil {
 		if errors.IsNotFound(err) {
 			return nil, true, nil
@@ -92,20 +91,13 @@ func (r *ClusterReconciler) getCluster(ctx context.Context, namespace string, na
 	return cluster, false, nil
 }
 
-func (r *ClusterReconciler) deleteProber(key string) {
-	_, ok := r.ProberMgr.GetProber(key)
-	if ok {
-		r.ProberMgr.Unregister(key)
-	}
-}
-
 func (r *ClusterReconciler) startProber(key string) {
 	_, ok := r.ProberMgr.GetProber(key)
 	if !ok {
 		deploymentScaler := prober.NewDeploymentScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter)
-		prober := prober.NewProber(key, r.ProbeConfig, r.Client, deploymentScaler)
-		r.ProberMgr.Register(prober)
-		prober.Run()
+		p := prober.NewProber(key, r.ProbeConfig, r.Client, deploymentScaler)
+		r.ProberMgr.Register(p)
+		go p.Run()
 	}
 }
 
