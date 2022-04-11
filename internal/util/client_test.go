@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"os"
 	"path/filepath"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	"github.com/gardener/dependency-watchdog/internal/util"
 	. "github.com/onsi/ginkgo/v2"
@@ -25,7 +29,26 @@ var (
 	pathToDeployment    = filepath.Join(pathToTestDirectory, "deployment.yaml")
 )
 
-var _ = Describe("Client", func() {
+var _ = Describe("Client", Ordered, func() {
+	var (
+		testEnv   *envtest.Environment
+		k8sClient client.Client
+		cfg       *rest.Config
+		err       error
+	)
+
+	BeforeAll(func() {
+		By("initialing and starting the test environment")
+		testEnv = &envtest.Environment{}
+		cfg, err = testEnv.Start()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg).NotTo(BeNil())
+
+		By("creating a new k8s client")
+		k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(k8sClient).NotTo(BeNil())
+	})
 
 	Describe("GetKubeConfigFromSecret", func() {
 		var ctx context.Context
@@ -33,7 +56,6 @@ var _ = Describe("Client", func() {
 
 		BeforeEach(func() {
 			ctx = context.Background()
-
 			result := getStructured[corev1.Secret](pathToSecret)
 			Expect(result.Err).Should(BeNil())
 			Expect(result.StructuredObject).ShouldNot(BeNil())
@@ -83,7 +105,7 @@ var _ = Describe("Client", func() {
 		})
 	})
 
-	Describe("GetDeploymentFor", func() {
+	Describe("GetDeploymentFor", Label("client"), func() {
 		var ctx context.Context
 		var deployment appsv1.Deployment
 
@@ -117,7 +139,7 @@ var _ = Describe("Client", func() {
 		})
 	})
 
-	Describe("CreateScalesGetter", func() {
+	Describe("CreateScalesGetter", Label("client"), func() {
 		It("should return scaleGetter if config is ok", func() {
 			scaleGetter, err := util.CreateScalesGetter(cfg)
 			Expect(err).Should(BeNil())
@@ -125,7 +147,7 @@ var _ = Describe("Client", func() {
 		})
 	})
 
-	Describe("Create ClientFromKubeConfigBytes", func() {
+	Describe("Create ClientFromKubeConfigBytes", Label("client"), func() {
 		It("should return new client from kubeconfig", func() {
 			By("reading the kubeconfig file")
 			kubeconfigBuffer, err := readFile(pathToKubeConfig)
@@ -137,6 +159,12 @@ var _ = Describe("Client", func() {
 			Expect(err).Should(BeNil())
 			Expect(cfg).ShouldNot(BeNil())
 		})
+	})
+
+	AfterAll(func() {
+		By("tearing down the test environment")
+		err := testEnv.Stop()
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 })

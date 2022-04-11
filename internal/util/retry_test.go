@@ -131,7 +131,7 @@ var _ = Describe("Retry", func() {
 			wg.Wait()
 		})
 
-		PIt("should stop if context is cancelled before backoff period begins", func() {
+		FIt("should stop if context is cancelled before backoff period begins", func() {
 			var result util.RetryResult[string]
 			var wg sync.WaitGroup
 			list := make([]string, 0, 1)
