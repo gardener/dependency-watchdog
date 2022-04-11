@@ -29,7 +29,7 @@ var (
 	pathToDeployment    = filepath.Join(pathToTestDirectory, "deployment.yaml")
 )
 
-var _ = Describe("Client", Ordered, func() {
+var _ = Describe("Client", Ordered, Label("client"), func() {
 	var (
 		testEnv   *envtest.Environment
 		k8sClient client.Client
