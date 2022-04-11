@@ -1,8 +1,9 @@
 package prober
 
 import (
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"time"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 type probeStatus struct {

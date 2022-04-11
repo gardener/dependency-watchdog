@@ -7,6 +7,7 @@ require (
 	github.com/go-logr/logr v1.2.0
 	github.com/hashicorp/go-multierror v1.1.0
 	github.com/onsi/ginkgo v1.16.5
+	github.com/onsi/ginkgo/v2 v2.1.0
 	github.com/onsi/gomega v1.18.0
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 	k8s.io/api v0.23.3

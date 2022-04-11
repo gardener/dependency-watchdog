@@ -3,8 +3,9 @@ package prober
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/gardener/dependency-watchdog/internal/util"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
