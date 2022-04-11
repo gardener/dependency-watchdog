@@ -11,71 +11,37 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-type AtomicStringList struct {
-	lock   sync.RWMutex
-	values []string
-}
-
-func NewAtomicStringList() *AtomicStringList {
-	return &AtomicStringList{}
-}
-
-func (a *AtomicStringList) Append(values ...string) {
-	a.lock.Lock()
-	defer a.lock.Unlock()
-	a.values = append(a.values, values...)
-}
-
-func (a *AtomicStringList) Values() []string {
-	a.lock.RLock()
-	defer a.lock.RUnlock()
-
-	if a.values == nil {
-		return nil
-	}
-
-	out := make([]string, len(a.values))
-	copy(out, a.values)
-	return out
-}
-
 var _ = Describe("Retry", Label("retry"), func() {
-	var list *AtomicStringList
-	var pass func() (string, error)
-	var fail func() (string, error)
+	var list []string
+	var appendPass func() (string, error)
+	var appendFail func() (string, error)
 	var passEventually func() (string, error)
-	//var cancelContextAfterOneRun func() (string, error)
 	var retryOnlyOnce func(error) bool
 	var numAttempts int
 	var backoff time.Duration
 	var ctx context.Context
 
 	BeforeEach(func() {
-		list = NewAtomicStringList()
 		ctx = context.Background()
 		numAttempts = 3
 		backoff = 10 * time.Millisecond
-		fail = func() (string, error) {
-			list.Append("fail")
-			return "fail", fmt.Errorf("fail")
+		appendFail = func() (string, error) {
+			list = append(list, "appendFail")
+			return "appendFail", fmt.Errorf("appendFail")
 		}
-		pass = func() (string, error) {
-			list.Append("pass")
-			return "pass", nil
+		appendPass = func() (string, error) {
+			list = append(list, "appendPass")
+			return "appendPass", nil
 		}
 		i := 0
 		j := 0
 		passEventually = func() (string, error) {
 			i++
 			if i%3 == 0 {
-				return pass()
+				return appendPass()
 			}
-			return fail()
+			return appendFail()
 		}
-		// cancelContextAfterOneRun = func() (string, error) {
-		// 	defer cancelFn()
-		// 	return fail()
-		// }
 		retryOnlyOnce = func(err error) bool {
 			if j == 0 {
 				j = 1
@@ -87,28 +53,25 @@ var _ = Describe("Retry", Label("retry"), func() {
 
 	It("should not return error if task function eventually succeeds", func() {
 		result := util.Retry(ctx, "", passEventually, numAttempts, backoff, util.AlwaysRetry)
-		values := list.Values()
 		Expect(result.Err).Should(BeNil())
-		Expect(result.Value).Should(Equal("pass"))
-		Expect(len(values)).Should(Equal(3))
-		Expect(values[0:2]).Should(ConsistOf("fail", "fail"))
-		Expect(values[2]).To(Equal("pass"))
+		Expect(result.Value).Should(Equal("appendPass"))
+		Expect(len(list)).Should(Equal(3))
+		Expect(list[0:2]).Should(ConsistOf("appendFail", "appendFail"))
+		Expect(list[2]).To(Equal("appendPass"))
 	})
 
 	It("should return error if it exceeds number of attempts", func() {
-		result := util.Retry(ctx, "", fail, numAttempts, backoff, util.AlwaysRetry)
-		values := list.Values()
-		Expect(len(values)).Should(Equal(numAttempts))
-		Expect(result.Err.Error()).Should(Equal("fail"))
-		Expect(result.Value).Should(Equal("fail"))
+		result := util.Retry(ctx, "", appendFail, numAttempts, backoff, util.AlwaysRetry)
+		Expect(len(list)).Should(Equal(numAttempts))
+		Expect(result.Err.Error()).Should(Equal("appendFail"))
+		Expect(result.Value).Should(Equal("appendFail"))
 	})
 
 	It("should stop if canRetry returns false", func() {
 		result := util.Retry(ctx, "", passEventually, numAttempts, backoff, retryOnlyOnce)
-		values := list.Values()
-		Expect(len(values)).Should(Equal(2))
-		Expect(values[0:2]).Should(ConsistOf("fail", "fail"))
-		Expect(result.Err.Error()).Should(Equal("fail"))
+		Expect(len(list)).Should(Equal(2))
+		Expect(list[0:2]).Should(ConsistOf("appendFail", "appendFail"))
+		Expect(result.Err.Error()).Should(Equal("appendFail"))
 		Expect(result.Value).Should(Equal(""))
 	})
 
@@ -121,11 +84,10 @@ var _ = Describe("Retry", Label("retry"), func() {
 			go func() {
 				defer wg.Done()
 				defer GinkgoRecover()
-				result = util.Retry(ctx, "", pass, numAttempts, backoff, util.AlwaysRetry)
-				values := list.Values()
+				result = util.Retry(ctx, "", appendPass, numAttempts, backoff, util.AlwaysRetry)
 				Expect(result.Err).Should(Equal(ctx.Err()))
 				Expect(result.Value).Should(Equal(""))
-				Expect(len(values)).Should(BeNumerically("<=", numAttempts))
+				Expect(len(list)).Should(BeNumerically("<=", numAttempts))
 			}()
 			cancelFn()
 			wg.Wait()
@@ -141,9 +103,9 @@ var _ = Describe("Retry", Label("retry"), func() {
 				defer wg.Done()
 				defer GinkgoRecover()
 				result = util.Retry(ctx, "", func() (string, error) {
-					list = append(list, "fail")
+					list = append(list, "appendFail")
 					cancelFn()
-					return "", fmt.Errorf("fail")
+					return "", fmt.Errorf("appendFail")
 				}, numAttempts, backoff, util.AlwaysRetry)
 
 				Expect(result.Err).Should(Equal(context.Canceled))
@@ -152,6 +114,10 @@ var _ = Describe("Retry", Label("retry"), func() {
 			}()
 			wg.Wait()
 		})
+	})
+
+	AfterEach(func() {
+		list = nil
 	})
 
 })
