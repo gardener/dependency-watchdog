@@ -21,7 +21,9 @@ import (
 
 	"github.com/gardener/dependency-watchdog/internal/prober"
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
+	gardencorev1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	gardenerv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -60,23 +62,32 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	// If cluster is not found or its deletion timestamp has been set then we will remove any existing probe
+	// If cluster is not found or its deletion timestamp has been set then we will remove any existing prober
 	if notFound || cluster.DeletionTimestamp != nil {
 		logger.V(4).Info("Cluster not found or marked for deletion, prober will be removed if present", "namespace", req.Namespace, "name", req.Name)
 		r.ProberMgr.Unregister(req.Name)
 		return ctrl.Result{}, nil
 	}
 
-	_, err = extensionscontroller.ShootFromCluster(cluster)
+	shoot, err := extensionscontroller.ShootFromCluster(cluster)
 	if err != nil {
 		logger.Error(err, "Error extracting shoot from cluster.", "namespace", req.Namespace, "name", req.Name)
 		return ctrl.Result{}, err
 	}
 
-	//TODO: update event part will come here.
-
-	r.startProber(req.Name)
-
+	// if hibernation is enabled then we will remove any existing prober
+	if gardencorev1beta1helper.HibernationIsEnabled(shoot) {
+		logger.V(4).Info("Cluster hibernation is enabled, prober will be removed if present", "namespace", req.Namespace, "name", req.Name)
+		r.ProberMgr.Unregister(req.Name)
+	} else {
+		if shoot.Status.IsHibernated {
+			logger.V(4).Info("Cluster is waking up, prober will be removed if present", "namespace", req.Namespace, "name", req.Name)
+			r.ProberMgr.Unregister(req.Name)
+		} else {
+			logger.V(4).Info("Starting new prober for cluster if not present", "namespace", req.Namespace, "name", req.Name)
+			r.startProber(req.Name)
+		}
+	}
 	return ctrl.Result{}, nil
 }
 
