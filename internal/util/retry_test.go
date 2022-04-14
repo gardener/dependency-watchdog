@@ -16,7 +16,6 @@ var _ = Describe("Retry", Label("retry"), func() {
 	var appendPass func() (string, error)
 	var appendFail func() (string, error)
 	var passEventually func() (string, error)
-	var retryOnlyOnce func(error) bool
 	var numAttempts int
 	var backoff time.Duration
 	var ctx context.Context
@@ -33,21 +32,13 @@ var _ = Describe("Retry", Label("retry"), func() {
 			list = append(list, "appendPass")
 			return "appendPass", nil
 		}
-		i := 0
-		j := 0
+		runCounter := 0
 		passEventually = func() (string, error) {
-			i++
-			if i%3 == 0 {
+			runCounter++
+			if runCounter%3 == 0 {
 				return appendPass()
 			}
 			return appendFail()
-		}
-		retryOnlyOnce = func(err error) bool {
-			if j == 0 {
-				j = 1
-				return true
-			}
-			return false
 		}
 	})
 
@@ -68,7 +59,15 @@ var _ = Describe("Retry", Label("retry"), func() {
 	})
 
 	It("should stop if canRetry returns false", func() {
-		result := util.Retry(ctx, "", passEventually, numAttempts, backoff, retryOnlyOnce)
+		var hasRunOnce bool
+		runOnceFn := func(error) bool {
+			if !hasRunOnce {
+				hasRunOnce = true
+				return true
+			}
+			return false
+		}
+		result := util.Retry(ctx, "", passEventually, numAttempts, backoff, runOnceFn)
 		Expect(len(list)).Should(Equal(2))
 		Expect(list[0:2]).Should(ConsistOf("appendFail", "appendFail"))
 		Expect(result.Err.Error()).Should(Equal("appendFail"))
