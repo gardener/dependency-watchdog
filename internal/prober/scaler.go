@@ -33,9 +33,18 @@ func NewDeploymentScaler(namespace string, config *Config, client client.Client,
 		scaler:    scalerGetter.Scales(namespace),
 		client:    client,
 	}
-	ds.scaleDownFlow = ds.createResourceScaleFlow(namespace, fmt.Sprintf("scale-down-%s", namespace), config.ScaleDownResourceInfos, util.ScaleDownReplicasMismatch)
-	ds.scaleUpFlow = ds.createResourceScaleFlow(namespace, fmt.Sprintf("scale-up-%s", namespace), config.ScaleUpResourceInfos, util.ScaleUpReplicasMismatch)
+	ds.scaleDownFlow = ds.createResourceScaleFlow(namespace, fmt.Sprintf("scale-down-%s", namespace), createScaleDownResourceInfos(config.DependentResourceInfos), util.ScaleDownReplicasMismatch)
+	ds.scaleUpFlow = ds.createResourceScaleFlow(namespace, fmt.Sprintf("scale-up-%s", namespace), createScaleUpResourceInfos(config.DependentResourceInfos), util.ScaleUpReplicasMismatch)
 	return &ds
+}
+
+// scaleableResourceInfo contains a flattened scaleUp or scaleDown resource info for a given resource reference
+type scaleableResourceInfo struct {
+	ref          autoscalingv1.CrossVersionObjectReference
+	level        int
+	initialDelay time.Duration
+	timeout      time.Duration
+	replicas     int32
 }
 
 type mismatchReplicasCheckFn func(replicas, targetReplicas int32) bool
@@ -63,11 +72,11 @@ func isIgnoreScalingAnnotationSet(deployment *appsv1.Deployment) bool {
 	return false
 }
 
-func (ds *deploymentScaler) createResourceScaleFlow(namespace, flowName string, resourceInfos []ResourceInfo, mismatchReplicasCheckFn func(replicas, targetReplicas int32) bool) *flow.Flow {
+func (ds *deploymentScaler) createResourceScaleFlow(namespace, flowName string, resourceInfos []scaleableResourceInfo, mismatchReplicasCheckFn func(replicas, targetReplicas int32) bool) *flow.Flow {
 	levels := sortAndGetUniqueLevels(resourceInfos)
 	orderedResourceInfos := collectResourceInfosByLevel(resourceInfos)
 	g := flow.NewGraph(flowName)
-	var previousLevelResourceInfos []ResourceInfo
+	var previousLevelResourceInfos []scaleableResourceInfo
 	for _, level := range levels {
 		var previousTaskID flow.TaskID
 		if resInfos, ok := orderedResourceInfos[level]; ok {
@@ -83,11 +92,11 @@ func (ds *deploymentScaler) createResourceScaleFlow(namespace, flowName string, 
 	return g.Compile()
 }
 
-// createScaleTaskFn creates a flow.TaskFn for a slice of ResourceInfo. If there are more than one
-// ResourceInfo passed to this function, it indicates that they all are at the same level indicating that these functions
-// should be invoked concurrently. In this case it will construct a flow.Parallel. If there is only one ResourceInfo passed
-// then it indicates that at a specific level there is only one ResourceInfo that needs to be scaled.
-func (ds *deploymentScaler) createScaleTaskFn(namespace string, resourceInfos []ResourceInfo, mismatchReplicasCheckFn func(replicas, targetReplicas int32) bool, waitOnResourceInfos []ResourceInfo) flow.TaskFn {
+// createScaleTaskFn creates a flow.TaskFn for a slice of DependentResourceInfo. If there are more than one
+// DependentResourceInfo passed to this function, it indicates that they all are at the same level indicating that these functions
+// should be invoked concurrently. In this case it will construct a flow.Parallel. If there is only one DependentResourceInfo passed
+// then it indicates that at a specific level there is only one DependentResourceInfo that needs to be scaled.
+func (ds *deploymentScaler) createScaleTaskFn(namespace string, resourceInfos []scaleableResourceInfo, mismatchReplicasCheckFn func(replicas, targetReplicas int32) bool, waitOnResourceInfos []scaleableResourceInfo) flow.TaskFn {
 	if len(resourceInfos) == 0 {
 		logger.V(4).Info("(createScaleTaskFn) [unexpected] resourceInfos. This should never be the case.", "namespace", namespace)
 		return nil
@@ -95,7 +104,7 @@ func (ds *deploymentScaler) createScaleTaskFn(namespace string, resourceInfos []
 	taskFns := make([]flow.TaskFn, len(resourceInfos))
 	for _, resourceInfo := range resourceInfos {
 		taskFn := flow.TaskFn(func(ctx context.Context) error {
-			operation := fmt.Sprintf("scale-resource-%s.%s", namespace, resourceInfo.Ref.Name)
+			operation := fmt.Sprintf("scale-resource-%s.%s", namespace, resourceInfo.ref.Name)
 			result := util.Retry(ctx,
 				operation,
 				func() (interface{}, error) {
@@ -116,19 +125,19 @@ func (ds *deploymentScaler) createScaleTaskFn(namespace string, resourceInfos []
 	return flow.Parallel(taskFns...)
 }
 
-func (ds *deploymentScaler) scale(ctx context.Context, resourceInfo ResourceInfo, mismatchReplicas mismatchReplicasCheckFn, waitOnResourceInfos []ResourceInfo) error {
-	deployment, err := util.GetDeploymentFor(ctx, ds.namespace, resourceInfo.Ref.Name, ds.client)
+func (ds *deploymentScaler) scale(ctx context.Context, resourceInfo scaleableResourceInfo, mismatchReplicas mismatchReplicasCheckFn, waitOnResourceInfos []scaleableResourceInfo) error {
+	deployment, err := util.GetDeploymentFor(ctx, ds.namespace, resourceInfo.ref.Name, ds.client)
 	if err != nil {
 		logger.Error(err, "error getting deployment for resource, skipping scaling operation", "namespace", ds.namespace, "resourceInfo", resourceInfo)
 		return err
 	}
 	// sleep for initial delay
-	err = util.SleepWithContext(ctx, *resourceInfo.InitialDelay)
+	err = util.SleepWithContext(ctx, resourceInfo.initialDelay)
 	if err != nil {
 		logger.Error(err, "looks like the context has been cancelled. exiting scaling operation", "namespace", ds.namespace, "resourceInfo", resourceInfo)
 		return err
 	}
-	if ds.shouldScale(ctx, deployment, *resourceInfo.Replicas, mismatchReplicas, waitOnResourceInfos) {
+	if ds.shouldScale(ctx, deployment, resourceInfo.replicas, mismatchReplicas, waitOnResourceInfos) {
 		util.Retry(ctx, fmt.Sprintf(""), func() (*autoscalingv1.Scale, error) {
 			return ds.doScale(ctx, resourceInfo)
 		}, defaultMaxResourceScalingAttempts, defaultScaleResourceBackoff, util.AlwaysRetry)
@@ -136,7 +145,7 @@ func (ds *deploymentScaler) scale(ctx context.Context, resourceInfo ResourceInfo
 	return nil
 }
 
-func (ds *deploymentScaler) shouldScale(ctx context.Context, deployment *appsv1.Deployment, targetReplicas int32, mismatchReplicas mismatchReplicasCheckFn, waitOnResourceInfos []ResourceInfo) bool {
+func (ds *deploymentScaler) shouldScale(ctx context.Context, deployment *appsv1.Deployment, targetReplicas int32, mismatchReplicas mismatchReplicasCheckFn, waitOnResourceInfos []scaleableResourceInfo) bool {
 	if isIgnoreScalingAnnotationSet(deployment) {
 		logger.V(4).Info("scaling ignored due to explicit instruction via annotation", "namespace", ds.namespace, "deploymentName", deployment.Name, "annotation", ignoreScalingAnnotationKey)
 		return false
@@ -151,13 +160,13 @@ func (ds *deploymentScaler) shouldScale(ctx context.Context, deployment *appsv1.
 	// Check for currently available replicas and not the desired replicas on the upstream resource dependencies.
 	if waitOnResourceInfos != nil {
 		for _, upstreamDependentResource := range waitOnResourceInfos {
-			upstreamDeployment, err := util.GetDeploymentFor(ctx, ds.namespace, upstreamDependentResource.Ref.Name, ds.client)
+			upstreamDeployment, err := util.GetDeploymentFor(ctx, ds.namespace, upstreamDependentResource.ref.Name, ds.client)
 			if err != nil {
 				logger.Error(err, "failed to get deployment for upstream dependent resource, skipping scaling", "upstreamDependentResource", upstreamDependentResource)
 				return false
 			}
 			actualReplicas := upstreamDeployment.Status.Replicas
-			if mismatchReplicas(actualReplicas, *upstreamDependentResource.Replicas) {
+			if mismatchReplicas(actualReplicas, upstreamDependentResource.replicas) {
 				logger.V(4).Info("upstream resource has still not been scaled to the desired replicas, skipping scaling of resource", "namespace", ds.namespace, "deploymentToScale", deployment.Name, "upstreamResourceInfo", upstreamDependentResource, "actualReplicas", actualReplicas)
 				return false
 			}
@@ -166,16 +175,16 @@ func (ds *deploymentScaler) shouldScale(ctx context.Context, deployment *appsv1.
 	return true
 }
 
-func (ds *deploymentScaler) doScale(ctx context.Context, resourceInfo ResourceInfo) (*autoscalingv1.Scale, error) {
-	gr, err := ds.getGroupResource(resourceInfo.Ref)
+func (ds *deploymentScaler) doScale(ctx context.Context, resourceInfo scaleableResourceInfo) (*autoscalingv1.Scale, error) {
+	gr, err := ds.getGroupResource(resourceInfo.ref)
 	if err != nil {
 		return nil, err
 	}
-	scale, err := ds.scaler.Get(ctx, gr, resourceInfo.Ref.Name, metav1.GetOptions{})
+	scale, err := ds.scaler.Get(ctx, gr, resourceInfo.ref.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
-	scale.Spec.Replicas = *resourceInfo.Replicas
+	scale.Spec.Replicas = resourceInfo.replicas
 	return ds.scaler.Update(ctx, gr, scale, metav1.UpdateOptions{})
 }
 
@@ -193,12 +202,12 @@ func (ds *deploymentScaler) getGroupResource(resourceRef autoscalingv1.CrossVers
 	return mapping.Resource.GroupResource(), nil
 }
 
-func collectResourceInfosByLevel(resourceInfos []ResourceInfo) map[int][]ResourceInfo {
-	resInfosByLevel := make(map[int][]ResourceInfo)
+func collectResourceInfosByLevel(resourceInfos []scaleableResourceInfo) map[int][]scaleableResourceInfo {
+	resInfosByLevel := make(map[int][]scaleableResourceInfo)
 	for _, resInfo := range resourceInfos {
-		level := resInfo.Level
+		level := resInfo.level
 		if _, ok := resInfosByLevel[level]; !ok {
-			var levelResInfos []ResourceInfo
+			var levelResInfos []scaleableResourceInfo
 			levelResInfos = append(levelResInfos, resInfo)
 			resInfosByLevel[level] = levelResInfos
 		} else {
@@ -208,15 +217,45 @@ func collectResourceInfosByLevel(resourceInfos []ResourceInfo) map[int][]Resourc
 	return resInfosByLevel
 }
 
-func sortAndGetUniqueLevels(resourceInfos []ResourceInfo) []int {
+func sortAndGetUniqueLevels(resourceInfos []scaleableResourceInfo) []int {
 	var levels []int
 	keys := make(map[int]bool)
 	for _, resInfo := range resourceInfos {
-		if _, found := keys[resInfo.Level]; !found {
-			keys[resInfo.Level] = true
-			levels = append(levels, resInfo.Level)
+		if _, found := keys[resInfo.level]; !found {
+			keys[resInfo.level] = true
+			levels = append(levels, resInfo.level)
 		}
 	}
 	sort.Ints(levels)
 	return levels
+}
+
+func createScaleUpResourceInfos(dependentResourceInfos []DependentResourceInfo) []scaleableResourceInfo {
+	resourceInfos := make([]scaleableResourceInfo, 0, len(dependentResourceInfos))
+	for _, depResInfo := range dependentResourceInfos {
+		resInfo := scaleableResourceInfo{
+			ref:          depResInfo.Ref,
+			level:        depResInfo.ScaleUpInfo.Level,
+			initialDelay: *depResInfo.ScaleUpInfo.InitialDelay,
+			timeout:      *depResInfo.ScaleUpInfo.Timeout,
+			replicas:     *depResInfo.ScaleUpInfo.Replicas,
+		}
+		resourceInfos = append(resourceInfos, resInfo)
+	}
+	return resourceInfos
+}
+
+func createScaleDownResourceInfos(dependentResourceInfos []DependentResourceInfo) []scaleableResourceInfo {
+	resourceInfos := make([]scaleableResourceInfo, 0, len(dependentResourceInfos))
+	for _, depResInfo := range dependentResourceInfos {
+		resInfo := scaleableResourceInfo{
+			ref:          depResInfo.Ref,
+			level:        depResInfo.ScaleDownInfo.Level,
+			initialDelay: *depResInfo.ScaleDownInfo.InitialDelay,
+			timeout:      *depResInfo.ScaleDownInfo.Timeout,
+			replicas:     *depResInfo.ScaleDownInfo.Replicas,
+		}
+		resourceInfos = append(resourceInfos, resInfo)
+	}
+	return resourceInfos
 }

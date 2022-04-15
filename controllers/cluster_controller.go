@@ -18,12 +18,10 @@ package controllers
 
 import (
 	"context"
-
 	"github.com/gardener/dependency-watchdog/internal/prober"
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	gardencorev1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	gardenerv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -45,15 +43,8 @@ type ClusterReconciler struct {
 //+kubebuilder:rbac:groups=gardener.cloud,resources=clusters,verbs=get;list;watch
 //+kubebuilder:rbac:groups=gardener.cloud,resources=clusters/status,verbs=get
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the Cluster object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.0/pkg/reconcile
+// Reconcile listens to create/update/delete events for `Cluster` resources and
+// manages probes for the shoot control namespace for these clusters by looking at the cluster state.
 func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	cluster, notFound, err := r.getCluster(ctx, req.Namespace, req.Name)
@@ -61,10 +52,16 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		logger.Error(err, "Unable to get the cluster resource, requeing for reconciliation", "namespace", req.Namespace, "name", req.Name)
 		return ctrl.Result{}, err
 	}
+	// If the cluster is not found then any existing probes if present will be unregistered
+	if notFound {
+		logger.V(4).Info("Cluster not found, any existing probes will be removed if present", "namespace", req.Namespace, "name", req.Name)
+		r.ProberMgr.Unregister(req.Name)
+		return ctrl.Result{}, nil
+	}
 
-	// If cluster is not found or its deletion timestamp has been set then we will remove any existing prober
-	if notFound || cluster.DeletionTimestamp != nil {
-		logger.V(4).Info("Cluster not found or marked for deletion, prober will be removed if present", "namespace", req.Namespace, "name", req.Name)
+	// If cluster is marked for deletion then any existing probes will be unregistered
+	if cluster.DeletionTimestamp != nil {
+		logger.V(4).Info("Cluster has been marked for deletion, any existing probes will be removed if present", "namespace", req.Namespace, "name", req.Name)
 		r.ProberMgr.Unregister(req.Name)
 		return ctrl.Result{}, nil
 	}
@@ -81,10 +78,10 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		r.ProberMgr.Unregister(req.Name)
 	} else {
 		if shoot.Status.IsHibernated {
-			logger.V(4).Info("Cluster is waking up, prober will be removed if present", "namespace", req.Namespace, "name", req.Name)
+			logger.V(4).Info("Cluster is waking up and is not yet ready, it is too early to start probing for this shoot. Any existing probes will be removed if present", "namespace", req.Namespace, "name", req.Name)
 			r.ProberMgr.Unregister(req.Name)
 		} else {
-			logger.V(4).Info("Starting new prober for cluster if not present", "namespace", req.Namespace, "name", req.Name)
+			logger.V(4).Info("Starting a new probe for cluster if not present", "namespace", req.Namespace, "name", req.Name)
 			r.startProber(req.Name)
 		}
 	}
@@ -102,6 +99,8 @@ func (r *ClusterReconciler) getCluster(ctx context.Context, namespace string, na
 	return cluster, false, nil
 }
 
+// startProber sets up a new probe against a given key which uniquely identifies the probe.
+// Typically, the key in case of a shoot cluster is the shoot namespace
 func (r *ClusterReconciler) startProber(key string) {
 	_, ok := r.ProberMgr.GetProber(key)
 	if !ok {

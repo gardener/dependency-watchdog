@@ -26,30 +26,34 @@ var (
 )
 
 type Config struct {
-	Name                         string         `yaml:"name"`
-	Namespace                    string         `yaml:"namespace,omitempty"`
-	InternalKubeConfigSecretName string         `yaml:"internalKubeConfigSecretName"`
-	ExternalKubeConfigSecretName string         `yaml:"externalKubeConfigSecretName"`
-	ProbeInterval                *time.Duration `yaml:"probeInterval,omitempty"`
-	InitialDelay                 *time.Duration `yaml:"initialDelay,omitempty"`
-	SuccessThreshold             *int           `yaml:"successThreshold,omitempty"`
-	FailureThreshold             *int           `yaml:"failureThreshold,omitempty"`
-	BackoffDuration              *time.Duration `yaml:"backoffDuration,omitempty"`
-	BackoffJitterFactor          *float64       `yaml:"backoffJitterFactor,omitempty"`
-	ScaleDownResourceInfos       []ResourceInfo `yaml:"scaleDownResourceInfos"`
-	ScaleUpResourceInfos         []ResourceInfo `yaml:"scaleUpResourceInfos"`
+	Name                         string                  `yaml:"name"`
+	Namespace                    string                  `yaml:"namespace,omitempty"`
+	InternalKubeConfigSecretName string                  `yaml:"internalKubeConfigSecretName"`
+	ExternalKubeConfigSecretName string                  `yaml:"externalKubeConfigSecretName"`
+	ProbeInterval                *time.Duration          `yaml:"probeInterval,omitempty"`
+	InitialDelay                 *time.Duration          `yaml:"initialDelay,omitempty"`
+	SuccessThreshold             *int                    `yaml:"successThreshold,omitempty"`
+	FailureThreshold             *int                    `yaml:"failureThreshold,omitempty"`
+	BackoffDuration              *time.Duration          `yaml:"backoffDuration,omitempty"`
+	BackoffJitterFactor          *float64                `yaml:"backoffJitterFactor,omitempty"`
+	DependentResourceInfos       []DependentResourceInfo `yaml:"dependentResourceInfos"`
 }
 
-type ResourceInfo struct {
+type DependentResourceInfo struct {
 	// Ref identifies a resource
-	Ref autoscalingv1.CrossVersionObjectReference `yaml:"ref"`
+	Ref           autoscalingv1.CrossVersionObjectReference `yaml:"ref"`
+	ScaleUpInfo   *ScaleInfo                                `yaml:"scaleUp,omitempty"`
+	ScaleDownInfo *ScaleInfo                                `yaml:"scaleDown,omitempty"`
+}
+
+type ScaleInfo struct {
 	// Level is used to order the dependent resources. Highest level or the first level starts at 0 and increments. Each dependent resource on a level will have to wait for
 	// all resource in a previous level to finish their scaling operation. If there are more than one resource defined with the same level then they will be scaled concurrently.
 	Level int `yaml:"level"`
 	// InitialDelay is the time to delay (duration) the scale down/up of this resource. If not specified its default value will be 0.
 	InitialDelay *time.Duration `yaml:"initialDelay,omitempty"`
 	// ScaleTimeout is the time timeout duration to wait for when attempting to update the scaling sub-resource.
-	ScaleUpdateTimeout *time.Duration `yaml:"scaleUpdateTimeout,omitempty"`
+	Timeout *time.Duration `yaml:"timeout,omitempty"`
 	// Replicas is the desired set of replicas. In case of scale down it represents the replicas to which it should scale down. If not specified its default value will be 0.
 	// In case of a scale up it represents the replicas to which it should scale up to. If not specified its default value will be 1.
 	Replicas *int32 `yaml:"replicas,omitempty"`
@@ -79,13 +83,11 @@ func (c *Config) validate() error {
 	v.MustNotBeEmpty("Name", c.Name)
 	v.MustNotBeEmpty("InternalKubeConfigSecretName", c.InternalKubeConfigSecretName)
 	v.MustNotBeEmpty("ExternalKubeConfigSecretName", c.ExternalKubeConfigSecretName)
-	v.MustNotBeEmpty("ScaleDownResourceInfos", c.ScaleDownResourceInfos)
-	v.MustNotBeEmpty("ScaleUpResourceInfos", c.ScaleUpResourceInfos)
-	for _, resInfo := range c.ScaleUpResourceInfos {
+	v.MustNotBeEmpty("ScaleDownResourceInfos", c.DependentResourceInfos)
+	for _, resInfo := range c.DependentResourceInfos {
 		v.ResourceRefMustBeValid(resInfo.Ref)
-	}
-	for _, resInfo := range c.ScaleDownResourceInfos {
-		v.ResourceRefMustBeValid(resInfo.Ref)
+		v.MustNotBeNil("scaleUp", resInfo.ScaleUpInfo)
+		v.MustNotBeNil("scaleDown", resInfo.ScaleDownInfo)
 	}
 	if v.error != nil {
 		return v.error
@@ -112,21 +114,25 @@ func (c *Config) fillDefaultValues() {
 	if c.BackoffJitterFactor == nil {
 		c.BackoffJitterFactor = &defaultBackoffJitterFactor
 	}
-	fillDefaultValuesForResourceInfos(ScaleUp, c.ScaleUpResourceInfos)
-	fillDefaultValuesForResourceInfos(ScaleDown, c.ScaleDownResourceInfos)
+	fillDefaultValuesForResourceInfos(c.DependentResourceInfos)
 }
 
-func fillDefaultValuesForResourceInfos(scaleType int, resourceInfos []ResourceInfo) {
+func fillDefaultValuesForResourceInfos(resourceInfos []DependentResourceInfo) {
 	for _, resInfo := range resourceInfos {
-		if resInfo.Replicas == nil {
-			resInfo.Replicas = getDefaultScaleTargetReplicas(scaleType)
-		}
-		if resInfo.ScaleUpdateTimeout == nil {
-			resInfo.ScaleUpdateTimeout = &defaultScaleUpdateTimeout
-		}
-		if resInfo.InitialDelay == nil {
-			resInfo.InitialDelay = &defaultInitialDelay
-		}
+		fillDefaultValuesForScaleInfo(ScaleUp, resInfo.ScaleUpInfo)
+		fillDefaultValuesForScaleInfo(ScaleDown, resInfo.ScaleDownInfo)
+	}
+}
+
+func fillDefaultValuesForScaleInfo(scaleType int, scaleInfo *ScaleInfo) {
+	if scaleInfo.Replicas == nil {
+		scaleInfo.Replicas = getDefaultScaleTargetReplicas(scaleType)
+	}
+	if scaleInfo.Timeout == nil {
+		scaleInfo.Timeout = &defaultScaleUpdateTimeout
+	}
+	if scaleInfo.InitialDelay == nil {
+		scaleInfo.InitialDelay = &defaultInitialDelay
 	}
 }
 
