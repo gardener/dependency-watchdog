@@ -3,6 +3,7 @@ package util_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,10 +25,9 @@ import (
 )
 
 var (
-	pathToTestDirectory = filepath.Join("..", "..", "testdata")
-	pathToSecret        = filepath.Join(pathToTestDirectory, "secret.yaml")
-	pathToKubeConfig    = filepath.Join(pathToTestDirectory, "kubeconfig.yaml")
-	pathToDeployment    = filepath.Join(pathToTestDirectory, "deployment.yaml")
+	secretPath     = filepath.Join("testdata", "secret.yaml")
+	kubeConfigPath = filepath.Join("testdata", "kubeconfig.yaml")
+	deploymentPath = filepath.Join("testdata", "deployment.yaml")
 )
 
 var _ = Describe("Client", Ordered, Label("client"), func() {
@@ -40,6 +40,9 @@ var _ = Describe("Client", Ordered, Label("client"), func() {
 
 	BeforeAll(func() {
 		By("initialing and starting the test environment")
+		fileExistsOrFail(secretPath)
+		fileExistsOrFail(deploymentPath)
+		fileExistsOrFail(kubeConfigPath)
 		testEnv = &envtest.Environment{}
 		cfg, err = testEnv.Start()
 		Expect(err).NotTo(HaveOccurred())
@@ -57,7 +60,7 @@ var _ = Describe("Client", Ordered, Label("client"), func() {
 
 		BeforeEach(func() {
 			ctx = context.Background()
-			result := getStructured[corev1.Secret](pathToSecret)
+			result := getStructured[corev1.Secret](secretPath)
 			Expect(result.Err).Should(BeNil())
 			Expect(result.StructuredObject).ShouldNot(BeNil())
 			secret = result.StructuredObject
@@ -81,7 +84,7 @@ var _ = Describe("Client", Ordered, Label("client"), func() {
 
 			It("should extract kubeconfig from secret", func() {
 				By("reading the kubeconfig file")
-				kubeconfigBuffer, err := readFile(pathToKubeConfig)
+				kubeconfigBuffer, err := readFile(kubeConfigPath)
 				Expect(err).Should(BeNil())
 				kubeconfig := kubeconfigBuffer.Bytes()
 				Expect(kubeconfig).ShouldNot(BeNil())
@@ -113,7 +116,7 @@ var _ = Describe("Client", Ordered, Label("client"), func() {
 		BeforeEach(func() {
 			ctx = context.Background()
 
-			result := getStructured[appsv1.Deployment](pathToDeployment)
+			result := getStructured[appsv1.Deployment](deploymentPath)
 			Expect(result.Err).Should(BeNil())
 			Expect(result.StructuredObject).ShouldNot(BeNil())
 			deployment = result.StructuredObject
@@ -151,7 +154,7 @@ var _ = Describe("Client", Ordered, Label("client"), func() {
 	Describe("Create ClientFromKubeConfigBytes", Label("client"), func() {
 		It("should return new client from kubeconfig", func() {
 			By("reading the kubeconfig file")
-			kubeconfigBuffer, err := readFile(pathToKubeConfig)
+			kubeconfigBuffer, err := readFile(kubeConfigPath)
 			Expect(err).Should(BeNil())
 			kubeconfig := kubeconfigBuffer.Bytes()
 			Expect(kubeconfig).ShouldNot(BeNil())
@@ -227,4 +230,11 @@ func readFile(filePath string) (*bytes.Buffer, error) {
 		return nil, err
 	}
 	return buff, nil
+}
+
+func fileExistsOrFail(filepath string) {
+	if _, err := os.Stat(filepath); errors.Is(err, os.ErrNotExist) {
+		GinkgoWriter.Printf("%s does not exist. This should not have happened. Check testdata directory.\n", filepath)
+		Expect(err).ToNot(HaveOccurred())
+	}
 }

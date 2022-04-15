@@ -1,4 +1,4 @@
-name: ""
+name: "shoot-kube-apiserver"
 namespace: ""
 internalKubeConfigSecretName: "dws-interal-probe-secret"
 externalKubeConfigSecretName: "dwd-external-probe-secret"
