@@ -38,7 +38,6 @@ require (
 	github.com/gardener/etcd-druid v0.8.0 // indirect
 	github.com/gardener/external-dns-management v0.7.18 // indirect
 	github.com/gardener/hvpa-controller/api v0.4.0 // indirect
-	github.com/gardener/machine-controller-manager v0.44.1 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-logr/zapr v1.2.0 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect

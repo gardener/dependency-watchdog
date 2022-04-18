@@ -32,7 +32,7 @@ Last but not the least, today the code complexity of DWD means that we cannot ha
 ### Goals
 
 * Simplify the management of probes to ensure deterministic and non-competing behavior w.r.t scaling of dependent control plane components
-* Simplify and enhancement the dependency management allowing concurrent scale Up/Down of dependent resources
+* Simplify and enhance the dependency management allowing concurrent scale Up/Down of dependent resources
 * De-link gardener core from extension specific configurations and allow shoot specific setup especially for usage externally where MCM might be used to manage machine deployments.
 * Use the controller-runtime components
 
