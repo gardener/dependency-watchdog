@@ -24,14 +24,14 @@ func (ps *probeStatus) canIgnoreProbeError(err error) bool {
 	return apiServerThrottledRequests || apierrors.IsNotFound(err) || secretsRotated
 }
 
-func (ps *probeStatus) recordFailure(err error, failureThreshold int) {
+func (ps *probeStatus) recordFailure(err error, failureThreshold int, failureThresholdBackoffDuration time.Duration) {
 	if ps.errorCount <= failureThreshold {
 		ps.errorCount++
 	}
 	ps.lastErr = err
 	ps.successCount = 0
 	if ps.isUnhealthy(failureThreshold) {
-		ps.resetBackoff(internalProbeUnhealthyBackoffDuration)
+		ps.resetBackoff(failureThresholdBackoffDuration)
 	}
 }
 

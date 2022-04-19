@@ -30,7 +30,6 @@ type Prober struct {
 	Scaler              DeploymentScaler
 	internalProbeStatus probeStatus
 	externalProbeStatus probeStatus
-	backOff             *time.Timer
 	stopC               <-chan struct{}
 	cancelFn            context.CancelFunc
 }
@@ -91,6 +90,7 @@ func (p *Prober) probe(ctx context.Context) {
 }
 
 func (p *Prober) probeInternal(ctx context.Context) {
+	backOffIfNeeded(&p.internalProbeStatus)
 	shootClient, err := p.createShootClient(ctx, p.Config.InternalKubeConfigSecretName)
 	if err != nil {
 		logger.Error(err, "failed to create shoot client using internal secret, ignoring error, probe will be re-attempted", "namespace", p.Namespace)
@@ -99,7 +99,7 @@ func (p *Prober) probeInternal(ctx context.Context) {
 	err = p.doProbe(shootClient)
 	if err != nil {
 		if !p.internalProbeStatus.canIgnoreProbeError(err) {
-			p.internalProbeStatus.recordFailure(err, *p.Config.FailureThreshold)
+			p.internalProbeStatus.recordFailure(err, *p.Config.FailureThreshold, internalProbeUnhealthyBackoffDuration)
 			logger.Error(err, "recording internal probe failure", "failedAttempts", p.internalProbeStatus.errorCount, "failureThreshold", p.Config.FailureThreshold)
 		}
 		logger.Error(err, "internal probe was not successful. ignoring this error, will retry probe", "namespace", p.Namespace)
@@ -110,6 +110,7 @@ func (p *Prober) probeInternal(ctx context.Context) {
 }
 
 func (p *Prober) probeExternal(ctx context.Context) {
+	backOffIfNeeded(&p.externalProbeStatus)
 	shootClient, err := p.createShootClient(ctx, p.Config.ExternalKubeConfigSecretName)
 	if err != nil {
 		logger.Error(err, "failed to create shoot client using external secret, ignoring error, probe will be re-attempted", "namespace", p.Namespace)
@@ -118,7 +119,7 @@ func (p *Prober) probeExternal(ctx context.Context) {
 	err = p.doProbe(shootClient)
 	if err != nil {
 		if !p.externalProbeStatus.canIgnoreProbeError(err) {
-			p.externalProbeStatus.recordFailure(err, *p.Config.FailureThreshold)
+			p.externalProbeStatus.recordFailure(err, *p.Config.FailureThreshold, 0)
 			logger.Error(err, "recording external probe failure", "failedAttempts", p.externalProbeStatus.errorCount, "failureThreshold", p.Config.FailureThreshold)
 		}
 		logger.Error(err, "external probe was not successful. ignoring this error, will retry probe", "namespace", p.Namespace)
@@ -126,6 +127,14 @@ func (p *Prober) probeExternal(ctx context.Context) {
 	}
 	p.externalProbeStatus.recordSuccess(*p.Config.SuccessThreshold)
 	logger.V(4).Info("external probe is successful", "namespace", p.Namespace, "successfulAttempts", p.internalProbeStatus.successCount)
+}
+
+func backOffIfNeeded(ps *probeStatus) {
+	if ps.backOff != nil {
+		<-ps.backOff.C
+		ps.backOff.Stop()
+		ps.backOff = nil
+	}
 }
 
 func (p *Prober) doProbe(client kubernetes.Interface) error {
