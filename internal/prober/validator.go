@@ -14,7 +14,7 @@ type validator struct {
 	error
 }
 
-func (v *validator) MustNotBeEmpty(key string, value interface{}) bool {
+func (v *validator) mustNotBeEmpty(key string, value interface{}) bool {
 	if value == nil {
 		v.error = multierr.Append(v.error, fmt.Errorf("%s must not be nil or empty", key))
 		return false
@@ -35,7 +35,7 @@ func (v *validator) MustNotBeEmpty(key string, value interface{}) bool {
 	return true
 }
 
-func (v *validator) MustNotBeNil(key string, value interface{}) bool {
+func (v *validator) mustNotBeNil(key string, value interface{}) bool {
 	if value == nil || reflect.ValueOf(value).IsNil() {
 		v.error = multierr.Append(v.error, fmt.Errorf("%s must not be nil", key))
 		return false
@@ -43,22 +43,7 @@ func (v *validator) MustNotBeNil(key string, value interface{}) bool {
 	return true
 }
 
-func (v *validator) MustBeGreaterThan(key string, value *int, lowerLimit int) bool {
-	if *value < lowerLimit {
-		v.error = multierr.Append(v.error, fmt.Errorf("%s must have a value greater than %d. Found value %d", key, lowerLimit, value))
-		return false
-	}
-	return true
-}
-
-func (v *validator) IfPresentMustBeGreaterThan(key string, value *int, lowerLimit int) bool {
-	if value != nil {
-		return v.MustBeGreaterThan(key, value, lowerLimit)
-	}
-	return true
-}
-
-func (v *validator) ResourceRefMustBeValid(resourceRef autoscalingv1.CrossVersionObjectReference) bool {
+func (v *validator) resourceRefMustBeValid(resourceRef autoscalingv1.CrossVersionObjectReference) bool {
 	_, err := schema.ParseGroupVersion(resourceRef.APIVersion)
 	if err != nil {
 		v.error = multierr.Append(v.error, err)

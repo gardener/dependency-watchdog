@@ -45,3 +45,14 @@ func (pm *manager) GetProber(key string) (*Prober, bool) {
 func createKey(prober *Prober) string {
 	return prober.Namespace // check if this would be sufficient
 }
+
+// checks if the context of the prober is cancelled or not.
+// Used in testing the manager code.
+func IsClosed(prober *Prober) bool {
+	select {
+	case <-prober.stopC:
+		return true
+	default:
+		return false
+	}
+}

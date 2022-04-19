@@ -85,14 +85,14 @@ func readAndUnmarshal(file string) (*Config, error) {
 func (c *Config) validate() error {
 	v := new(validator)
 	// Check the mandatory config parameters for which a default will not be set
-	v.MustNotBeEmpty("Name", c.Name)
-	v.MustNotBeEmpty("InternalKubeConfigSecretName", c.InternalKubeConfigSecretName)
-	v.MustNotBeEmpty("ExternalKubeConfigSecretName", c.ExternalKubeConfigSecretName)
-	v.MustNotBeEmpty("ScaleDownResourceInfos", c.DependentResourceInfos)
+	v.mustNotBeEmpty("Name", c.Name)
+	v.mustNotBeEmpty("InternalKubeConfigSecretName", c.InternalKubeConfigSecretName)
+	v.mustNotBeEmpty("ExternalKubeConfigSecretName", c.ExternalKubeConfigSecretName)
+	v.mustNotBeEmpty("ScaleDownResourceInfos", c.DependentResourceInfos)
 	for _, resInfo := range c.DependentResourceInfos {
-		v.ResourceRefMustBeValid(resInfo.Ref)
-		v.MustNotBeNil("scaleUp", resInfo.ScaleUpInfo)
-		v.MustNotBeNil("scaleDown", resInfo.ScaleDownInfo)
+		v.resourceRefMustBeValid(resInfo.Ref)
+		v.mustNotBeNil("scaleUp", resInfo.ScaleUpInfo)
+		v.mustNotBeNil("scaleDown", resInfo.ScaleDownInfo)
 	}
 	if v.error != nil {
 		return v.error
