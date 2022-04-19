@@ -36,7 +36,7 @@ func (v *validator) MustNotBeEmpty(key string, value interface{}) bool {
 }
 
 func (v *validator) MustNotBeNil(key string, value interface{}) bool {
-	if value == nil {
+	if value == nil || reflect.ValueOf(value).IsNil() {
 		v.error = multierr.Append(v.error, fmt.Errorf("%s must not be nil", key))
 		return false
 	}

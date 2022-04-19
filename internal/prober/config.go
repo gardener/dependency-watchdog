@@ -11,18 +11,15 @@ import (
 const (
 	ScaleUp int = iota
 	ScaleDown
-)
-
-var (
-	defaultProbeInterval             = 10 * time.Second
-	defaultInitialDelay              = 0 * time.Second
-	defaultBackoffDuration           = 30 * time.Second
-	defaultSuccessThreshold          = 1
-	defaultFailureThreshold          = 3
-	defaultBackoffJitterFactor       = 0.2
-	defaultScaleUpReplicas     int32 = 1
-	defaultScaleDownReplicas   int32 = 0
-	defaultScaleUpdateTimeout        = 10 * time.Second
+	DefaultProbeInterval             = 10 * time.Second
+	DefaultInitialDelay              = 0 * time.Second
+	DefaultBackoffDuration           = 30 * time.Second
+	DefaultSuccessThreshold          = 1
+	DefaultFailureThreshold          = 3
+	DefaultBackoffJitterFactor       = 0.2
+	DefaultScaleUpReplicas     int32 = 1
+	DefaultScaleDownReplicas   int32 = 0
+	DefaultScaleUpdateTimeout        = 10 * time.Second
 )
 
 type Config struct {
@@ -59,18 +56,26 @@ type ScaleInfo struct {
 	Replicas *int32 `yaml:"replicas,omitempty"`
 }
 
-func ReadAndUnmarshal(file string) (*Config, error) {
+func LoadConfig(file string) (*Config, error) {
+	config, err := readAndUnmarshal(file)
+	if err != nil {
+		return nil, err
+	}
+	config.fillDefaultValues()
+	err = config.validate()
+	if err != nil {
+		return nil, err
+	}
+	return config, nil
+}
+
+func readAndUnmarshal(file string) (*Config, error) {
 	configBytes, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
 	config := Config{}
 	err = yaml.Unmarshal(configBytes, &config)
-	if err != nil {
-		return nil, err
-	}
-	config.fillDefaultValues()
-	err = config.validate()
 	if err != nil {
 		return nil, err
 	}
@@ -97,22 +102,28 @@ func (c *Config) validate() error {
 
 func (c *Config) fillDefaultValues() {
 	if c.ProbeInterval == nil {
-		c.ProbeInterval = &defaultProbeInterval
+		c.ProbeInterval = new(time.Duration)
+		*c.ProbeInterval = DefaultProbeInterval
 	}
 	if c.InitialDelay == nil {
-		c.InitialDelay = &defaultInitialDelay
+		c.InitialDelay = new(time.Duration)
+		*c.InitialDelay = DefaultInitialDelay
 	}
 	if c.BackoffDuration == nil {
-		c.BackoffDuration = &defaultBackoffDuration
+		c.BackoffDuration = new(time.Duration)
+		*c.BackoffDuration = DefaultBackoffDuration
 	}
 	if c.SuccessThreshold == nil {
-		c.SuccessThreshold = &defaultSuccessThreshold
+		c.SuccessThreshold = new(int)
+		*c.SuccessThreshold = DefaultSuccessThreshold
 	}
 	if c.FailureThreshold == nil {
-		c.FailureThreshold = &defaultFailureThreshold
+		c.FailureThreshold = new(int)
+		*c.FailureThreshold = DefaultFailureThreshold
 	}
 	if c.BackoffJitterFactor == nil {
-		c.BackoffJitterFactor = &defaultBackoffJitterFactor
+		c.BackoffJitterFactor = new(float64)
+		*c.BackoffJitterFactor = DefaultBackoffJitterFactor
 	}
 	fillDefaultValuesForResourceInfos(c.DependentResourceInfos)
 }
@@ -125,22 +136,27 @@ func fillDefaultValuesForResourceInfos(resourceInfos []DependentResourceInfo) {
 }
 
 func fillDefaultValuesForScaleInfo(scaleType int, scaleInfo *ScaleInfo) {
-	if scaleInfo.Replicas == nil {
-		scaleInfo.Replicas = getDefaultScaleTargetReplicas(scaleType)
-	}
-	if scaleInfo.Timeout == nil {
-		scaleInfo.Timeout = &defaultScaleUpdateTimeout
-	}
-	if scaleInfo.InitialDelay == nil {
-		scaleInfo.InitialDelay = &defaultInitialDelay
+	if scaleInfo != nil {
+		if scaleInfo.Replicas == nil {
+			scaleInfo.Replicas = new(int32)
+			*scaleInfo.Replicas = getDefaultScaleTargetReplicas(scaleType)
+		}
+		if scaleInfo.Timeout == nil {
+			scaleInfo.Timeout = new(time.Duration)
+			*scaleInfo.Timeout = DefaultScaleUpdateTimeout
+		}
+		if scaleInfo.InitialDelay == nil {
+			scaleInfo.InitialDelay = new(time.Duration)
+			*scaleInfo.InitialDelay = DefaultInitialDelay
+		}
 	}
 }
 
-func getDefaultScaleTargetReplicas(scaleType int) *int32 {
+func getDefaultScaleTargetReplicas(scaleType int) int32 {
 	if scaleType == ScaleUp {
-		return &defaultScaleUpReplicas
+		return DefaultScaleUpReplicas
 	}
-	return &defaultScaleDownReplicas
+	return DefaultScaleDownReplicas
 }
 
 func (c *Config) GetSecretNames() []string {

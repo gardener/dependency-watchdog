@@ -73,7 +73,7 @@ func addProbeFlags(fs *flag.FlagSet) {
 }
 
 func startProberControllerMgr(ctx context.Context, args []string, logger logr.Logger) (manager.Manager, error) {
-	proberConfig, err := prober.ReadAndUnmarshal(opts.SharedOpts.ConfigFile)
+	proberConfig, err := prober.LoadConfig(opts.SharedOpts.ConfigFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse prober config file %s : %w", opts.SharedOpts.ConfigFile, err)
 	}
