@@ -23,7 +23,15 @@ const (
 	internalProbeUnhealthyBackoffDuration = 30 * time.Second
 )
 
-type Prober struct {
+type Prober interface {
+	Run()
+	GetNamespace() string
+	GetConfig() *Config
+	Close()
+	IsClosed() bool
+}
+
+type prober struct {
 	Namespace           string
 	Config              *Config
 	Client              client.Client
@@ -34,9 +42,9 @@ type Prober struct {
 	cancelFn            context.CancelFunc
 }
 
-func NewProber(namespace string, config *Config, ctrlClient client.Client, scaler DeploymentScaler) *Prober {
+func NewProber(namespace string, config *Config, ctrlClient client.Client, scaler DeploymentScaler) Prober {
 	ctx, cancelFn := context.WithCancel(context.Background())
-	return &Prober{
+	return &prober{
 		Namespace: namespace,
 		Config:    config,
 		Client:    ctrlClient,
@@ -46,11 +54,29 @@ func NewProber(namespace string, config *Config, ctrlClient client.Client, scale
 	}
 }
 
-func (p *Prober) Close() {
+func (p *prober) GetNamespace() string {
+	return p.Namespace
+}
+
+func (p *prober) GetConfig() *Config {
+	return p.Config
+}
+
+func (p *prober) Close() {
 	p.cancelFn()
 }
 
-func (p *Prober) Run() {
+// IsClosed checks if the context of the prober is cancelled or not.
+func (p *prober) IsClosed() bool {
+	select {
+	case <-p.stopC:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p *prober) Run() {
 	ctx, cancelFn := context.WithCancel(context.Background())
 	defer cancelFn()
 	wait.JitterUntilWithContext(ctx, func(ctx context.Context) {
@@ -64,7 +90,7 @@ func (p *Prober) Run() {
 	}, *p.Config.ProbeInterval, *p.Config.BackoffJitterFactor, true)
 }
 
-func (p *Prober) probe(ctx context.Context) {
+func (p *prober) probe(ctx context.Context) {
 	p.probeInternal(ctx)
 	if p.internalProbeStatus.isHealthy(*p.Config.SuccessThreshold) {
 		p.probeExternal(ctx)
@@ -89,7 +115,7 @@ func (p *Prober) probe(ctx context.Context) {
 	}
 }
 
-func (p *Prober) probeInternal(ctx context.Context) {
+func (p *prober) probeInternal(ctx context.Context) {
 	backOffIfNeeded(&p.internalProbeStatus)
 	shootClient, err := p.createShootClient(ctx, p.Config.InternalKubeConfigSecretName)
 	if err != nil {
@@ -109,7 +135,7 @@ func (p *Prober) probeInternal(ctx context.Context) {
 	logger.V(4).Info("internal probe is successful", "namespace", p.Namespace, "successfulAttempts", p.internalProbeStatus.successCount)
 }
 
-func (p *Prober) probeExternal(ctx context.Context) {
+func (p *prober) probeExternal(ctx context.Context) {
 	backOffIfNeeded(&p.externalProbeStatus)
 	shootClient, err := p.createShootClient(ctx, p.Config.ExternalKubeConfigSecretName)
 	if err != nil {
@@ -137,7 +163,7 @@ func backOffIfNeeded(ps *probeStatus) {
 	}
 }
 
-func (p *Prober) doProbe(client kubernetes.Interface) error {
+func (p *prober) doProbe(client kubernetes.Interface) error {
 	_, err := client.Discovery().ServerVersion()
 	if err != nil {
 		return err
@@ -145,7 +171,7 @@ func (p *Prober) doProbe(client kubernetes.Interface) error {
 	return nil
 }
 
-func (p *Prober) createShootClient(ctx context.Context, secretName string) (kubernetes.Interface, error) {
+func (p *prober) createShootClient(ctx context.Context, secretName string) (kubernetes.Interface, error) {
 	operation := fmt.Sprintf("get-secret-%s-for-namespace-%s", secretName, p.Namespace)
 	retryResult := util.Retry(ctx,
 		operation,

@@ -9,5 +9,5 @@ import (
 
 func TestProber(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Prober Suite")
+	RunSpecs(t, "prober Suite")
 }

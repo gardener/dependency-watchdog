@@ -2,6 +2,8 @@ package prober
 
 import (
 	"errors"
+	"fmt"
+	. "github.com/onsi/gomega"
 	"testing"
 	"time"
 
@@ -9,10 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func createProbeStatus(successCount int, errCount int, lastErr error, backOff *time.Timer) *probeStatus {
-	return &probeStatus{successCount: successCount, errorCount: errCount,
-		lastErr: lastErr, backOff: backOff}
-}
 func TestIsHealthy(t *testing.T) {
 	unhealthy := createProbeStatus(0, 0, nil, nil)
 	healthy := createProbeStatus(4, 0, nil, nil)
@@ -29,17 +27,12 @@ func TestIsHealthy(t *testing.T) {
 }
 
 func TestIsUnhealthy(t *testing.T) {
+	g := NewWithT(t)
 	unhealthy := createProbeStatus(0, 4, nil, nil)
 	healthy := createProbeStatus(0, 2, nil, nil)
 	failureThreshold := 3
-
-	if !unhealthy.isUnhealthy(failureThreshold) {
-		t.Fatalf("IsUnhealthy failed, Expected true for unhealthy status, but got false")
-	}
-	if healthy.isUnhealthy(failureThreshold) {
-		t.Fatalf("IsUnhealthy failed, Expected false for healthy status, but got true")
-	}
-	t.Log("IsUnhealthy Passed")
+	g.Expect(unhealthy.isUnhealthy(failureThreshold)).To(BeFalse(), fmt.Sprintf("unhealthy.isUnhealthy should have been true"))
+	g.Expect(healthy.isUnhealthy(failureThreshold)).To(BeFalse())
 }
 
 func TestRestBackoff(t *testing.T) {
@@ -131,4 +124,9 @@ func TestCanIgnoreProbeError(t *testing.T) {
 
 	ps.backOff.Stop()
 	t.Log("CanIgnoreProbeError Passed")
+}
+
+func createProbeStatus(successCount int, errCount int, lastErr error, backOff *time.Timer) *probeStatus {
+	return &probeStatus{successCount: successCount, errorCount: errCount,
+		lastErr: lastErr, backOff: backOff}
 }

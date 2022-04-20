@@ -3,56 +3,58 @@ package prober
 import "sync"
 
 type Manager interface {
-	Register(prober *Prober)
-	Unregister(key string)
-	GetProber(key string) (*Prober, bool)
+	Register(prober Prober) bool
+	Unregister(key string) bool
+	GetProber(key string) (Prober, bool)
+	GetAllProbers() []Prober
 }
 
 func NewManager() Manager {
 	return &manager{
-		probers: make(map[string]*Prober),
+		probers: make(map[string]Prober),
 	}
 }
 
 type manager struct {
 	sync.Mutex
-	probers map[string]*Prober
+	probers map[string]Prober
 }
 
-func (pm *manager) Unregister(key string) {
+func (pm *manager) Unregister(key string) bool {
 	pm.Lock()
 	defer pm.Unlock()
 	if probe, ok := pm.probers[key]; ok {
 		delete(pm.probers, key)
 		probe.Close()
+		return true
 	}
+	return false
 }
 
-func (pm *manager) Register(prober *Prober) {
+func (pm *manager) Register(prober Prober) bool {
 	pm.Lock()
 	defer pm.Unlock()
 	key := createKey(prober)
 	if _, ok := pm.probers[key]; !ok {
 		pm.probers[key] = prober
+		return true
 	}
+	return false
 }
 
-func (pm *manager) GetProber(key string) (*Prober, bool) {
+func (pm *manager) GetProber(key string) (Prober, bool) {
 	prober, ok := pm.probers[key]
 	return prober, ok
 }
 
-func createKey(prober *Prober) string {
-	return prober.Namespace // check if this would be sufficient
+func (pm *manager) GetAllProbers() []Prober {
+	probers := make([]Prober, 0, len(pm.probers))
+	for _, p := range pm.probers {
+		probers = append(probers, p)
+	}
+	return probers
 }
 
-// checks if the context of the prober is cancelled or not.
-// Used in testing the manager code.
-func IsClosed(prober *Prober) bool {
-	select {
-	case <-prober.stopC:
-		return true
-	default:
-		return false
-	}
+func createKey(prober Prober) string {
+	return prober.GetNamespace() // check if this would be sufficient
 }
