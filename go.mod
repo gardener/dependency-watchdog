@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/gardener/gardener v1.44.1
 	github.com/go-logr/logr v1.2.0
+	github.com/golang/mock v1.6.0
 	github.com/hashicorp/go-multierror v1.1.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/ginkgo/v2 v2.1.3
