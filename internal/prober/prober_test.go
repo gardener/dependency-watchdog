@@ -38,7 +38,7 @@ type entry struct {
 	expectedExternalProbeErrorCount   int
 }
 
-func TestExternalProbeShouldNotStartIfInternalProbeIsNotHealthy(t *testing.T) {
+func TestInternalProbeErrorCount(t *testing.T) {
 	table := []entry{
 		{"Success Count is less than Threshold", nil, 1, 0, 0, 0},
 		{"Unignorable error is returned by doProbe", notIgnorableErr, 0, 1, 0, 0},
@@ -62,7 +62,7 @@ func TestExternalProbeShouldNotStartIfInternalProbeIsNotHealthy(t *testing.T) {
 	}
 }
 
-func TestInternalProbeHealthyAndExternalProbeHealthy(t *testing.T) {
+func TestHealthyProbesShouldRunScaleUp(t *testing.T) {
 	table := []entry{
 		{"Scale Up Succeeds", nil, 1, 0, 1, 0},
 		{"Scale Up Fails", errors.New("Scale Up failed"), 1, 0, 1, 0},
@@ -83,7 +83,7 @@ func TestInternalProbeHealthyAndExternalProbeHealthy(t *testing.T) {
 	}
 }
 
-func TestExternalErrorCountForNonIgnorableErrors(t *testing.T) {
+func TestExternalProbeFailingShouldRunScaleDown(t *testing.T) {
 	table := []entry{
 		{"Scale Down Succeeds", nil, 2, 0, 0, 2},
 		{"Scale Down Fails", errors.New("Scale Down failed"), 2, 0, 0, 2},
@@ -93,13 +93,13 @@ func TestExternalErrorCountForNonIgnorableErrors(t *testing.T) {
 		t.Run(entry.name, func(t *testing.T) {
 			setupProberTest(t)
 			config = createConfig(1, 2, 5*time.Millisecond, 0.2)
-			i := 0
+			runCounter := 0
 
 			msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).Times(4)
 			mki.EXPECT().Discovery().Return(mdi).AnyTimes().Times(4)
 			mdi.EXPECT().ServerVersion().DoAndReturn(func() (*version.Info, error) {
-				i++
-				if i%2 == 1 {
+				runCounter++
+				if runCounter%2 == 1 {
 					return nil, nil
 				}
 				return nil, notIgnorableErr
@@ -123,13 +123,13 @@ func TestUnchangedExternalErrorCountForIgnorableErrors(t *testing.T) {
 		t.Run(entry.name, func(t *testing.T) {
 			setupProberTest(t)
 			config = createConfig(1, 2, 5*time.Millisecond, 0.2)
-			i := 0
+			runCounter := 0
 
 			msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).MinTimes(2).MaxTimes(4)
 			mki.EXPECT().Discovery().Return(mdi).AnyTimes().Times(4).MinTimes(2).MaxTimes(4)
 			mdi.EXPECT().ServerVersion().DoAndReturn(func() (*version.Info, error) {
-				i++
-				if i%2 == 1 {
+				runCounter++
+				if runCounter%2 == 1 {
 					return nil, nil
 				}
 				return nil, entry.err
