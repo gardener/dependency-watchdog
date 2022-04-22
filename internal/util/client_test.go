@@ -1,21 +1,22 @@
-package util_test
+package util
 
 import (
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"testing"
 
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
-	"github.com/gardener/dependency-watchdog/internal/util"
-	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/suite"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -28,150 +29,188 @@ var (
 	secretPath     = filepath.Join("testdata", "secret.yaml")
 	kubeConfigPath = filepath.Join("testdata", "kubeconfig.yaml")
 	deploymentPath = filepath.Join("testdata", "deployment.yaml")
+	ctx            context.Context
+	deployment     appsv1.Deployment
+	secret         corev1.Secret
 )
 
-var _ = Describe("Client", Ordered, Label("client"), func() {
-	var (
-		testEnv   *envtest.Environment
-		k8sClient client.Client
-		cfg       *rest.Config
-		err       error
-	)
+type ClientTestSuite struct {
+	suite.Suite
+	testEnv   *envtest.Environment
+	k8sClient client.Client
+	cfg       *rest.Config
+}
 
-	BeforeAll(func() {
-		By("initialing and starting the test environment")
-		fileExistsOrFail(secretPath)
-		fileExistsOrFail(deploymentPath)
-		fileExistsOrFail(kubeConfigPath)
-		testEnv = &envtest.Environment{}
-		cfg, err = testEnv.Start()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(cfg).NotTo(BeNil())
+func (s *ClientTestSuite) SetupSuite() {
+	var err error
+	log.Println("setting up testEnv")
+	fileExistsOrFail(secretPath)
+	fileExistsOrFail(deploymentPath)
+	fileExistsOrFail(kubeConfigPath)
+	s.testEnv = &envtest.Environment{}
+	s.cfg, err = s.testEnv.Start()
+	if err != nil {
+		log.Fatalf("error in starting testEnv: %v", err)
+	}
+	if s.cfg == nil {
+		log.Fatalf("Got nil config from testEnv")
+	}
+	s.k8sClient, err = client.New(s.cfg, client.Options{Scheme: scheme.Scheme})
+	if err != nil {
+		log.Fatalf("error in creating new client: %v", err)
+	}
+	if s.k8sClient == nil {
+		log.Fatalf("Got a nil k8sClient")
+	}
+}
 
-		By("creating a new k8s client")
-		k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(k8sClient).NotTo(BeNil())
-	})
+func (s *ClientTestSuite) TearDownSuite() {
+	log.Println("tearing down envTest")
+	err := s.testEnv.Stop()
+	if err != nil {
+		log.Fatalf("error in stopping testEnv: %v", err)
+	}
+}
 
-	Describe("GetKubeConfigFromSecret", func() {
-		var ctx context.Context
-		var secret corev1.Secret
+func TestClientTestSuite(t *testing.T) {
+	suite.Run(t, new(ClientTestSuite))
+}
 
-		BeforeEach(func() {
-			ctx = context.Background()
-			result := getStructured[corev1.Secret](secretPath)
-			Expect(result.Err).Should(BeNil())
-			Expect(result.StructuredObject).ShouldNot(BeNil())
-			secret = result.StructuredObject
-		})
+func (s *ClientTestSuite) TestSecretNotFound(t *testing.T) {
+	g := NewWithT(t)
+	_ = setupGetKubeconfigTest(t, s.k8sClient)
+	kubeconfig, err := GetKubeConfigFromSecret(ctx, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, s.k8sClient)
+	g.Expect(apierrors.IsNotFound(err)).Should(BeTrue())
+	g.Expect(kubeconfig).Should(BeNil())
+}
 
-		It("should return error if secret is not found", func() {
-			kubeconfig, err := util.GetKubeConfigFromSecret(ctx, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, k8sClient)
-			Expect(apierrors.IsNotFound(err)).Should(BeTrue())
-			Expect(kubeconfig).Should(BeNil())
-		})
+func (s *ClientTestSuite) TestKubeConfigNotFound(t *testing.T) {
+	g := NewWithT(t)
+	cleanup := setupGetKubeconfigTest(t, s.k8sClient)
+	defer cleanup()
+	err := s.k8sClient.Create(ctx, &secret)
+	g.Expect(err).Should(BeNil())
+	kubeconfig, err := GetKubeConfigFromSecret(ctx, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, s.k8sClient)
+	g.Expect(kubeconfig).Should(BeNil())
+	g.Expect(err).ShouldNot(BeNil())
+	g.Expect(apierrors.IsNotFound(err)).Should(BeFalse())
+}
 
-		Describe("Found the secret", func() {
-			It("should return error if kubeconfig is not found", func() {
-				err := k8sClient.Create(ctx, &secret)
-				Expect(err).Should(BeNil())
-				kubeconfig, err := util.GetKubeConfigFromSecret(ctx, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, k8sClient)
-				Expect(kubeconfig).Should(BeNil())
-				Expect(err).ShouldNot(BeNil())
-				Expect(apierrors.IsNotFound(err)).Should(BeFalse())
-			})
+func (s *ClientTestSuite) TestExtractKubeConfigFromSecret(t *testing.T) {
+	g := NewWithT(t)
+	cleanup := setupGetKubeconfigTest(t, s.k8sClient)
+	defer cleanup()
+	kubeconfigBuffer, err := readFile(kubeConfigPath)
+	g.Expect(err).Should(BeNil())
+	kubeconfig := kubeconfigBuffer.Bytes()
+	g.Expect(kubeconfig).ShouldNot(BeNil())
 
-			It("should extract kubeconfig from secret", func() {
-				By("reading the kubeconfig file")
-				kubeconfigBuffer, err := readFile(kubeConfigPath)
-				Expect(err).Should(BeNil())
-				kubeconfig := kubeconfigBuffer.Bytes()
-				Expect(kubeconfig).ShouldNot(BeNil())
+	secret.Data = map[string][]byte{
+		"kubeconfig": kubeconfig,
+	}
+	err = s.k8sClient.Create(ctx, &secret)
+	g.Expect(err).Should(BeNil())
 
-				By("creating the secret")
-				secret.Data = map[string][]byte{
-					"kubeconfig": kubeconfig,
-				}
-				err = k8sClient.Create(ctx, &secret)
-				Expect(err).Should(BeNil())
+	actualKubeconfig, err := GetKubeConfigFromSecret(ctx, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, s.k8sClient)
+	g.Expect(err).Should(BeNil())
+	g.Expect(actualKubeconfig).Should(Equal(kubeconfig))
+}
 
-				By("matching the returned kubeconfig with the deployed one")
-				actualKubeconfig, err := util.GetKubeConfigFromSecret(ctx, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, k8sClient)
-				Expect(err).Should(BeNil())
-				Expect(actualKubeconfig).Should(Equal(kubeconfig))
-			})
+func (s *ClientTestSuite) TestDeploymentNotFound(t *testing.T) {
+	g := NewWithT(t)
+	setupGetDeploymentTest(t)
+	actual, err := GetDeploymentFor(ctx, deployment.ObjectMeta.Namespace, deployment.ObjectMeta.Name, s.k8sClient)
+	g.Expect(apierrors.IsNotFound(err)).Should(BeTrue())
+	g.Expect(actual).Should(BeNil())
+}
 
-			AfterEach(func() {
-				err := k8sClient.Delete(ctx, &secret)
-				Expect(err).Should(BeNil())
-			})
-		})
-	})
+func (s *ClientTestSuite) TestFoundDeployment(t *testing.T) {
+	g := NewWithT(t)
+	setupGetDeploymentTest(t)
 
-	Describe("GetDeploymentFor", Label("client"), func() {
-		var ctx context.Context
-		var deployment appsv1.Deployment
+	err := s.k8sClient.Create(ctx, &deployment)
+	g.Expect(err).Should(BeNil())
 
-		BeforeEach(func() {
-			ctx = context.Background()
+	actual, err := GetDeploymentFor(ctx, deployment.ObjectMeta.Namespace, deployment.ObjectMeta.Name, s.k8sClient)
+	g.Expect(err).Should(BeNil())
+	g.Expect(actual).ShouldNot(BeNil())
+	g.Expect(actual.ObjectMeta.Name).Should(Equal(deployment.ObjectMeta.Name))
+	g.Expect(actual.ObjectMeta.Namespace).Should(Equal(deployment.ObjectMeta.Namespace))
 
-			result := getStructured[appsv1.Deployment](deploymentPath)
-			Expect(result.Err).Should(BeNil())
-			Expect(result.StructuredObject).ShouldNot(BeNil())
-			deployment = result.StructuredObject
-		})
+	err = s.k8sClient.Delete(ctx, &deployment)
+	g.Expect(err).Should(BeNil())
+}
 
-		It("should return error if deployment is not found", func() {
-			actual, err := util.GetDeploymentFor(ctx, deployment.ObjectMeta.Namespace, deployment.ObjectMeta.Name, k8sClient)
-			Expect(apierrors.IsNotFound(err)).Should(BeTrue())
-			Expect(actual).Should(BeNil())
-		})
+func (s *ClientTestSuite) TestCreateScalesGetter(t *testing.T) {
+	g := NewWithT(t)
+	scaleGetter, err := CreateScalesGetter(s.cfg)
+	g.Expect(err).Should(BeNil())
+	g.Expect(scaleGetter).ShouldNot(BeNil())
+}
 
-		It("should return the deployment if found", func() {
-			err := k8sClient.Create(ctx, &deployment)
-			Expect(err).Should(BeNil())
+func (s *ClientTestSuite) TestCreateClientFromKubeconfigBytes(t *testing.T) {
+	g := NewWithT(t)
+	kubeconfigBuffer, err := readFile(kubeConfigPath)
+	g.Expect(err).Should(BeNil())
+	kubeconfig := kubeconfigBuffer.Bytes()
+	g.Expect(kubeconfig).ShouldNot(BeNil())
 
-			actual, err := util.GetDeploymentFor(ctx, deployment.ObjectMeta.Namespace, deployment.ObjectMeta.Name, k8sClient)
-			Expect(err).Should(BeNil())
-			Expect(actual).ShouldNot(BeNil())
-			Expect(actual.ObjectMeta.Name).Should(Equal(deployment.ObjectMeta.Name))
-			Expect(actual.ObjectMeta.Namespace).Should(Equal(deployment.ObjectMeta.Namespace))
+	cfg, err := CreateClientFromKubeConfigBytes(kubeconfig)
+	g.Expect(err).Should(BeNil())
+	g.Expect(cfg).ShouldNot(BeNil())
+}
 
-			err = k8sClient.Delete(ctx, &deployment)
-			Expect(err).Should(BeNil())
-		})
-	})
+// func setupEnvSuite() func() {
+// 	log.Println("setting up testEnv")
+// 	fileExistsOrFail(secretPath)
+// 	fileExistsOrFail(deploymentPath)
+// 	fileExistsOrFail(kubeConfigPath)
+// 	testEnv = &envtest.Environment{}
+// 	cfg, err = testEnv.Start()
+// 	if err != nil {
+// 		log.Fatalf("error in starting testEnv: %v", err)
+// 	}
+// 	if cfg == nil {
+// 		log.Fatalf("Got nil config from testEnv")
+// 	}
+// 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+// 	if err != nil {
+// 		log.Fatalf("error in creating new client: %v", err)
+// 	}
+// 	if k8sClient == nil {
+// 		log.Fatalf("Got a nil k8sClient")
+// 	}
+// 	return func() {
+// 		log.Println("tearing down envTest")
+// 		err := testEnv.Stop()
+// 		if err != nil {
+// 			log.Fatalf("error in stopping testEnv: %v", err)
+// 		}
+// 	}
+// }
 
-	Describe("CreateScalesGetter", Label("client"), func() {
-		It("should return scaleGetter if config is ok", func() {
-			scaleGetter, err := util.CreateScalesGetter(cfg)
-			Expect(err).Should(BeNil())
-			Expect(scaleGetter).ShouldNot(BeNil())
-		})
-	})
+func setupGetKubeconfigTest(t *testing.T, k8sClient client.Client) func() {
+	g := NewWithT(t)
+	ctx = context.Background()
+	result := getStructured[corev1.Secret](secretPath)
+	g.Expect(result.Err).Should(BeNil())
+	g.Expect(result.StructuredObject).ShouldNot(BeNil())
+	secret = result.StructuredObject
 
-	Describe("Create ClientFromKubeConfigBytes", Label("client"), func() {
-		It("should return new client from kubeconfig", func() {
-			By("reading the kubeconfig file")
-			kubeconfigBuffer, err := readFile(kubeConfigPath)
-			Expect(err).Should(BeNil())
-			kubeconfig := kubeconfigBuffer.Bytes()
-			Expect(kubeconfig).ShouldNot(BeNil())
+	return func() {
+		err := k8sClient.Delete(ctx, &secret)
+		g.Expect(err).Should(BeNil())
+	}
+}
 
-			cfg, err := util.CreateClientFromKubeConfigBytes(kubeconfig)
-			Expect(err).Should(BeNil())
-			Expect(cfg).ShouldNot(BeNil())
-		})
-	})
-
-	AfterAll(func() {
-		By("tearing down the test environment")
-		err := testEnv.Stop()
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-})
+func setupGetDeploymentTest(t *testing.T) {
+	g := NewWithT(t)
+	ctx = context.Background()
+	result := getStructured[appsv1.Deployment](deploymentPath)
+	g.Expect(result.Err).Should(BeNil())
+	g.Expect(result.StructuredObject).ShouldNot(BeNil())
+	deployment = result.StructuredObject
+}
 
 type Result[T any] struct {
 	StructuredObject T
@@ -233,8 +272,11 @@ func readFile(filePath string) (*bytes.Buffer, error) {
 }
 
 func fileExistsOrFail(filepath string) {
-	if _, err := os.Stat(filepath); errors.Is(err, os.ErrNotExist) {
-		GinkgoWriter.Printf("%s does not exist. This should not have happened. Check testdata directory.\n", filepath)
-		Expect(err).ToNot(HaveOccurred())
+	var err error
+	if _, err = os.Stat(filepath); errors.Is(err, os.ErrNotExist) {
+		log.Fatalf("%s does not exist. This should not have happened. Check testdata directory.\n", filepath)
+	}
+	if err != nil {
+		log.Fatalf("Error occured in finding file %s : %v", filepath, err)
 	}
 }
