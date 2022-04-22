@@ -56,5 +56,5 @@ func (pm *manager) GetAllProbers() []Prober {
 }
 
 func createKey(prober Prober) string {
-	return prober.GetNamespace() // check if this would be sufficient
+	return prober.namespace // check if this would be sufficient
 }

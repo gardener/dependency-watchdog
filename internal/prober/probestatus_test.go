@@ -76,7 +76,7 @@ func TestRecordFailure(t *testing.T) {
 	g.Expect(ps.errorCount).To(Equal(errCount+1), "RecordFailure should have incremented the errorCount by 1")
 	g.Expect(ps.backOff).To(BeNil(), "RecordFailure should not reset backOff if failureThreshold is not crossed")
 	g.Expect(ps.successCount).To(BeZero(), "RecordFailure should have made successCount equal to 0")
-	g.Expect(ps.lastErr).ToNot(BeNil(), "RecordFailure should set the lastErr value to the current error")
+	g.Expect(ps.lastErr).To(Equal(err), "RecordFailure should set the lastErr value to the current error")
 
 	ps.recordFailure(err, failureThreshold, 1*time.Minute)
 

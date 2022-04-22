@@ -2,13 +2,10 @@ package prober
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/gardener/dependency-watchdog/internal/util"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -23,51 +20,37 @@ const (
 	internalProbeUnhealthyBackoffDuration = 30 * time.Second
 )
 
-type Prober interface {
-	Run()
-	GetNamespace() string
-	GetConfig() *Config
-	Close()
-	IsClosed() bool
-}
-
-type prober struct {
-	Namespace           string
-	Config              *Config
-	Client              client.Client
-	Scaler              DeploymentScaler
+type Prober struct {
+	namespace           string
+	config              *Config
+	client              client.Client
+	scaler              DeploymentScaler
+	shootclientCreator  ShootClientCreator
 	internalProbeStatus probeStatus
 	externalProbeStatus probeStatus
 	stopC               <-chan struct{}
 	cancelFn            context.CancelFunc
 }
 
-func NewProber(namespace string, config *Config, ctrlClient client.Client, scaler DeploymentScaler) Prober {
+func NewProber(namespace string, config *Config, ctrlClient client.Client, scaler DeploymentScaler, shootClientCreator ShootClientCreator) *Prober {
 	ctx, cancelFn := context.WithCancel(context.Background())
-	return &prober{
-		Namespace: namespace,
-		Config:    config,
-		Client:    ctrlClient,
-		Scaler:    scaler,
-		stopC:     ctx.Done(),
-		cancelFn:  cancelFn,
+	return &Prober{
+		namespace:          namespace,
+		config:             config,
+		client:             ctrlClient,
+		scaler:             scaler,
+		shootclientCreator: shootClientCreator,
+		stopC:              ctx.Done(),
+		cancelFn:           cancelFn,
 	}
 }
 
-func (p *prober) GetNamespace() string {
-	return p.Namespace
-}
-
-func (p *prober) GetConfig() *Config {
-	return p.Config
-}
-
-func (p *prober) Close() {
+func (p *Prober) Close() {
 	p.cancelFn()
 }
 
 // IsClosed checks if the context of the prober is cancelled or not.
-func (p *prober) IsClosed() bool {
+func (p *Prober) IsClosed() bool {
 	select {
 	case <-p.stopC:
 		return true
@@ -76,83 +59,83 @@ func (p *prober) IsClosed() bool {
 	}
 }
 
-func (p *prober) Run() {
+func (p *Prober) Run() {
 	ctx, cancelFn := context.WithCancel(context.Background())
 	defer cancelFn()
 	wait.JitterUntilWithContext(ctx, func(ctx context.Context) {
 		select {
 		case <-p.stopC:
-			logger.V(3).Info("stop has been called for prober", "namespace", p.Namespace)
+			logger.V(3).Info("stop has been called for prober", "namespace", p.namespace)
 			return
 		default:
 			p.probe(ctx)
 		}
-	}, *p.Config.ProbeInterval, *p.Config.BackoffJitterFactor, true)
+	}, *p.config.ProbeInterval, *p.config.BackoffJitterFactor, true)
 }
 
-func (p *prober) probe(ctx context.Context) {
+func (p *Prober) probe(ctx context.Context) {
 	p.probeInternal(ctx)
-	if p.internalProbeStatus.isHealthy(*p.Config.SuccessThreshold) {
+	if p.internalProbeStatus.isHealthy(*p.config.SuccessThreshold) {
 		p.probeExternal(ctx)
 		// based on the external probe result it will either scale up or scale down
-		if p.externalProbeStatus.isUnhealthy(*p.Config.FailureThreshold) {
-			logger.V(4).Info("external probe is un-healthy, checking if scale down is already done or is still pending", "namespace", p.Namespace)
-			err := p.Scaler.ScaleDown(ctx)
+		if p.externalProbeStatus.isUnhealthy(*p.config.FailureThreshold) {
+			logger.V(4).Info("external probe is un-healthy, checking if scale down is already done or is still pending", "namespace", p.namespace)
+			err := p.scaler.ScaleDown(ctx)
 			if err != nil {
-				logger.Error(err, "failed to scale down resources", "namespace", p.Namespace)
+				logger.Error(err, "failed to scale down resources", "namespace", p.namespace)
 			}
 			return
 		}
-		if p.externalProbeStatus.isHealthy(*p.Config.SuccessThreshold) {
-			logger.V(4).Info("external probe is healthy, checking if scale up is already done or is still pending", "namespace", p.Namespace)
-			err := p.Scaler.ScaleUp(ctx)
+		if p.externalProbeStatus.isHealthy(*p.config.SuccessThreshold) {
+			logger.V(4).Info("external probe is healthy, checking if scale up is already done or is still pending", "namespace", p.namespace)
+			err := p.scaler.ScaleUp(ctx)
 			if err != nil {
-				logger.Error(err, "failed to scale up resources", "namespace", p.Namespace)
+				logger.Error(err, "failed to scale up resources", "namespace", p.namespace)
 			}
 		}
 	} else {
-		logger.V(4).Info("internal probe is not healthy, skipping external probe check and subsequent scaling", "namespace", p.Namespace)
+		logger.V(4).Info("internal probe is not healthy, skipping external probe check and subsequent scaling", "namespace", p.namespace)
 	}
 }
 
-func (p *prober) probeInternal(ctx context.Context) {
+func (p *Prober) probeInternal(ctx context.Context) {
 	backOffIfNeeded(&p.internalProbeStatus)
-	shootClient, err := p.createShootClient(ctx, p.Config.InternalKubeConfigSecretName)
+	shootClient, err := p.shootclientCreator.CreateClient(ctx, p.namespace, p.config.InternalKubeConfigSecretName)
 	if err != nil {
-		logger.Error(err, "failed to create shoot client using internal secret, ignoring error, probe will be re-attempted", "namespace", p.Namespace)
+		logger.Error(err, "failed to create shoot client using internal secret, ignoring error, probe will be re-attempted", "namespace", p.namespace)
 		return
 	}
 	err = p.doProbe(shootClient)
 	if err != nil {
 		if !p.internalProbeStatus.canIgnoreProbeError(err) {
-			p.internalProbeStatus.recordFailure(err, *p.Config.FailureThreshold, internalProbeUnhealthyBackoffDuration)
-			logger.Error(err, "recording internal probe failure", "failedAttempts", p.internalProbeStatus.errorCount, "failureThreshold", p.Config.FailureThreshold)
+			p.internalProbeStatus.recordFailure(err, *p.config.FailureThreshold, internalProbeUnhealthyBackoffDuration)
+			logger.Error(err, "recording internal probe failure", "failedAttempts", p.internalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
 		}
-		logger.Error(err, "internal probe was not successful. ignoring this error, will retry probe", "namespace", p.Namespace)
+		logger.Error(err, "internal probe was not successful. ignoring this error, will retry probe", "namespace", p.namespace)
 		return
 	}
-	p.internalProbeStatus.recordSuccess(*p.Config.SuccessThreshold)
-	logger.V(4).Info("internal probe is successful", "namespace", p.Namespace, "successfulAttempts", p.internalProbeStatus.successCount)
+	p.internalProbeStatus.recordSuccess(*p.config.SuccessThreshold)
+	logger.V(4).Info("internal probe is successful", "namespace", p.namespace, "successfulAttempts", p.internalProbeStatus.successCount)
 }
 
-func (p *prober) probeExternal(ctx context.Context) {
+func (p *Prober) probeExternal(ctx context.Context) {
 	backOffIfNeeded(&p.externalProbeStatus)
-	shootClient, err := p.createShootClient(ctx, p.Config.ExternalKubeConfigSecretName)
+	shootClient, err := p.shootclientCreator.CreateClient(ctx, p.namespace, p.config.ExternalKubeConfigSecretName)
 	if err != nil {
-		logger.Error(err, "failed to create shoot client using external secret, ignoring error, probe will be re-attempted", "namespace", p.Namespace)
+		logger.Error(err, "failed to create shoot client using external secret, ignoring error, probe will be re-attempted", "namespace", p.namespace)
 		return
 	}
 	err = p.doProbe(shootClient)
 	if err != nil {
 		if !p.externalProbeStatus.canIgnoreProbeError(err) {
-			p.externalProbeStatus.recordFailure(err, *p.Config.FailureThreshold, 0)
-			logger.Error(err, "recording external probe failure", "failedAttempts", p.externalProbeStatus.errorCount, "failureThreshold", p.Config.FailureThreshold)
+			p.externalProbeStatus.recordFailure(err, *p.config.FailureThreshold, 0)
+			logger.Error(err, "recording external probe failure", "failedAttempts", p.externalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
 		}
-		logger.Error(err, "external probe was not successful. ignoring this error, will retry probe", "namespace", p.Namespace)
+		logger.Error(err, "external probe was not successful. ignoring this error, will retry probe", "namespace", p.namespace)
 		return
 	}
-	p.externalProbeStatus.recordSuccess(*p.Config.SuccessThreshold)
-	logger.V(4).Info("external probe is successful", "namespace", p.Namespace, "successfulAttempts", p.internalProbeStatus.successCount)
+	p.externalProbeStatus.recordSuccess(*p.config.SuccessThreshold)
+	logger.V(4).Info("external probe is successful", "namespace", p.namespace, "successfulAttempts", p.internalProbeStatus.successCount)
 }
 
 func backOffIfNeeded(ps *probeStatus) {
@@ -163,28 +146,10 @@ func backOffIfNeeded(ps *probeStatus) {
 	}
 }
 
-func (p *prober) doProbe(client kubernetes.Interface) error {
+func (p *Prober) doProbe(client kubernetes.Interface) error {
 	_, err := client.Discovery().ServerVersion()
 	if err != nil {
 		return err
 	}
 	return nil
-}
-
-func (p *prober) createShootClient(ctx context.Context, secretName string) (kubernetes.Interface, error) {
-	operation := fmt.Sprintf("get-secret-%s-for-namespace-%s", secretName, p.Namespace)
-	retryResult := util.Retry(ctx,
-		operation,
-		func() ([]byte, error) { return util.GetKubeConfigFromSecret(ctx, p.Namespace, secretName, p.Client) },
-		defaultGetSecretMaxAttempts,
-		defaultGetSecretBackoff,
-		canRetrySecretGet)
-	if retryResult.Err != nil {
-		return nil, retryResult.Err
-	}
-	return util.CreateClientFromKubeConfigBytes(retryResult.Value)
-}
-
-func canRetrySecretGet(err error) bool {
-	return !apierrors.IsNotFound(err)
 }

@@ -1,72 +1,87 @@
-package prober_test
+package prober
 
 import (
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"testing"
 
-	"github.com/gardener/dependency-watchdog/internal/prober"
+	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Probermgr", func() {
-	var mgr prober.Manager
+func setupMgrTest(t *testing.T) (Manager, func(mgr Manager)) {
+	g := NewWithT(t)
+	mgr := NewManager()
+	g.Expect(mgr).ShouldNot(BeNil(), "NewManager should return a non nil manager")
 
-	BeforeEach(func() {
-		mgr = prober.NewManager()
-		Expect(mgr).ShouldNot(BeNil())
-	})
-
-	AfterEach(func() {
+	return mgr, func(mgr Manager) {
 		for _, p := range mgr.GetAllProbers() {
-			mgr.Unregister(p.GetNamespace())
+			mgr.Unregister(p.namespace)
 		}
-	})
+	}
+}
 
-	It("register a new prober and check if it exists and is not closed", func() {
-		By("registering a prober")
-		const namespace = "bingo"
-		p := prober.NewProber(namespace, &prober.Config{Name: "bingo"}, nil, nil)
-		Expect(p).ShouldNot(BeNil())
-		Expect(p.GetNamespace()).Should(Equal(namespace))
-		Expect(mgr.Register(p)).To(BeTrue())
+func TestRegisterNewProberAndCheckIfItExistsAndIsNotClosed(t *testing.T) {
+	g := NewWithT(t)
+	mgr, tearDownTest := setupMgrTest(t)
+	defer tearDownTest(mgr)
 
-		By("checking if it got registered with correct key")
-		foundProber, ok := mgr.GetProber(namespace)
-		Expect(ok).Should(BeTrue())
-		Expect(foundProber).ShouldNot(BeNil())
-		Expect(foundProber.GetNamespace()).Should(Equal(p.GetNamespace()))
-		Expect(foundProber.IsClosed()).Should(BeFalse())
-	})
+	const namespace = "bingo"
+	p := NewProber(namespace, &Config{Name: "bingo"}, nil, nil, nil)
+	g.Expect(p).ShouldNot(BeNil(), "NewProber should have returned a non nil Prober")
+	g.Expect(p.namespace).Should(Equal(namespace), "The namespace of the created prober should match")
+	g.Expect(mgr.Register(*p)).To(BeTrue(), "mgr.Register should register a new prober")
 
-	It("unregister an existing prober and check its removed from the manager and is also closed", func() {
-		By("registering the prober")
-		const namespace = "bingo"
-		p := prober.NewProber(namespace, &prober.Config{Name: "bingo"}, nil, nil)
-		Expect(mgr.Register(p)).To(BeTrue())
-		By("unregistering the prober")
-		mgr.Unregister(namespace)
-		By("checking if it got de-registered and the context got cancelled")
-		_, ok := mgr.GetProber(namespace)
-		Expect(ok).Should(BeFalse())
-		Eventually(p.IsClosed()).Should(BeTrue())
-	})
+	foundProber, ok := mgr.GetProber(namespace)
+	g.Expect(ok).Should(BeTrue(), "mgr.GetProber should return true for a registered prober")
+	g.Expect(foundProber).ShouldNot(BeNil(), "mgr.GetProber should get the registered prober")
+	g.Expect(foundProber.namespace).Should(Equal(namespace))
+	g.Expect(foundProber.IsClosed()).Should(BeFalse(), "mgr.GetProber should not cancel the prober")
 
-	It("unregister a non-existing prober and check if this does not fail", func() {
-		Expect(mgr.Unregister("bazingo")).To(BeFalse())
-	})
+	t.Log("New prober registered and is not closed")
+}
 
-	It("prober registration with the same key should not overwrite existing prober registration", func() {
-		By("registering the prober")
-		const namespace = "bingo"
-		p1 := prober.NewProber(namespace, &prober.Config{Name: "bingo"}, nil, nil)
-		Expect(mgr.Register(p1)).To(BeTrue())
-		By("attempting to register another prober with the same namespace but with a different Config.Name")
-		p2 := prober.NewProber(namespace, &prober.Config{Name: "zingo"}, nil, nil)
-		Expect(mgr.Register(p2)).To(BeFalse())
-		By("validate if the old prober is still registered and is not overwritten")
-		foundProber, ok := mgr.GetProber(namespace)
-		Expect(ok).Should(BeTrue())
-		Expect(foundProber.GetConfig().Name).ShouldNot(Equal(p2.GetConfig().Name))
-		Expect(foundProber.GetConfig().Name).Should(Equal(p1.GetConfig().Name))
-	})
+func TestProberRegistrationWithSameKeyShouldNotOverwriteExistingProber(t *testing.T) {
+	g := NewWithT(t)
+	mgr, tearDownTest := setupMgrTest(t)
+	defer tearDownTest(mgr)
 
-})
+	const namespace = "bingo"
+	p1 := NewProber(namespace, &Config{Name: "bingo"}, nil, nil, nil)
+	g.Expect(mgr.Register(*p1)).To(BeTrue(), "mgr.Register should register a new prober")
+
+	p2 := NewProber(namespace, &Config{Name: "zingo"}, nil, nil, nil)
+	g.Expect(mgr.Register(*p2)).To(BeFalse(), "mgr.Register should return false if a prober with the same key is already registered")
+
+	foundProber, ok := mgr.GetProber(namespace)
+	g.Expect(ok).Should(BeTrue(), "mgr.Register should not remove the existing prober")
+	g.Expect(foundProber.config.Name).ShouldNot(Equal(p2.config.Name), "mgr.Register should not replace the existing prober with a new one")
+	g.Expect(foundProber.config.Name).Should(Equal(p1.config.Name))
+
+	t.Log("Existing prober is not overwritten by the Register method")
+}
+
+func TestUnregisterExistingProberShouldCloseItAndRemoveItFromManager(t *testing.T) {
+	g := NewWithT(t)
+	mgr, tearDownTest := setupMgrTest(t)
+	defer tearDownTest(mgr)
+
+	const namespace = "bingo"
+	p := NewProber(namespace, &Config{Name: "bingo"}, nil, nil, nil)
+	g.Expect(mgr.Register(*p)).To(BeTrue(), "mgr.Register should register a new prober")
+
+	mgr.Unregister(namespace)
+	_, ok := mgr.GetProber(namespace)
+	g.Expect(ok).Should(BeFalse(), "mgr.Unregister should delete the prober for the corresponding key")
+	g.Eventually(p.IsClosed()).Should(BeTrue(), "mgr.Unregister should cancel the unregistered prober")
+
+	t.Log("De-registered existing prober and closed it")
+
+}
+
+func TestUnregisterNonExistingProberShouldNotFail(t *testing.T) {
+	g := NewWithT(t)
+	mgr, tearDownTest := setupMgrTest(t)
+	defer tearDownTest(mgr)
+
+	g.Expect(mgr.Unregister("bazingo")).To(BeFalse(), "mgr.Unregister should return false for non existing prober")
+	t.Log("De-registering a non existing prober did not fail")
+
+}

@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+
 	"github.com/gardener/dependency-watchdog/internal/prober"
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	gardencorev1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
@@ -105,8 +106,9 @@ func (r *ClusterReconciler) startProber(key string) {
 	_, ok := r.ProberMgr.GetProber(key)
 	if !ok {
 		deploymentScaler := prober.NewDeploymentScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter)
-		p := prober.NewProber(key, r.ProbeConfig, r.Client, deploymentScaler)
-		r.ProberMgr.Register(p)
+		shootClientCreator := prober.NewShootClientCreator(r.Client)
+		p := prober.NewProber(key, r.ProbeConfig, r.Client, deploymentScaler, shootClientCreator)
+		r.ProberMgr.Register(*p)
 		go p.Run()
 	}
 }
