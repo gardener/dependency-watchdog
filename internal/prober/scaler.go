@@ -33,8 +33,12 @@ func NewDeploymentScaler(namespace string, config *Config, client client.Client,
 		scaler:    scalerGetter.Scales(namespace),
 		client:    client,
 	}
-	ds.scaleDownFlow = ds.createResourceScaleFlow(namespace, fmt.Sprintf("scale-down-%s", namespace), createScaleDownResourceInfos(config.DependentResourceInfos), util.ScaleDownReplicasMismatch)
-	ds.scaleUpFlow = ds.createResourceScaleFlow(namespace, fmt.Sprintf("scale-up-%s", namespace), createScaleUpResourceInfos(config.DependentResourceInfos), util.ScaleUpReplicasMismatch)
+	scaleDownFlow := ds.createResourceScaleFlow(namespace, fmt.Sprintf("scale-down-%s", namespace), createScaleDownResourceInfos(config.DependentResourceInfos), util.ScaleDownReplicasMismatch)
+	logger.V(5).Info("created scaleDownFlow %#v for namespace: %s", scaleDownFlow.flowStepInfos, namespace)
+	ds.scaleDownFlow = scaleDownFlow.flow
+	scaleUpFlow := ds.createResourceScaleFlow(namespace, fmt.Sprintf("scale-up-%s", namespace), createScaleUpResourceInfos(config.DependentResourceInfos), util.ScaleUpReplicasMismatch)
+	logger.V(5).Info("created scaleUpfor %#v for namespace: %s", scaleUpFlow.flowStepInfos, namespace)
+	ds.scaleUpFlow = scaleUpFlow.flow
 	return &ds
 }
 
@@ -72,24 +76,57 @@ func isIgnoreScalingAnnotationSet(deployment *appsv1.Deployment) bool {
 	return false
 }
 
-func (ds *deploymentScaler) createResourceScaleFlow(namespace, flowName string, resourceInfos []scaleableResourceInfo, mismatchReplicasCheckFn func(replicas, targetReplicas int32) bool) *flow.Flow {
+type scaleFlow struct {
+	flow          *flow.Flow
+	flowStepInfos []scaleStepInfo
+}
+
+type scaleStepInfo struct {
+	taskID              flow.TaskID
+	dependentTaskIDs    flow.TaskIDs
+	waitOnResourceInfos []scaleableResourceInfo
+}
+
+func newScaleFlow() *scaleFlow {
+	return &scaleFlow{
+		flowStepInfos: make([]scaleStepInfo, 0, 1),
+	}
+}
+
+func (sf *scaleFlow) addScaleStepInfo(id flow.TaskID, dependentTaskIDs flow.TaskIDs, waitOnResources []scaleableResourceInfo) {
+	sf.flowStepInfos = append(sf.flowStepInfos, scaleStepInfo{
+		taskID:              id,
+		dependentTaskIDs:    dependentTaskIDs,
+		waitOnResourceInfos: waitOnResources,
+	})
+}
+
+func (sf *scaleFlow) setFlow(flow *flow.Flow) {
+	sf.flow = flow
+}
+
+func (ds *deploymentScaler) createResourceScaleFlow(namespace, flowName string, resourceInfos []scaleableResourceInfo, mismatchReplicasCheckFn func(replicas, targetReplicas int32) bool) *scaleFlow {
 	levels := sortAndGetUniqueLevels(resourceInfos)
 	orderedResourceInfos := collectResourceInfosByLevel(resourceInfos)
 	g := flow.NewGraph(flowName)
+	sf := newScaleFlow()
 	var previousLevelResourceInfos []scaleableResourceInfo
 	for _, level := range levels {
 		var previousTaskID flow.TaskID
 		if resInfos, ok := orderedResourceInfos[level]; ok {
+			dependentTaskIDs := flow.NewTaskIDs(previousTaskID)
 			taskID := g.Add(flow.Task{
 				Name:         fmt.Sprintf("scaling dependencies %v at level %d", resInfos, level),
 				Fn:           ds.createScaleTaskFn(namespace, resInfos, mismatchReplicasCheckFn, previousLevelResourceInfos),
-				Dependencies: flow.NewTaskIDs(previousTaskID),
+				Dependencies: dependentTaskIDs,
 			})
 			copy(previousLevelResourceInfos, resInfos)
 			previousTaskID = taskID
+			sf.addScaleStepInfo(taskID, dependentTaskIDs, previousLevelResourceInfos)
 		}
 	}
-	return g.Compile()
+	sf.setFlow(g.Compile())
+	return sf
 }
 
 // createScaleTaskFn creates a flow.TaskFn for a slice of DependentResourceInfo. If there are more than one
@@ -126,15 +163,15 @@ func (ds *deploymentScaler) createScaleTaskFn(namespace string, resourceInfos []
 }
 
 func (ds *deploymentScaler) scale(ctx context.Context, resourceInfo scaleableResourceInfo, mismatchReplicas mismatchReplicasCheckFn, waitOnResourceInfos []scaleableResourceInfo) error {
+	// sleep for initial delay
+	err := util.SleepWithContext(ctx, resourceInfo.initialDelay)
+	if err != nil {
+		logger.Error(err, "looks like the context has been cancelled. exiting scaling operation", "namespace", ds.namespace, "resourceInfo", resourceInfo)
+		return err
+	}
 	deployment, err := util.GetDeploymentFor(ctx, ds.namespace, resourceInfo.ref.Name, ds.client)
 	if err != nil {
 		logger.Error(err, "error getting deployment for resource, skipping scaling operation", "namespace", ds.namespace, "resourceInfo", resourceInfo)
-		return err
-	}
-	// sleep for initial delay
-	err = util.SleepWithContext(ctx, resourceInfo.initialDelay)
-	if err != nil {
-		logger.Error(err, "looks like the context has been cancelled. exiting scaling operation", "namespace", ds.namespace, "resourceInfo", resourceInfo)
 		return err
 	}
 	if ds.shouldScale(ctx, deployment, resourceInfo.replicas, mismatchReplicas, waitOnResourceInfos) {
@@ -165,10 +202,15 @@ func (ds *deploymentScaler) shouldScale(ctx context.Context, deployment *appsv1.
 				logger.Error(err, "failed to get deployment for upstream dependent resource, skipping scaling", "upstreamDependentResource", upstreamDependentResource)
 				return false
 			}
-			actualReplicas := upstreamDeployment.Status.Replicas
-			if mismatchReplicas(actualReplicas, upstreamDependentResource.replicas) {
-				logger.V(4).Info("upstream resource has still not been scaled to the desired replicas, skipping scaling of resource", "namespace", ds.namespace, "deploymentToScale", deployment.Name, "upstreamResourceInfo", upstreamDependentResource, "actualReplicas", actualReplicas)
-				return false
+			// This check is required because it is possible that an upstream deployment has an annotation which enforces ignoring any scaling for it.
+			// This should not prevent downstream deployments to be scaled up. Therefore, upstream deployment successful scaling should only be checked
+			// if no such annotation is being set on any dependent upstream deployment.
+			if !isIgnoreScalingAnnotationSet(upstreamDeployment) {
+				actualReplicas := upstreamDeployment.Status.Replicas
+				if mismatchReplicas(actualReplicas, upstreamDependentResource.replicas) {
+					logger.V(4).Info("upstream resource has still not been scaled to the desired replicas, skipping scaling of resource", "namespace", ds.namespace, "deploymentToScale", deployment.Name, "upstreamResourceInfo", upstreamDependentResource, "actualReplicas", actualReplicas)
+					return false
+				}
 			}
 		}
 	}
