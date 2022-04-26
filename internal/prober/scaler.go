@@ -3,6 +3,7 @@ package prober
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"time"
@@ -155,20 +156,7 @@ func (ds *deploymentScaler) createScaleTaskFn(namespace string, resourceInfos []
 	}
 	taskFns := make([]flow.TaskFn, 0, len(resourceInfos))
 	for _, resourceInfo := range resourceInfos {
-		taskFn := func(ctx context.Context) error {
-			operation := fmt.Sprintf("scale-resource-%s.%s", namespace, resourceInfo.ref.Name)
-			result := util.Retry(ctx,
-				operation,
-				func() (interface{}, error) {
-					err := ds.scale(ctx, resourceInfo, mismatchReplicasCheckFn, waitOnResourceInfos)
-					return nil, err
-				},
-				defaultMaxResourceScalingAttempts,
-				defaultGetSecretBackoff,
-				util.AlwaysRetry)
-			logger.V(4).Info("resource has been scaled", "namespace", namespace, "resource", resourceInfo)
-			return result.Err
-		}
+		taskFn := ds.doCreateTaskFn(namespace, resourceInfo, mismatchReplicasCheckFn, waitOnResourceInfos)
 		taskFns = append(taskFns, taskFn)
 	}
 	if len(taskFns) == 1 {
@@ -177,10 +165,28 @@ func (ds *deploymentScaler) createScaleTaskFn(namespace string, resourceInfos []
 	return flow.Parallel(taskFns...)
 }
 
+func (ds *deploymentScaler) doCreateTaskFn(namespace string, resInfo scaleableResourceInfo, mismatchReplicasCheckFn func(replicas, targetReplicas int32) bool, waitOnResourceInfos []scaleableResourceInfo) flow.TaskFn {
+	return func(ctx context.Context) error {
+		log.Printf("resourceInfo: %#v\n", resInfo)
+		operation := fmt.Sprintf("scale-resource-%s.%s", namespace, resInfo.ref.Name)
+		result := util.Retry(ctx,
+			operation,
+			func() (interface{}, error) {
+				err := ds.scale(ctx, resInfo, mismatchReplicasCheckFn, waitOnResourceInfos)
+				return nil, err
+			},
+			defaultMaxResourceScalingAttempts,
+			defaultGetSecretBackoff,
+			util.AlwaysRetry)
+		logger.V(4).Info("resource has been scaled", "namespace", namespace, "resource", resInfo)
+		return result.Err
+	}
+}
 func (ds *deploymentScaler) scale(ctx context.Context, resourceInfo scaleableResourceInfo, mismatchReplicas mismatchReplicasCheckFn, waitOnResourceInfos []scaleableResourceInfo) error {
+	var err error
+	logger.V(4).Info("Attempting to scale: %#v\n", resourceInfo)
 	// sleep for initial delay
-	logger.V(4).Info("Attempting to scale: %#v", resourceInfo)
-	err := util.SleepWithContext(ctx, resourceInfo.initialDelay)
+	err = util.SleepWithContext(ctx, resourceInfo.initialDelay)
 	if err != nil {
 		logger.Error(err, "looks like the context has been cancelled. exiting scaling operation", "namespace", ds.namespace, "resourceInfo", resourceInfo)
 		return err
@@ -191,11 +197,9 @@ func (ds *deploymentScaler) scale(ctx context.Context, resourceInfo scaleableRes
 		return err
 	}
 	if ds.shouldScale(ctx, deployment, resourceInfo.replicas, mismatchReplicas, waitOnResourceInfos) {
-		util.Retry(ctx, fmt.Sprintf(""), func() (*autoscalingv1.Scale, error) {
-			return ds.doScale(ctx, resourceInfo)
-		}, defaultMaxResourceScalingAttempts, defaultScaleResourceBackoff, util.AlwaysRetry)
+		_, err = ds.doScale(ctx, resourceInfo)
 	}
-	return nil
+	return err
 }
 
 func (ds *deploymentScaler) shouldScale(ctx context.Context, deployment *appsv1.Deployment, targetReplicas int32, mismatchReplicas mismatchReplicasCheckFn, waitOnResourceInfos []scaleableResourceInfo) bool {

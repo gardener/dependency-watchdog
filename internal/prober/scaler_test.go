@@ -2,6 +2,7 @@ package prober
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -43,17 +44,20 @@ var (
 const namespace = "default"
 
 func TestScalerSuite(t *testing.T) {
+	g := NewWithT(t)
+	var err error
 	tests := []struct {
 		title  string
 		run    func(t *testing.T)
 		before func(t *testing.T)
 		after  func(t *testing.T)
 	}{
-		{"test resource scale flow", testCreateResourceScaleFlow, nil, nil},
+		//{"test resource scale flow", testCreateResourceScaleFlow, nil, nil},
 		{"test deployment not found", testDeploymentNotFound, nil, nil},
 	}
 	k8sClient, cfg, testEnv = BeforeSuite(t)
-	scalesGetter, _ = util.CreateScalesGetter(cfg)
+	scalesGetter, err = util.CreateScalesGetter(cfg)
+	g.Expect(err).To(BeNil())
 	createProbeConfig()
 	ds = NewDeploymentScaler(namespace, probeCfg, k8sClient, scalesGetter)
 	for _, test := range tests {
@@ -78,7 +82,7 @@ func TestFlow(t *testing.T) {
 	func2 := func(ctx context.Context) error {
 		log.Println("executing func2")
 		time.Sleep(50 * time.Millisecond)
-		return nil
+		return errors.New("func2 error")
 	}
 	func3 := func(ctx context.Context) error {
 		log.Println("executing func3")
@@ -138,9 +142,9 @@ func testDeploymentNotFound(t *testing.T) {
 		expectedScaledKCMReplicas int32
 		scalingFn                 func(context.Context) error
 	}{
-		{0, 0, 0, 1, 1, 1, ds.ScaleUp},
+		//{0, 0, 0, 1, 1, 1, ds.ScaleUp},
 		//{0, 1, 0, 1, ds.ScaleUp},
-		//{1, 1, 1, 0, 0, 0, ds.ScaleDown},
+		{1, 1, 1, 0, 0, 0, ds.ScaleDown},
 		//{0, 1, 0, 0, ds.ScaleDown},
 	}
 
@@ -153,17 +157,23 @@ func testDeploymentNotFound(t *testing.T) {
 		caDeployment := createDeploySpec(g, caDeploySpecPath)
 		createDeployment(g, caDeployment, entry.caReplicas)
 
-		foundMcmDeployment, err := util.GetDeploymentFor(ctx, namespace, mcmRef.Name, k8sClient)
-		g.Expect(foundMcmDeployment.Spec.Replicas).To(Equal(entry.mcmReplicas))
-		foundKcmDeployment, err := util.GetDeploymentFor(ctx, namespace, kcmRef.Name, k8sClient)
-		g.Expect(foundKcmDeployment.Spec.Replicas).To(Equal(entry.kcmReplicas))
-		foundCaDeployment, err := util.GetDeploymentFor(ctx, namespace, caRef.Name, k8sClient)
-		g.Expect(foundCaDeployment.Spec.Replicas).To(Equal(entry.caReplicas))
+		foundMcmDeployment, err := util.GetDeploymentFor(ctx, namespace, mcmDeployment.ObjectMeta.Name, k8sClient)
+		g.Expect(err).To(BeNil())
+		g.Expect(foundMcmDeployment).ToNot(BeNil())
+		g.Expect(*foundMcmDeployment.Spec.Replicas).To(Equal(entry.mcmReplicas))
+		foundKcmDeployment, err := util.GetDeploymentFor(ctx, namespace, kcmDeployment.ObjectMeta.Name, k8sClient)
+		g.Expect(err).To(BeNil())
+		g.Expect(foundKcmDeployment).ToNot(BeNil())
+		g.Expect(*foundKcmDeployment.Spec.Replicas).To(Equal(entry.kcmReplicas))
+		foundCaDeployment, err := util.GetDeploymentFor(ctx, namespace, caDeployment.ObjectMeta.Name, k8sClient)
+		g.Expect(err).To(BeNil())
+		g.Expect(foundCaDeployment).ToNot(BeNil())
+		g.Expect(*foundCaDeployment.Spec.Replicas).To(Equal(entry.caReplicas))
 
 		err = entry.scalingFn(ctx)
 		g.Expect(err).To(BeNil())
-		matchReplicas(g, kcmDeployment.ObjectMeta.Namespace, kcmDeployment.ObjectMeta.Name, entry.expectedScaledKCMReplicas)
 		matchReplicas(g, caDeployment.ObjectMeta.Namespace, caDeployment.ObjectMeta.Name, entry.expectedScaledCAReplicas)
+		matchReplicas(g, kcmDeployment.ObjectMeta.Namespace, kcmDeployment.ObjectMeta.Name, entry.expectedScaledKCMReplicas)
 		matchReplicas(g, mcmDeployment.ObjectMeta.Namespace, mcmDeployment.ObjectMeta.Name, entry.expectedScaledMCMReplicas)
 		deleteDeployments(g)
 	}
@@ -174,12 +184,13 @@ func createDeploySpec(g *WithT, file string) *appsv1.Deployment {
 	deployment, err := getStructured[appsv1.Deployment](file)
 	g.Expect(err).To(BeNil())
 	g.Expect(deployment).ToNot(BeNil())
-	return &deployment
+	return deployment
 }
 
 func createDeployment(g *WithT, deploy *appsv1.Deployment, replicas int32) {
-	deploy.Spec.Replicas = &replicas
-	err := k8sClient.Create(ctx, deploy)
+	d := deploy.DeepCopy()
+	d.Spec.Replicas = &replicas
+	err := k8sClient.Create(ctx, d)
 	g.Expect(err).To(BeNil())
 }
 

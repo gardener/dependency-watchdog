@@ -26,7 +26,7 @@ import (
 var (
 	secretPath     = filepath.Join("testdata", "secret.yaml")
 	kubeConfigPath = filepath.Join("testdata", "kubeconfig.yaml")
-	deploymentPath = filepath.Join("testdata", "kcmdeployment.yaml")
+	deploymentPath = filepath.Join("testdata", "deployment.yaml")
 	ctx            context.Context
 	deployment     appsv1.Deployment
 	secret         corev1.Secret

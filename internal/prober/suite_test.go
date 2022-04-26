@@ -50,7 +50,7 @@ type Result[T any] struct {
 	Err              error
 }
 
-func getStructured[T any](filepath string) (T, error) {
+func getStructured[T any](filepath string) (*T, error) {
 	unstructuredObject, err := getUnstructured(filepath)
 	if err != nil {
 		return nil, err
@@ -60,7 +60,7 @@ func getStructured[T any](filepath string) (T, error) {
 	if err != nil {
 		return nil, err
 	}
-	return structuredObject, nil
+	return &structuredObject, nil
 }
 
 func getUnstructured(filePath string) (*unstructured.Unstructured, error) {

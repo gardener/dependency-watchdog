@@ -1,7 +1,7 @@
-APIVersion: apps/v1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ca
+  name: cluster-autoscaler
   namespace: default
   labels:
     app: ca

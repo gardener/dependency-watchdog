@@ -18,7 +18,7 @@ var (
 	sk8sClient     client.Client
 	stestEnv       *envtest.Environment
 	sctx           = context.Background()
-	secret         corev1.Secret
+	secret         *corev1.Secret
 	clientCreator  ShootClientCreator
 )
 
@@ -52,7 +52,7 @@ func testConfigNotFound(t *testing.T) {
 	g := NewWithT(t)
 	teardown := setupShootCLientTest(t)
 	defer teardown()
-	err := sk8sClient.Create(sctx, &secret)
+	err := sk8sClient.Create(sctx, secret)
 	g.Expect(err).To(BeNil())
 	shootClient, err := clientCreator.CreateClient(sctx, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name)
 	g.Expect(err).ToNot(BeNil())
@@ -71,7 +71,7 @@ func testCreateShootClient(t *testing.T) {
 	secret.Data = map[string][]byte{
 		"kubeconfig": kubeconfig.Bytes(),
 	}
-	err = sk8sClient.Create(sctx, &secret)
+	err = sk8sClient.Create(sctx, secret)
 	g.Expect(err).To(BeNil())
 
 	shootClient, err := clientCreator.CreateClient(sctx, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name)
@@ -80,16 +80,16 @@ func testCreateShootClient(t *testing.T) {
 }
 
 func setupShootCLientTest(t *testing.T) func() {
+	var err error
 	g := NewWithT(t)
 	fileExistsOrFail(secretPath)
-	result := getStructured[corev1.Secret](secretPath)
-	g.Expect(result.Err).To(BeNil())
-	g.Expect(result.StructuredObject).ToNot(BeNil())
-	secret = result.StructuredObject
+	secret, err = getStructured[corev1.Secret](secretPath)
+	g.Expect(err).To(BeNil())
+	g.Expect(secret).ToNot(BeNil())
 	clientCreator = NewShootClientCreator(sk8sClient)
 
 	return func() {
-		err := sk8sClient.Delete(sctx, &secret)
+		err := sk8sClient.Delete(sctx, secret)
 		g.Expect(err).Should(BeNil())
 	}
 }
