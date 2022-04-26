@@ -11,29 +11,29 @@ import (
 const (
 	ScaleUp int = iota
 	ScaleDown
-	DefaultProbeInterval             = 10 * time.Second
-	DefaultInitialDelay              = 0 * time.Second
-	DefaultBackoffDuration           = 30 * time.Second
-	DefaultSuccessThreshold          = 1
-	DefaultFailureThreshold          = 3
-	DefaultBackoffJitterFactor       = 0.2
-	DefaultScaleUpReplicas     int32 = 1
-	DefaultScaleDownReplicas   int32 = 0
-	DefaultScaleUpdateTimeout        = 10 * time.Second
+	DefaultProbeInterval                             = 10 * time.Second
+	DefaultInitialDelay                              = 0 * time.Second
+	DefaultInternalProbeFailureBackoffDuration       = 30 * time.Second
+	DefaultSuccessThreshold                          = 1
+	DefaultFailureThreshold                          = 3
+	DefaultBackoffJitterFactor                       = 0.2
+	DefaultScaleUpReplicas                     int32 = 1
+	DefaultScaleDownReplicas                   int32 = 0
+	DefaultScaleUpdateTimeout                        = 10 * time.Second
 )
 
 type Config struct {
-	Name                         string                  `yaml:"name"`
-	Namespace                    string                  `yaml:"namespace,omitempty"`
-	InternalKubeConfigSecretName string                  `yaml:"internalKubeConfigSecretName"`
-	ExternalKubeConfigSecretName string                  `yaml:"externalKubeConfigSecretName"`
-	ProbeInterval                *time.Duration          `yaml:"probeInterval,omitempty"`
-	InitialDelay                 *time.Duration          `yaml:"initialDelay,omitempty"`
-	SuccessThreshold             *int                    `yaml:"successThreshold,omitempty"`
-	FailureThreshold             *int                    `yaml:"failureThreshold,omitempty"`
-	BackoffDuration              *time.Duration          `yaml:"backoffDuration,omitempty"`
-	BackoffJitterFactor          *float64                `yaml:"backoffJitterFactor,omitempty"`
-	DependentResourceInfos       []DependentResourceInfo `yaml:"dependentResourceInfos"`
+	Name                                string                  `yaml:"name"`
+	Namespace                           string                  `yaml:"namespace,omitempty"`
+	InternalKubeConfigSecretName        string                  `yaml:"internalKubeConfigSecretName"`
+	ExternalKubeConfigSecretName        string                  `yaml:"externalKubeConfigSecretName"`
+	ProbeInterval                       *time.Duration          `yaml:"probeInterval,omitempty"`
+	InitialDelay                        *time.Duration          `yaml:"initialDelay,omitempty"`
+	SuccessThreshold                    *int                    `yaml:"successThreshold,omitempty"`
+	FailureThreshold                    *int                    `yaml:"failureThreshold,omitempty"`
+	InternalProbeFailureBackoffDuration *time.Duration          `yaml:"internalProbeFailureBackoffDuration,omitempty"`
+	BackoffJitterFactor                 *float64                `yaml:"backoffJitterFactor,omitempty"`
+	DependentResourceInfos              []DependentResourceInfo `yaml:"dependentResourceInfos"`
 }
 
 type DependentResourceInfo struct {
@@ -109,9 +109,9 @@ func (c *Config) fillDefaultValues() {
 		c.InitialDelay = new(time.Duration)
 		*c.InitialDelay = DefaultInitialDelay
 	}
-	if c.BackoffDuration == nil {
-		c.BackoffDuration = new(time.Duration)
-		*c.BackoffDuration = DefaultBackoffDuration
+	if c.InternalProbeFailureBackoffDuration == nil {
+		c.InternalProbeFailureBackoffDuration = new(time.Duration)
+		*c.InternalProbeFailureBackoffDuration = DefaultInternalProbeFailureBackoffDuration
 	}
 	if c.SuccessThreshold == nil {
 		c.SuccessThreshold = new(int)

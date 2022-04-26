@@ -14,10 +14,9 @@ import (
 var logger = log.Log.WithName("prober")
 
 const (
-	defaultGetSecretBackoff               = 100 * time.Millisecond
-	defaultGetSecretMaxAttempts           = 3
-	backOffDurationForThrottledRequests   = 10 * time.Second
-	internalProbeUnhealthyBackoffDuration = 30 * time.Second
+	defaultGetSecretBackoff             = 100 * time.Millisecond
+	defaultGetSecretMaxAttempts         = 3
+	backOffDurationForThrottledRequests = 10 * time.Second
 )
 
 type Prober struct {
@@ -108,7 +107,7 @@ func (p *Prober) probeInternal(ctx context.Context) {
 	err = p.doProbe(shootClient)
 	if err != nil {
 		if !p.internalProbeStatus.canIgnoreProbeError(err) {
-			p.internalProbeStatus.recordFailure(err, *p.config.FailureThreshold, internalProbeUnhealthyBackoffDuration)
+			p.internalProbeStatus.recordFailure(err, *p.config.FailureThreshold, *p.config.InternalProbeFailureBackoffDuration)
 			logger.Error(err, "recording internal probe failure", "failedAttempts", p.internalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
 		}
 		logger.Error(err, "internal probe was not successful. ignoring this error, will retry probe", "namespace", p.namespace)

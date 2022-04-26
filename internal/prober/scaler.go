@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/gardener/dependency-watchdog/internal/util"
@@ -111,22 +112,37 @@ func (ds *deploymentScaler) createResourceScaleFlow(namespace, flowName string, 
 	g := flow.NewGraph(flowName)
 	sf := newScaleFlow()
 	var previousLevelResourceInfos []scaleableResourceInfo
+	var previousTaskID flow.TaskID
+	var dependentTaskIDs flow.TaskIDs
 	for _, level := range levels {
-		var previousTaskID flow.TaskID
 		if resInfos, ok := orderedResourceInfos[level]; ok {
-			dependentTaskIDs := flow.NewTaskIDs(previousTaskID)
+			if previousTaskID != "" {
+				dependentTaskIDs = flow.NewTaskIDs(previousTaskID)
+			} else {
+				dependentTaskIDs = nil
+			}
 			taskID := g.Add(flow.Task{
-				Name:         fmt.Sprintf("scaling dependencies %v at level %d", resInfos, level),
+				Name:         createTaskName(resInfos, level),
 				Fn:           ds.createScaleTaskFn(namespace, resInfos, mismatchReplicasCheckFn, previousLevelResourceInfos),
 				Dependencies: dependentTaskIDs,
 			})
+			sf.addScaleStepInfo(taskID, dependentTaskIDs, previousLevelResourceInfos)
+			previousLevelResourceInfos = make([]scaleableResourceInfo, len(resInfos))
 			copy(previousLevelResourceInfos, resInfos)
 			previousTaskID = taskID
-			sf.addScaleStepInfo(taskID, dependentTaskIDs, previousLevelResourceInfos)
+
 		}
 	}
 	sf.setFlow(g.Compile())
 	return sf
+}
+
+func createTaskName(resInfos []scaleableResourceInfo, level int) string {
+	resNames := make([]string, 0, len(resInfos))
+	for _, resInfo := range resInfos {
+		resNames = append(resNames, resInfo.ref.Name)
+	}
+	return fmt.Sprintf("scaling dependencies (level %d) - %s", level, strings.Join(resNames, ","))
 }
 
 // createScaleTaskFn creates a flow.TaskFn for a slice of DependentResourceInfo. If there are more than one
@@ -138,7 +154,7 @@ func (ds *deploymentScaler) createScaleTaskFn(namespace string, resourceInfos []
 		logger.V(4).Info("(createScaleTaskFn) [unexpected] resourceInfos. This should never be the case.", "namespace", namespace)
 		return nil
 	}
-	taskFns := make([]flow.TaskFn, len(resourceInfos))
+	taskFns := make([]flow.TaskFn, 0, len(resourceInfos))
 	for _, resourceInfo := range resourceInfos {
 		taskFn := flow.TaskFn(func(ctx context.Context) error {
 			operation := fmt.Sprintf("scale-resource-%s.%s", namespace, resourceInfo.ref.Name)
@@ -164,6 +180,7 @@ func (ds *deploymentScaler) createScaleTaskFn(namespace string, resourceInfos []
 
 func (ds *deploymentScaler) scale(ctx context.Context, resourceInfo scaleableResourceInfo, mismatchReplicas mismatchReplicasCheckFn, waitOnResourceInfos []scaleableResourceInfo) error {
 	// sleep for initial delay
+	logger.V(4).Info("Attempting to scale: %#v", resourceInfo)
 	err := util.SleepWithContext(ctx, resourceInfo.initialDelay)
 	if err != nil {
 		logger.Error(err, "looks like the context has been cancelled. exiting scaling operation", "namespace", ds.namespace, "resourceInfo", resourceInfo)

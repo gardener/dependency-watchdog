@@ -27,7 +27,7 @@ func TestCheckIfDefaultValuesAreSetForAllOptionalMissingValues(t *testing.T) {
 	g.Expect(config.ProbeInterval.Milliseconds()).To(Equal(DefaultProbeInterval.Milliseconds()), "LoadConfig should set probe delay to DefaultProbeInterval if not set in the config file")
 	g.Expect(*config.SuccessThreshold).To(Equal(DefaultSuccessThreshold), "LoadConfig should set success threshold to DefaultSuccessThreshold if not set in the config file")
 	g.Expect(*config.FailureThreshold).To(Equal(DefaultFailureThreshold), "LoadConfig should set failure threshold to DefaultFailureThreshold if not set in the config file")
-	g.Expect(config.BackoffDuration.Milliseconds()).To(Equal(DefaultBackoffDuration.Milliseconds()), "LoadConfig should set backOff duration to DefaultBackoffDuration if not set in the config file")
+	g.Expect(config.InternalProbeFailureBackoffDuration.Milliseconds()).To(Equal(DefaultInternalProbeFailureBackoffDuration.Milliseconds()), "LoadConfig should set backOff duration to DefaultInternalProbeFailureBackoffDuration if not set in the config file")
 	g.Expect(*config.BackoffJitterFactor).To(Equal(DefaultBackoffJitterFactor), "LoadConfig should set jitter factor to DefaultJitterFactor if not set in the config file")
 	for _, resInfo := range config.DependentResourceInfos {
 		g.Expect(resInfo.ScaleUpInfo.InitialDelay.Milliseconds()).To(Equal(DefaultInitialDelay.Milliseconds()), fmt.Sprintf("LoadConfig should set scale up initial delay for %v to DefaultInitialDelay if not set in the config file", resInfo.Ref.Name))
