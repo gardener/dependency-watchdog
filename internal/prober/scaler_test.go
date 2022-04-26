@@ -22,33 +22,35 @@ import (
 )
 
 var (
-	deploymentPath      = filepath.Join("testdata", "deployment.yaml")
 	defaultInitialDelay = 10 * time.Millisecond
 	defaultTimeout      = 20 * time.Millisecond
-	mcmRef              = autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "machine-controller-manager", APIVersion: "apps/v1"}
-	kcmRef              = autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "kube-controller-manager", APIVersion: "apps/v1"}
-	caRef               = autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "cluster-autoscaler", APIVersion: "apps/v1"}
-	kcmDeploy           *appsv1.Deployment
-	mcmDeploy           *appsv1.Deployment
-	caDeploy            *appsv1.Deployment
-	k8sClient           client.Client
-	testEnv             *envtest.Environment
-	cfg                 *rest.Config
-	probeCfg            *Config
-	scalesGetter        scale.ScalesGetter
-	ds                  DeploymentScaler
-	ctx                 = context.Background()
+
+	mcmDeploySpecPath = filepath.Join("testdata", "mcmdeployment.yaml")
+	kcmDeploySpecPath = filepath.Join("testdata", "kcmdeployment.yaml")
+	caDeploySpecPath  = filepath.Join("testdata", "cadeployment.yaml")
+	mcmRef            = autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "machine-controller-manager", APIVersion: "apps/v1"}
+	kcmRef            = autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "kube-controller-manager", APIVersion: "apps/v1"}
+	caRef             = autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "cluster-autoscaler", APIVersion: "apps/v1"}
+	k8sClient         client.Client
+	testEnv           *envtest.Environment
+	cfg               *rest.Config
+	probeCfg          *Config
+	scalesGetter      scale.ScalesGetter
+	ds                DeploymentScaler
+	ctx               = context.Background()
 )
 
 const namespace = "default"
 
 func TestScalerSuite(t *testing.T) {
 	tests := []struct {
-		title string
-		run   func(t *testing.T)
+		title  string
+		run    func(t *testing.T)
+		before func(t *testing.T)
+		after  func(t *testing.T)
 	}{
-		{"test resource scale flow", testCreateResourceScaleFlow},
-		{"test deployment not found", testDeploymentNotFound},
+		{"test resource scale flow", testCreateResourceScaleFlow, nil, nil},
+		{"test deployment not found", testDeploymentNotFound, nil, nil},
 	}
 	k8sClient, cfg, testEnv = BeforeSuite(t)
 	scalesGetter, _ = util.CreateScalesGetter(cfg)
@@ -56,11 +58,16 @@ func TestScalerSuite(t *testing.T) {
 	ds = NewDeploymentScaler(namespace, probeCfg, k8sClient, scalesGetter)
 	for _, test := range tests {
 		t.Run(test.title, func(t *testing.T) {
+			if test.before != nil {
+				test.before(t)
+			}
 			test.run(t)
+			if test.after != nil {
+				test.after(t)
+			}
 		})
 	}
 	AfterSuite(t, testEnv)
-
 }
 func TestFlow(t *testing.T) {
 	func1 := func(ctx context.Context) error {
@@ -96,9 +103,7 @@ func TestFlow(t *testing.T) {
 func testCreateResourceScaleFlow(t *testing.T) {
 	g := NewWithT(t)
 
-	depScaler := deploymentScaler{
-		scaler: scalesGetter.Scales(namespace),
-	}
+	depScaler := deploymentScaler{}
 	var scri []scaleableResourceInfo
 	scri = append(scri, scaleableResourceInfo{ref: caRef, level: 1, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 0})
 	scri = append(scri, scaleableResourceInfo{ref: mcmRef, level: 0, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 0})
@@ -124,72 +129,69 @@ func testCreateResourceScaleFlow(t *testing.T) {
 }
 
 func testDeploymentNotFound(t *testing.T) {
-	//g := NewWithT(t)
 	table := []struct {
-		mcmReplicas         int32
-		caReplicas          int32
-		kcmReplicas         int32
-		expectedmcmReplicas int32
-		expectedcaReplicas  int32
-		expectedkcmReplicas int32
-		f                   func(context.Context) error
+		mcmReplicas               int32
+		caReplicas                int32
+		kcmReplicas               int32
+		expectedScaledMCMReplicas int32
+		expectedScaledCAReplicas  int32
+		expectedScaledKCMReplicas int32
+		scalingFn                 func(context.Context) error
 	}{
-		//{0, 0, 0, 1, 1, 1, ds.ScaleUp},
+		{0, 0, 0, 1, 1, 1, ds.ScaleUp},
 		//{0, 1, 0, 1, ds.ScaleUp},
-		{1, 1, 1, 0, 0, 0, ds.ScaleDown},
+		//{1, 1, 1, 0, 0, 0, ds.ScaleDown},
 		//{0, 1, 0, 0, ds.ScaleDown},
 	}
 
 	for _, entry := range table {
-		readDeploymentYaml(t)
-		createDeployment(t, mcmDeploy, entry.mcmReplicas)
-		createDeployment(t, caDeploy, entry.caReplicas)
-		createDeployment(t, kcmDeploy, entry.kcmReplicas)
+		g := NewWithT(t)
+		mcmDeployment := createDeploySpec(g, mcmDeploySpecPath)
+		createDeployment(g, mcmDeployment, entry.mcmReplicas)
+		kcmDeployment := createDeploySpec(g, kcmDeploySpecPath)
+		createDeployment(g, kcmDeployment, entry.kcmReplicas)
+		caDeployment := createDeploySpec(g, caDeploySpecPath)
+		createDeployment(g, caDeployment, entry.caReplicas)
 
-		_ = entry.f(ctx)
-		// g.Expect(err.Error()).To(ContainSubstring("\"" + kcmDeploy.ObjectMeta.Name + "\"" + " not found"))
-		// _, err = util.GetDeploymentFor(ctx, kcmDeploy.ObjectMeta.Name, kcmDeploy.ObjectMeta.Namespace, k8sClient)
-		// g.Expect(apierrors.IsNotFound(err)).To(BeTrue())
-		matchReplicas(t, kcmDeploy.ObjectMeta.Namespace, kcmDeploy.ObjectMeta.Name, entry.expectedkcmReplicas)
-		matchReplicas(t, caDeploy.ObjectMeta.Namespace, caDeploy.ObjectMeta.Name, entry.expectedcaReplicas)
-		matchReplicas(t, mcmDeploy.ObjectMeta.Namespace, mcmDeploy.ObjectMeta.Name, entry.expectedmcmReplicas)
+		foundMcmDeployment, err := util.GetDeploymentFor(ctx, namespace, mcmRef.Name, k8sClient)
+		g.Expect(foundMcmDeployment.Spec.Replicas).To(Equal(entry.mcmReplicas))
+		foundKcmDeployment, err := util.GetDeploymentFor(ctx, namespace, kcmRef.Name, k8sClient)
+		g.Expect(foundKcmDeployment.Spec.Replicas).To(Equal(entry.kcmReplicas))
+		foundCaDeployment, err := util.GetDeploymentFor(ctx, namespace, caRef.Name, k8sClient)
+		g.Expect(foundCaDeployment.Spec.Replicas).To(Equal(entry.caReplicas))
 
-		deleteDeployment(t)
+		err = entry.scalingFn(ctx)
+		g.Expect(err).To(BeNil())
+		matchReplicas(g, kcmDeployment.ObjectMeta.Namespace, kcmDeployment.ObjectMeta.Name, entry.expectedScaledKCMReplicas)
+		matchReplicas(g, caDeployment.ObjectMeta.Namespace, caDeployment.ObjectMeta.Name, entry.expectedScaledCAReplicas)
+		matchReplicas(g, mcmDeployment.ObjectMeta.Namespace, mcmDeployment.ObjectMeta.Name, entry.expectedScaledMCMReplicas)
+		deleteDeployments(g)
 	}
 }
 
-func readDeploymentYaml(t *testing.T) {
-	g := NewWithT(t)
-	fileExistsOrFail(deploymentPath)
-	result := getStructured[appsv1.Deployment](deploymentPath)
-	g.Expect(result.Err).To(BeNil())
-	g.Expect(result.StructuredObject).ToNot(BeNil())
-	mcmDeploy = result.StructuredObject.DeepCopy()
-	mcmDeploy.ObjectMeta.Name = mcmRef.Name
-	kcmDeploy = result.StructuredObject.DeepCopy()
-	kcmDeploy.ObjectMeta.Name = kcmRef.Name
-	caDeploy = result.StructuredObject.DeepCopy()
-	caDeploy.ObjectMeta.Name = caRef.Name
+func createDeploySpec(g *WithT, file string) *appsv1.Deployment {
+	fileExistsOrFail(file)
+	deployment, err := getStructured[appsv1.Deployment](file)
+	g.Expect(err).To(BeNil())
+	g.Expect(deployment).ToNot(BeNil())
+	return &deployment
 }
 
-func createDeployment(t *testing.T, deploy *appsv1.Deployment, replicas int32) {
-	g := NewWithT(t)
+func createDeployment(g *WithT, deploy *appsv1.Deployment, replicas int32) {
 	deploy.Spec.Replicas = &replicas
 	err := k8sClient.Create(ctx, deploy)
 	g.Expect(err).To(BeNil())
 }
 
-func matchReplicas(t *testing.T, namespace string, name string, expectedReplicas int32) {
-	g := NewWithT(t)
+func matchReplicas(g *WithT, namespace string, name string, expectedReplicas int32) {
 	deploy, err := util.GetDeploymentFor(ctx, namespace, name, k8sClient)
 	g.Expect(err).To(BeNil())
 	g.Expect(deploy).ToNot(BeNil())
 	log.Println(name, " ", *(deploy.Spec.Replicas))
-	g.Expect(*(deploy.Spec.Replicas)).Should(Equal(expectedReplicas))
+	g.Expect(*deploy.Spec.Replicas).Should(Equal(expectedReplicas))
 }
 
-func deleteDeployment(t *testing.T) {
-	g := NewWithT(t)
+func deleteDeployments(g *WithT) {
 	opts := []client.DeleteAllOfOption{
 		client.InNamespace(namespace),
 	}

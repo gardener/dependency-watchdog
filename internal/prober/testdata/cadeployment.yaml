@@ -1,22 +1,22 @@
-apiVersion: apps/v1
+APIVersion: apps/v1
 kind: Deployment
 metadata:
-  name: test
+  name: ca
   namespace: default
   labels:
-    app: nginx
+    app: ca
 spec:
   replicas: 0
   selector:
     matchLabels:
-      app: nginx
+      app: ca
   template:
     metadata:
       labels:
-        app: nginx
+        app: ca
     spec:
       containers:
-        - name: nginx
+        - name: ca-main
           image: nginx:1.14.2
           ports:
             - containerPort: 80

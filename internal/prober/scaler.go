@@ -106,7 +106,7 @@ func (sf *scaleFlow) setFlow(flow *flow.Flow) {
 	sf.flow = flow
 }
 
-func (ds *deploymentScaler) createResourceScaleFlow(namespace, flowName string, resourceInfos []scaleableResourceInfo, mismatchReplicasCheckFn func(replicas, targetReplicas int32) bool) *scaleFlow {
+func (ds *deploymentScaler) createResourceScaleFlow(namespace, flowName string, resourceInfos []scaleableResourceInfo, replicaPredicateFn mismatchReplicasCheckFn) *scaleFlow {
 	levels := sortAndGetUniqueLevels(resourceInfos)
 	orderedResourceInfos := collectResourceInfosByLevel(resourceInfos)
 	g := flow.NewGraph(flowName)
@@ -123,14 +123,13 @@ func (ds *deploymentScaler) createResourceScaleFlow(namespace, flowName string, 
 			}
 			taskID := g.Add(flow.Task{
 				Name:         createTaskName(resInfos, level),
-				Fn:           ds.createScaleTaskFn(namespace, resInfos, mismatchReplicasCheckFn, previousLevelResourceInfos),
+				Fn:           ds.createScaleTaskFn(namespace, resInfos, replicaPredicateFn, previousLevelResourceInfos),
 				Dependencies: dependentTaskIDs,
 			})
 			sf.addScaleStepInfo(taskID, dependentTaskIDs, previousLevelResourceInfos)
 			previousLevelResourceInfos = make([]scaleableResourceInfo, len(resInfos))
 			copy(previousLevelResourceInfos, resInfos)
 			previousTaskID = taskID
-
 		}
 	}
 	sf.setFlow(g.Compile())
@@ -142,7 +141,7 @@ func createTaskName(resInfos []scaleableResourceInfo, level int) string {
 	for _, resInfo := range resInfos {
 		resNames = append(resNames, resInfo.ref.Name)
 	}
-	return fmt.Sprintf("scaling dependencies (level %d) - %s", level, strings.Join(resNames, ","))
+	return fmt.Sprintf("scale:level-%d:%s", level, strings.Join(resNames, "#"))
 }
 
 // createScaleTaskFn creates a flow.TaskFn for a slice of DependentResourceInfo. If there are more than one
@@ -156,7 +155,7 @@ func (ds *deploymentScaler) createScaleTaskFn(namespace string, resourceInfos []
 	}
 	taskFns := make([]flow.TaskFn, 0, len(resourceInfos))
 	for _, resourceInfo := range resourceInfos {
-		taskFn := flow.TaskFn(func(ctx context.Context) error {
+		taskFn := func(ctx context.Context) error {
 			operation := fmt.Sprintf("scale-resource-%s.%s", namespace, resourceInfo.ref.Name)
 			result := util.Retry(ctx,
 				operation,
@@ -169,10 +168,10 @@ func (ds *deploymentScaler) createScaleTaskFn(namespace string, resourceInfos []
 				util.AlwaysRetry)
 			logger.V(4).Info("resource has been scaled", "namespace", namespace, "resource", resourceInfo)
 			return result.Err
-		})
+		}
 		taskFns = append(taskFns, taskFn)
 	}
-	if len(resourceInfos) == 1 {
+	if len(taskFns) == 1 {
 		return taskFns[0]
 	}
 	return flow.Parallel(taskFns...)
