@@ -39,6 +39,25 @@ func Retry[T any](ctx context.Context, operation string, fn func() (T, error), n
 	return RetryResult[T]{Value: result, Err: err}
 }
 
+func RetryUntilPredicate(ctx context.Context, operation string, predicateFn func() bool, timeout time.Duration, interval time.Duration) bool {
+	timer := time.NewTimer(timeout)
+	for {
+		select {
+		case <-ctx.Done():
+			logger.V(4).Info("context has been cancelled, exiting retrying operation", "operation", operation)
+			return false
+		case <-timer.C:
+			logger.V(4).Info("timed out waiting for predicateFn to be true", "operation", operation)
+			return false
+		default:
+			if predicateFn() {
+				return true
+			}
+			time.Sleep(interval)
+		}
+	}
+}
+
 func AlwaysRetry(err error) bool {
 	return true
 }

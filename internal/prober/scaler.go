@@ -6,6 +6,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gardener/dependency-watchdog/internal/util"
@@ -29,11 +30,13 @@ type DeploymentScaler interface {
 	ScaleDown(ctx context.Context) error
 }
 
-func NewDeploymentScaler(namespace string, config *Config, client client.Client, scalerGetter scalev1.ScalesGetter) DeploymentScaler {
+func NewDeploymentScaler(namespace string, config *Config, client client.Client, scalerGetter scalev1.ScalesGetter, options ...scalerOption) DeploymentScaler {
+	opts := buildScalerOptions(options...)
 	ds := deploymentScaler{
 		namespace: namespace,
 		scaler:    scalerGetter.Scales(namespace),
 		client:    client,
+		options:   opts,
 	}
 	scaleDownFlow := ds.createResourceScaleFlow(namespace, fmt.Sprintf("scale-down-%s", namespace), createScaleDownResourceInfos(config.DependentResourceInfos), util.ScaleDownReplicasMismatch)
 	logger.V(5).Info("created scaleDownFlow %#v for namespace: %s", scaleDownFlow.flowStepInfos, namespace)
@@ -61,6 +64,7 @@ type deploymentScaler struct {
 	client        client.Client
 	scaleDownFlow *flow.Flow
 	scaleUpFlow   *flow.Flow
+	options       *scalerOptions
 }
 
 func (ds *deploymentScaler) ScaleDown(ctx context.Context) error {
@@ -216,25 +220,50 @@ func (ds *deploymentScaler) shouldScale(ctx context.Context, deployment *appsv1.
 	// check if all resources this resource should wait on have been scaled, if not then we cannot scale this resource.
 	// Check for currently available replicas and not the desired replicas on the upstream resource dependencies.
 	if waitOnResourceInfos != nil {
-		for _, upstreamDependentResource := range waitOnResourceInfos {
-			upstreamDeployment, err := util.GetDeploymentFor(ctx, ds.namespace, upstreamDependentResource.ref.Name, ds.client)
-			if err != nil {
-				logger.Error(err, "failed to get deployment for upstream dependent resource, skipping scaling", "upstreamDependentResource", upstreamDependentResource)
-				return false
-			}
-			// This check is required because it is possible that an upstream deployment has an annotation which enforces ignoring any scaling for it.
-			// This should not prevent downstream deployments to be scaled up. Therefore, upstream deployment successful scaling should only be checked
-			// if no such annotation is being set on any dependent upstream deployment.
-			if !isIgnoreScalingAnnotationSet(upstreamDeployment) {
-				actualReplicas := upstreamDeployment.Status.Replicas
-				if mismatchReplicas(actualReplicas, upstreamDependentResource.replicas) {
-					logger.V(4).Info("upstream resource has still not been scaled to the desired replicas, skipping scaling of resource", "namespace", ds.namespace, "deploymentToScale", deployment.Name, "upstreamResourceInfo", upstreamDependentResource, "actualReplicas", actualReplicas)
-					return false
-				}
-			}
+		return ds.waitUntilUpstreamResourcesAreScaled(ctx, waitOnResourceInfos, mismatchReplicas)
+	}
+	return true
+}
+
+func (ds *deploymentScaler) resourceMatchDesiredReplicas(ctx context.Context, resInfo scaleableResourceInfo, mismatchReplicas mismatchReplicasCheckFn) bool {
+	d, err := util.GetDeploymentFor(ctx, ds.namespace, resInfo.ref.Name, ds.client)
+	if err != nil {
+		logger.Error(err, "error trying to get Deployment for resource", "resource", resInfo.ref)
+		return false
+	}
+	if !isIgnoreScalingAnnotationSet(d) {
+		actualReplicas := d.Status.Replicas
+		if !mismatchReplicas(actualReplicas, resInfo.replicas) {
+			logger.V(4).Info("resource has still not been scaled to the desired replicas", "namespace", ds.namespace, "deploymentToScale", d.Name, "resourceInfo", resInfo, "actualReplicas", actualReplicas)
+			return true
+		} else {
+			return false
 		}
 	}
 	return true
+}
+
+func (ds *deploymentScaler) waitUntilUpstreamResourcesAreScaled(ctx context.Context, upstreamResInfos []scaleableResourceInfo, mismatchReplicas mismatchReplicasCheckFn) bool {
+	var wg sync.WaitGroup
+	wg.Add(len(upstreamResInfos))
+	resultC := make(chan bool, len(upstreamResInfos))
+	for _, resInfo := range upstreamResInfos {
+		resInfo := resInfo
+		go func() {
+			defer wg.Done()
+			operation := fmt.Sprintf("wait for upstream resource: %s to reach replicas %d", resInfo.ref.Name, resInfo.replicas)
+			resultC <- util.RetryUntilPredicate(ctx, operation, func() bool { return ds.resourceMatchDesiredReplicas(ctx, resInfo, mismatchReplicas) }, *ds.options.dependentResourceCheckTimeout, *ds.options.dependentResourceCheckInterval)
+		}()
+	}
+	go func() {
+		defer close(resultC)
+		wg.Wait()
+	}()
+	result := true
+	for r := range resultC {
+		result = result && r
+	}
+	return result
 }
 
 func (ds *deploymentScaler) doScale(ctx context.Context, resourceInfo scaleableResourceInfo) (*autoscalingv1.Scale, error) {
