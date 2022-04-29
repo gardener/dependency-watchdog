@@ -4,19 +4,21 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
+
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	kind "sigs.k8s.io/kind/pkg/cluster"
-	"strings"
-	"time"
 )
 
 var (
@@ -35,6 +37,8 @@ type KindCluster interface {
 	CreateDeployment(name, namespace, imageName string, replicas int32, annotations map[string]string) error
 	DeleteAllDeployments(namespace string) error
 	GetRestConfig() *rest.Config
+	GetClient() client.Client
+	GetDeployment(namespace, name string) (*appsv1.Deployment, error)
 	Delete() error
 }
 
@@ -179,6 +183,19 @@ func (kc *kindCluster) CreateDeployment(name, namespace, imageName string, repli
 	return kc.client.Create(context.Background(), deployment)
 }
 
+func (kc *kindCluster) GetDeployment(namespace, name string) (*appsv1.Deployment, error) {
+	key := types.NamespacedName{
+		Namespace: namespace,
+		Name:      name,
+	}
+	deployment := appsv1.Deployment{}
+	err := kc.client.Get(context.Background(), key, &deployment)
+	if err != nil {
+		return nil, err
+	}
+	return &deployment, nil
+}
+
 func (kc *kindCluster) DeleteAllDeployments(namespace string) error {
 	deployment := &appsv1.Deployment{}
 	opts := []client.DeleteAllOfOption{client.InNamespace(namespace)}
@@ -187,6 +204,10 @@ func (kc *kindCluster) DeleteAllDeployments(namespace string) error {
 
 func (kc *kindCluster) GetRestConfig() *rest.Config {
 	return kc.restConfig
+}
+
+func (kc *kindCluster) GetClient() client.Client {
+	return kc.client
 }
 
 func (kc *kindCluster) Delete() error {

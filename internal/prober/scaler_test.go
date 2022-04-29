@@ -2,109 +2,153 @@ package prober
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log"
-	"path/filepath"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/gardener/dependency-watchdog/internal/test"
 	"github.com/gardener/dependency-watchdog/internal/util"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	. "github.com/onsi/gomega"
-	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/scale"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
 
 var (
 	defaultInitialDelay = 10 * time.Millisecond
 	defaultTimeout      = 20 * time.Millisecond
-
-	mcmDeploySpecPath = filepath.Join("testdata", "mcmdeployment.yaml")
-	kcmDeploySpecPath = filepath.Join("testdata", "kcmdeployment.yaml")
-	caDeploySpecPath  = filepath.Join("testdata", "cadeployment.yaml")
-	mcmRef            = autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "machine-controller-manager", APIVersion: "apps/v1"}
-	kcmRef            = autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "kube-controller-manager", APIVersion: "apps/v1"}
-	caRef             = autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "cluster-autoscaler", APIVersion: "apps/v1"}
-	k8sClient         client.Client
-	testEnv           *envtest.Environment
-	cfg               *rest.Config
-	probeCfg          *Config
-	scalesGetter      scale.ScalesGetter
-	ds                DeploymentScaler
-	ctx               = context.Background()
+	mcmRef              = autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "machine-controller-manager", APIVersion: "apps/v1"}
+	kcmRef              = autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "kube-controller-manager", APIVersion: "apps/v1"}
+	caRef               = autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "cluster-autoscaler", APIVersion: "apps/v1"}
+	kindTestEnv         test.KindCluster
+	cfg                 *rest.Config
+	probeCfg            *Config
+	scalesGetter        scale.ScalesGetter
+	ds                  DeploymentScaler
+	ctx                 = context.Background()
 )
 
-const namespace = "default"
+const (
+	namespace                = "default"
+	deploymentImageName      = "nginx:1.14.2"
+	ignoreScaleAnnotationKey = "dependency-watchdog.gardener.cloud/ignore-scaling"
+)
 
-func TestScalerSuite(t *testing.T) {
-	g := NewWithT(t)
+func beforAll(g *WithT) {
 	var err error
-	tests := []struct {
-		title  string
-		run    func(t *testing.T)
-		before func(t *testing.T)
-		after  func(t *testing.T)
-	}{
-		//{"test resource scale flow", testCreateResourceScaleFlow, nil, nil},
-		{"test deployment not found", testDeploymentNotFound, nil, nil},
-	}
-	k8sClient, cfg, testEnv = BeforeSuite(t)
+	kindTestEnv, err = test.CreateKindCluster(test.KindConfig{Name: "test"})
+	g.Expect(err).To(BeNil())
+	cfg = kindTestEnv.GetRestConfig()
 	scalesGetter, err = util.CreateScalesGetter(cfg)
 	g.Expect(err).To(BeNil())
 	createProbeConfig()
-	ds = NewDeploymentScaler(namespace, probeCfg, k8sClient, scalesGetter)
+
+	ds = NewDeploymentScaler(namespace, probeCfg, kindTestEnv.GetClient(), scalesGetter,
+		withDependentResourceCheckTimeout(10*time.Second), withDependentResourceCheckInterval(100*time.Millisecond))
+}
+
+func TestScalerSuite(t *testing.T) {
+	g := NewWithT(t)
+	beforAll(g)
+	tests := []struct {
+		title string
+		run   func(t *testing.T)
+		after func(namespace string) error
+	}{
+		{"test scaling when deployment is not found", testScalingWhenDeploymentNotFound, kindTestEnv.DeleteAllDeployments},
+		{"test scaling when all deployments are found", testScalingWhenAllDeploymentsAreFound, kindTestEnv.DeleteAllDeployments},
+	}
 	for _, test := range tests {
 		t.Run(test.title, func(t *testing.T) {
-			if test.before != nil {
-				test.before(t)
-			}
 			test.run(t)
 			if test.after != nil {
-				test.after(t)
+				err := test.after(namespace)
+				g.Expect(err).To(BeNil())
 			}
 		})
 	}
-	AfterSuite(t, testEnv)
+	kindTestEnv.Delete()
 }
-func TestFlow(t *testing.T) {
-	func1 := func(ctx context.Context) error {
-		log.Println("executing func1")
-		time.Sleep(10 * time.Second)
-		return nil
-	}
-	func2 := func(ctx context.Context) error {
-		log.Println("executing func2")
-		time.Sleep(50 * time.Millisecond)
-		return errors.New("func2 error")
-	}
-	func3 := func(ctx context.Context) error {
-		log.Println("executing func3")
-		return nil
+
+func testScalingWhenAllDeploymentsAreFound(t *testing.T) {
+	table := []struct {
+		mcmReplicas               int32
+		kcmReplicas               int32
+		caReplicas                int32
+		expectedScaledMCMReplicas int32
+		expectedScaledKCMReplicas int32
+		expectedScaledCAReplicas  int32
+		applyKCMAnnotation        bool
+		scalingFn                 func(context.Context) error
+	}{
+		{0, 0, 0, 1, 1, 1, false, ds.ScaleUp},
+		{0, 1, 0, 1, 1, 1, false, ds.ScaleUp},
+		{0, 0, 0, 1, 0, 1, true, ds.ScaleUp},
+		{0, 1, 0, 1, 1, 1, true, ds.ScaleUp},
+		{1, 1, 1, 0, 0, 0, false, ds.ScaleDown},
+		{0, 1, 0, 0, 0, 0, false, ds.ScaleDown},
+		{1, 1, 1, 0, 1, 0, true, ds.ScaleDown},
+		{1, 0, 1, 0, 0, 0, true, ds.ScaleDown},
 	}
 
-	g := flow.NewGraph("test")
-	taskId := g.Add(flow.Task{
-		Name:         "func1-2",
-		Fn:           flow.Parallel(func1, func2),
-		Dependencies: nil,
-	})
-	g.Add(flow.Task{
-		Name:         "func3",
-		Fn:           func3,
-		Dependencies: flow.NewTaskIDs(taskId),
-	})
+	for _, entry := range table {
+		g := NewWithT(t)
 
-	f := g.Compile()
-	f.Run(context.Background(), flow.Opts{})
+		createDeployment(g, namespace, mcmRef.Name, deploymentImageName, entry.mcmReplicas, nil)
+		createDeployment(g, namespace, caRef.Name, deploymentImageName, entry.caReplicas, nil)
+		if entry.applyKCMAnnotation {
+			createDeployment(g, namespace, kcmRef.Name, deploymentImageName, entry.kcmReplicas, map[string]string{ignoreScaleAnnotationKey: "true"})
+		} else {
+			createDeployment(g, namespace, kcmRef.Name, deploymentImageName, entry.kcmReplicas, nil)
+		}
+
+		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, mcmRef.Name, entry.mcmReplicas) }, 10*time.Second, 100*time.Millisecond).Should(BeTrue())
+		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, caRef.Name, entry.caReplicas) }, 10*time.Second, 100*time.Millisecond).Should(BeTrue())
+		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, kcmRef.Name, entry.kcmReplicas) }, 10*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		err := entry.scalingFn(ctx)
+		g.Expect(err).To(BeNil())
+		matchStatusReplicas(g, namespace, caRef.Name, entry.expectedScaledCAReplicas)
+		matchStatusReplicas(g, namespace, kcmRef.Name, entry.expectedScaledKCMReplicas)
+		matchStatusReplicas(g, namespace, mcmRef.Name, entry.expectedScaledMCMReplicas)
+		kindTestEnv.DeleteAllDeployments(namespace)
+	}
 }
-func testCreateResourceScaleFlow(t *testing.T) {
+
+func testScalingWhenDeploymentNotFound(t *testing.T) {
+	table := []struct {
+		mcmReplicas               int32
+		caReplicas                int32
+		expectedScaledMCMReplicas int32
+		expectedScaledCAReplicas  int32
+		scalingFn                 func(context.Context) error
+	}{
+		{0, 0, 0, 1, ds.ScaleUp},
+		{1, 1, 0, 1, ds.ScaleDown},
+	}
+	for _, entry := range table {
+		g := NewWithT(t)
+		createDeployment(g, namespace, mcmRef.Name, deploymentImageName, entry.mcmReplicas, nil)
+		createDeployment(g, namespace, caRef.Name, deploymentImageName, entry.caReplicas, nil)
+
+		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, mcmRef.Name, entry.mcmReplicas) }, 10*time.Second, 100*time.Millisecond).Should(BeTrue())
+		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, caRef.Name, entry.caReplicas) }, 10*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		err := entry.scalingFn(ctx)
+		g.Expect(err).ToNot(BeNil())
+		g.Expect(err.Error()).To(ContainSubstring("\"" + kcmRef.Name + "\" not found"))
+		matchSpecReplicas(g, namespace, mcmRef.Name, entry.expectedScaledMCMReplicas)
+		matchSpecReplicas(g, namespace, caRef.Name, entry.expectedScaledCAReplicas)
+		err = kindTestEnv.DeleteAllDeployments(namespace)
+		g.Expect(err).To(BeNil())
+	}
+}
+
+func TestCreateResourceScaleFlowParallel(t *testing.T) {
 	g := NewWithT(t)
 
 	depScaler := deploymentScaler{}
@@ -113,110 +157,61 @@ func testCreateResourceScaleFlow(t *testing.T) {
 	scri = append(scri, scaleableResourceInfo{ref: mcmRef, level: 0, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 0})
 	scri = append(scri, scaleableResourceInfo{ref: kcmRef, level: 0, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 0})
 
-	waitOnResourceInfosForCA := []scaleableResourceInfo{
-		scri[1],
-		scri[2],
+	waitOnResourceInfos := [][]scaleableResourceInfo{
+		{scri[1], scri[2]},
 	}
 	sf := depScaler.createResourceScaleFlow(namespace, "test", scri, util.ScaleDownReplicasMismatch)
-	g.Expect(sf).ToNot(BeNil())
+	checkCreatedFlow(g, sf, waitOnResourceInfos)
+}
+
+func TestCreateScaleFlowSequential(t *testing.T) {
+	g := NewWithT(t)
+
+	depScaler := deploymentScaler{}
+	var scri []scaleableResourceInfo
+	scri = append(scri, scaleableResourceInfo{ref: caRef, level: 0, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1})
+	scri = append(scri, scaleableResourceInfo{ref: kcmRef, level: 1, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1})
+	scri = append(scri, scaleableResourceInfo{ref: mcmRef, level: 2, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1})
+
+	waitOnResourceInfos := [][]scaleableResourceInfo{
+		{scri[0]},
+		{scri[0], scri[1]},
+	}
+
+	sf := depScaler.createResourceScaleFlow(namespace, "test", scri, util.ScaleDownReplicasMismatch)
+	checkCreatedFlow(g, sf, waitOnResourceInfos)
+}
+
+func checkCreatedFlow(g *WithT, sf *scaleFlow, waitOnResourceInfos [][]scaleableResourceInfo) {
+	g.Expect(len(sf.flowStepInfos)).To(Equal(len(waitOnResourceInfos) + 1))
 	g.Expect(sf.flow).ToNot(BeNil())
-	g.Expect(sf.flow.Name()).To(Equal("test"))
-	g.Expect(sf.flow.Len()).To(Equal(2))
-	g.Expect(len(sf.flowStepInfos)).To(Equal(2))
-	g.Expect(sf.flowStepInfos[0].dependentTaskIDs).To(BeNil())
+	g.Expect(sf.flow.Len()).To(Equal(len(waitOnResourceInfos) + 1))
+	g.Expect(sf.flowStepInfos[0].dependentTaskIDs.Len()).To(Equal(0))
 	g.Expect(sf.flowStepInfos[0].waitOnResourceInfos).To(BeNil())
-	g.Expect(sf.flowStepInfos[1].dependentTaskIDs.Len()).To(Equal(1))
-	_, ok := sf.flowStepInfos[1].dependentTaskIDs[sf.flowStepInfos[0].taskID]
-	g.Expect(ok).To(BeTrue())
-	g.Expect(sf.flowStepInfos[1].waitOnResourceInfos).To(Equal(waitOnResourceInfosForCA))
-
-}
-
-func testDeploymentNotFound(t *testing.T) {
-	table := []struct {
-		mcmReplicas               int32
-		caReplicas                int32
-		kcmReplicas               int32
-		expectedScaledMCMReplicas int32
-		expectedScaledCAReplicas  int32
-		expectedScaledKCMReplicas int32
-		scalingFn                 func(context.Context) error
-	}{
-		//{0, 0, 0, 1, 1, 1, ds.ScaleUp},
-		//{0, 1, 0, 1, ds.ScaleUp},
-		{1, 1, 1, 0, 0, 0, ds.ScaleDown},
-		//{0, 1, 0, 0, ds.ScaleDown},
-	}
-
-	for _, entry := range table {
-		g := NewWithT(t)
-		mcmDeployment := createDeploySpec(g, mcmDeploySpecPath)
-		createDeployment(g, mcmDeployment, entry.mcmReplicas)
-		kcmDeployment := createDeploySpec(g, kcmDeploySpecPath)
-		createDeployment(g, kcmDeployment, entry.kcmReplicas)
-		caDeployment := createDeploySpec(g, caDeploySpecPath)
-		createDeployment(g, caDeployment, entry.caReplicas)
-
-		foundMcmDeployment, err := util.GetDeploymentFor(ctx, namespace, mcmDeployment.ObjectMeta.Name, k8sClient)
-		g.Expect(err).To(BeNil())
-		g.Expect(foundMcmDeployment).ToNot(BeNil())
-		g.Expect(*foundMcmDeployment.Spec.Replicas).To(Equal(entry.mcmReplicas))
-		foundKcmDeployment, err := util.GetDeploymentFor(ctx, namespace, kcmDeployment.ObjectMeta.Name, k8sClient)
-		g.Expect(err).To(BeNil())
-		g.Expect(foundKcmDeployment).ToNot(BeNil())
-		g.Expect(*foundKcmDeployment.Spec.Replicas).To(Equal(entry.kcmReplicas))
-		foundCaDeployment, err := util.GetDeploymentFor(ctx, namespace, caDeployment.ObjectMeta.Name, k8sClient)
-		g.Expect(err).To(BeNil())
-		g.Expect(foundCaDeployment).ToNot(BeNil())
-		g.Expect(*foundCaDeployment.Spec.Replicas).To(Equal(entry.caReplicas))
-
-		err = entry.scalingFn(ctx)
-		g.Expect(err).To(BeNil())
-		matchReplicas(g, caDeployment.ObjectMeta.Namespace, caDeployment.ObjectMeta.Name, entry.expectedScaledCAReplicas)
-		matchReplicas(g, kcmDeployment.ObjectMeta.Namespace, kcmDeployment.ObjectMeta.Name, entry.expectedScaledKCMReplicas)
-		matchReplicas(g, mcmDeployment.ObjectMeta.Namespace, mcmDeployment.ObjectMeta.Name, entry.expectedScaledMCMReplicas)
-		deleteDeployments(g)
+	dependentTaskIDs := flow.NewTaskIDs(sf.flowStepInfos[0].taskID)
+	for i, flowStep := range sf.flowStepInfos[1:] {
+		g.Expect(flowStep.dependentTaskIDs).To(Equal(dependentTaskIDs))
+		g.Expect(flowStep.waitOnResourceInfos).To(Equal(waitOnResourceInfos[i]))
+		dependentTaskIDs.Insert(flowStep.taskID)
 	}
 }
 
-func createDeploySpec(g *WithT, file string) *appsv1.Deployment {
-	fileExistsOrFail(file)
-	deployment, err := getStructured[appsv1.Deployment](file)
-	g.Expect(err).To(BeNil())
-	g.Expect(deployment).ToNot(BeNil())
-	return deployment
+func TestSleepWithContextInScale(t *testing.T) {
+	g := NewWithT(t)
+	var err error
+	depScaler := deploymentScaler{}
+	cancelableCtx, cancelFn := context.WithCancel(ctx)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err = depScaler.scale(cancelableCtx, scaleableResourceInfo{initialDelay: 100 * time.Millisecond}, nil, nil)
+	}()
+	cancelFn()
+	wg.Wait()
+	g.Expect(err).To(Equal(context.Canceled))
 }
 
-func createDeployment(g *WithT, deploy *appsv1.Deployment, replicas int32) {
-	d := deploy.DeepCopy()
-	d.Spec.Replicas = &replicas
-	err := k8sClient.Create(ctx, d)
-	g.Expect(err).To(BeNil())
-}
-
-func matchReplicas(g *WithT, namespace string, name string, expectedReplicas int32) {
-	deploy, err := util.GetDeploymentFor(ctx, namespace, name, k8sClient)
-	g.Expect(err).To(BeNil())
-	g.Expect(deploy).ToNot(BeNil())
-	log.Println(name, " ", *(deploy.Spec.Replicas))
-	g.Expect(*deploy.Spec.Replicas).Should(Equal(expectedReplicas))
-}
-
-func deleteDeployments(g *WithT) {
-	opts := []client.DeleteAllOfOption{
-		client.InNamespace(namespace),
-	}
-	err := k8sClient.DeleteAllOf(ctx, &appsv1.Deployment{}, opts...)
-	g.Expect(err).To(BeNil())
-}
-
-func createProbeConfig() {
-	var dependentResourceInfos []DependentResourceInfo
-	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(mcmRef.Name, 2, 0, 1, 0))
-	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(kcmRef.Name, 1, 0, 1, 0))
-	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(caRef.Name, 0, 1, 1, 0))
-	probeCfg = &Config{Namespace: namespace, DependentResourceInfos: dependentResourceInfos}
-}
 func TestSortAndGetUniqueLevels(t *testing.T) {
 	g := NewWithT(t)
 	numResInfosByLevel := map[int]int{2: 1, 0: 2, 1: 2}
@@ -311,4 +306,39 @@ func scaleableResourceMatchFound(expected scaleableResourceInfo, resources []sca
 		}
 	}
 	return false
+}
+
+func createDeployment(g *WithT, namespace, name, deploymentImageName string, replicas int32, annotations map[string]string) {
+	err := kindTestEnv.CreateDeployment(name, namespace, deploymentImageName, replicas, annotations)
+	g.Expect(err).To(BeNil())
+}
+
+func checkIfDeploymentReady(namespace, name string, replicas int32) bool {
+	deploy, err := kindTestEnv.GetDeployment(namespace, name)
+	if err != nil || deploy.Status.Replicas != replicas {
+		return false
+	}
+	return true
+}
+
+func matchSpecReplicas(g *WithT, namespace string, name string, expectedReplicas int32) {
+	deploy, err := kindTestEnv.GetDeployment(namespace, name)
+	g.Expect(err).To(BeNil())
+	g.Expect(deploy).ToNot(BeNil())
+	g.Expect(*deploy.Spec.Replicas).Should(Equal(expectedReplicas))
+}
+
+func matchStatusReplicas(g *WithT, namespace string, name string, expectedReplicas int32) {
+	deploy, err := kindTestEnv.GetDeployment(namespace, name)
+	g.Expect(err).To(BeNil())
+	g.Expect(deploy).ToNot(BeNil())
+	g.Expect(deploy.Status.Replicas).Should(Equal(expectedReplicas))
+}
+
+func createProbeConfig() {
+	var dependentResourceInfos []DependentResourceInfo
+	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(mcmRef.Name, 2, 0, 1, 0))
+	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(kcmRef.Name, 1, 0, 1, 0))
+	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(caRef.Name, 0, 1, 1, 0))
+	probeCfg = &Config{Namespace: namespace, DependentResourceInfos: dependentResourceInfos}
 }

@@ -3,7 +3,6 @@ package prober
 import (
 	"context"
 	"fmt"
-	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -102,7 +101,7 @@ func newScaleFlow() *scaleFlow {
 func (sf *scaleFlow) addScaleStepInfo(id flow.TaskID, dependentTaskIDs flow.TaskIDs, waitOnResources []scaleableResourceInfo) {
 	sf.flowStepInfos = append(sf.flowStepInfos, scaleStepInfo{
 		taskID:              id,
-		dependentTaskIDs:    dependentTaskIDs,
+		dependentTaskIDs:    dependentTaskIDs.Copy(),
 		waitOnResourceInfos: waitOnResources,
 	})
 }
@@ -117,24 +116,22 @@ func (ds *deploymentScaler) createResourceScaleFlow(namespace, flowName string, 
 	g := flow.NewGraph(flowName)
 	sf := newScaleFlow()
 	var previousLevelResourceInfos []scaleableResourceInfo
-	var previousTaskID flow.TaskID
-	var dependentTaskIDs flow.TaskIDs
+	var previousTaskIDs flow.TaskIDs
 	for _, level := range levels {
 		if resInfos, ok := orderedResourceInfos[level]; ok {
-			if previousTaskID != "" {
-				dependentTaskIDs = flow.NewTaskIDs(previousTaskID)
-			} else {
-				dependentTaskIDs = nil
-			}
+			dependentTaskIDs := previousTaskIDs
 			taskID := g.Add(flow.Task{
 				Name:         createTaskName(resInfos, level),
 				Fn:           ds.createScaleTaskFn(namespace, resInfos, replicaPredicateFn, previousLevelResourceInfos),
 				Dependencies: dependentTaskIDs,
 			})
 			sf.addScaleStepInfo(taskID, dependentTaskIDs, previousLevelResourceInfos)
-			previousLevelResourceInfos = make([]scaleableResourceInfo, len(resInfos))
-			copy(previousLevelResourceInfos, resInfos)
-			previousTaskID = taskID
+			previousLevelResourceInfos = append(previousLevelResourceInfos, resInfos...)
+			if previousTaskIDs == nil {
+				previousTaskIDs = flow.NewTaskIDs(taskID)
+			} else {
+				previousTaskIDs.Insert(taskID)
+			}
 		}
 	}
 	sf.setFlow(g.Compile())
@@ -171,7 +168,6 @@ func (ds *deploymentScaler) createScaleTaskFn(namespace string, resourceInfos []
 
 func (ds *deploymentScaler) doCreateTaskFn(namespace string, resInfo scaleableResourceInfo, mismatchReplicasCheckFn func(replicas, targetReplicas int32) bool, waitOnResourceInfos []scaleableResourceInfo) flow.TaskFn {
 	return func(ctx context.Context) error {
-		log.Printf("resourceInfo: %#v\n", resInfo)
 		operation := fmt.Sprintf("scale-resource-%s.%s", namespace, resInfo.ref.Name)
 		result := util.Retry(ctx,
 			operation,
@@ -219,7 +215,7 @@ func (ds *deploymentScaler) shouldScale(ctx context.Context, deployment *appsv1.
 	}
 	// check if all resources this resource should wait on have been scaled, if not then we cannot scale this resource.
 	// Check for currently available replicas and not the desired replicas on the upstream resource dependencies.
-	if waitOnResourceInfos != nil {
+	if len(waitOnResourceInfos) > 0 {
 		return ds.waitUntilUpstreamResourcesAreScaled(ctx, waitOnResourceInfos, mismatchReplicas)
 	}
 	return true

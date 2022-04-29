@@ -158,11 +158,3 @@ func getDefaultScaleTargetReplicas(scaleType int) int32 {
 	}
 	return DefaultScaleDownReplicas
 }
-
-func (c *Config) GetSecretNames() []string {
-	secretNames := make([]string, 2)
-	// it is assumed that mandatory check will already been done in validate method, so just collect the secret names
-	secretNames = append(secretNames, c.InternalKubeConfigSecretName)
-	secretNames = append(secretNames, c.ExternalKubeConfigSecretName)
-	return secretNames
-}

@@ -2,15 +2,17 @@ package test
 
 import (
 	"fmt"
+	"log"
+
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	"log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
 
 type ControllerTestEnv interface {
 	GetClient() client.Client
+	GetConfig() *rest.Config
 	Delete()
 }
 
@@ -45,6 +47,10 @@ func CreateControllerTestEnv() (ControllerTestEnv, error) {
 
 func (te *controllerTestEnv) GetClient() client.Client {
 	return te.client
+}
+
+func (te *controllerTestEnv) GetConfig() *rest.Config {
+	return te.restConfig
 }
 
 func (te *controllerTestEnv) Delete() {

@@ -5,24 +5,26 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/gardener/dependency-watchdog/internal/test"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
 
 var (
 	secretPath     = filepath.Join("testdata", "secret.yaml")
 	kubeConfigPath = filepath.Join("testdata", "kubeconfig.yaml")
+	envTest        test.ControllerTestEnv
 	sk8sClient     client.Client
-	stestEnv       *envtest.Environment
 	sctx           = context.Background()
 	secret         *corev1.Secret
 	clientCreator  ShootClientCreator
 )
 
 func TestSuite(t *testing.T) {
+	var err error
+	g := NewWithT(t)
 	tests := []struct {
 		title string
 		run   func(t *testing.T)
@@ -31,13 +33,15 @@ func TestSuite(t *testing.T) {
 		{"kubeconfig not found", testConfigNotFound},
 		{"shootclient should be created", testCreateShootClient},
 	}
-	sk8sClient, _, stestEnv = BeforeSuite(t)
+	envTest, err = test.CreateControllerTestEnv()
+	g.Expect(err).To(BeNil())
+	sk8sClient = envTest.GetClient()
 	for _, test := range tests {
 		t.Run(test.title, func(t *testing.T) {
 			test.run(t)
 		})
 	}
-	AfterSuite(t, stestEnv)
+	envTest.Delete()
 }
 
 func testSecretNotFound(t *testing.T) {
@@ -65,7 +69,7 @@ func testCreateShootClient(t *testing.T) {
 	g := NewWithT(t)
 	teardown := setupShootCLientTest(t)
 	defer teardown()
-	kubeconfig, err := readFile(kubeConfigPath)
+	kubeconfig, err := test.ReadFile(kubeConfigPath)
 	g.Expect(err).To(BeNil())
 	g.Expect(kubeconfig).ToNot(BeNil())
 	secret.Data = map[string][]byte{
@@ -82,8 +86,8 @@ func testCreateShootClient(t *testing.T) {
 func setupShootCLientTest(t *testing.T) func() {
 	var err error
 	g := NewWithT(t)
-	fileExistsOrFail(secretPath)
-	secret, err = getStructured[corev1.Secret](secretPath)
+	test.FileExistsOrFail(secretPath)
+	secret, err = test.GetStructured[corev1.Secret](secretPath)
 	g.Expect(err).To(BeNil())
 	g.Expect(secret).ToNot(BeNil())
 	clientCreator = NewShootClientCreator(sk8sClient)

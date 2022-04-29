@@ -18,15 +18,16 @@ import (
 )
 
 var (
-	config          *Config
-	ctrl            *gomock.Controller
-	mds             *mockprober.MockDeploymentScaler
-	msc             *mockprober.MockShootClientCreator
-	clientBuilder   *fake.ClientBuilder
-	fakeClient      client.WithWatch
-	mki             *mockinterface.MockInterface
-	mdi             *mockdiscovery.MockDiscoveryInterface
-	notIgnorableErr = errors.New("Not Ignorable error")
+	config                              *Config
+	ctrl                                *gomock.Controller
+	mds                                 *mockprober.MockDeploymentScaler
+	msc                                 *mockprober.MockShootClientCreator
+	clientBuilder                       *fake.ClientBuilder
+	fakeClient                          client.WithWatch
+	mki                                 *mockinterface.MockInterface
+	mdi                                 *mockdiscovery.MockDiscoveryInterface
+	notIgnorableErr                     = errors.New("Not Ignorable error")
+	internalProbeFailureBackoffDuration = time.Millisecond
 )
 
 type entry struct {
@@ -184,9 +185,10 @@ func setupProberTest(t *testing.T) {
 
 func createConfig(successThreshold int, failureThreshold int, probeInterval time.Duration, backoffJitterFactor float64) *Config {
 	return &Config{
-		SuccessThreshold:    &successThreshold,
-		FailureThreshold:    &failureThreshold,
-		ProbeInterval:       &probeInterval,
-		BackoffJitterFactor: &backoffJitterFactor,
+		SuccessThreshold:                    &successThreshold,
+		FailureThreshold:                    &failureThreshold,
+		ProbeInterval:                       &probeInterval,
+		BackoffJitterFactor:                 &backoffJitterFactor,
+		InternalProbeFailureBackoffDuration: &internalProbeFailureBackoffDuration,
 	}
 }
