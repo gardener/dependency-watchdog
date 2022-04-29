@@ -424,7 +424,7 @@ func (p *prober) handleError(pr *probeResult, err error, msg string) {
 	if pr.lastError != nil {
 		klog.Errorf("%s: Probe finished with error %s for resultRun:%d", msg, pr.lastError.Error(), pr.resultRun)
 	} else {
-		klog.V(4).Infof("%s: Probe finished successfully for rusultRun:%d", msg, pr.resultRun)
+		klog.V(4).Infof("%s: Probe finished successfully for resultRun:%d", msg, pr.resultRun)
 	}
 
 }
