@@ -9,15 +9,17 @@
     - [Goals](#goals)
     - [Out of scope](#out-of-scope)
   - [Proposal](#proposal)
-    - [Prober Configuration](#prober-configuration)
-      - [Scaling level](#scaling-level)
-    - [Prober lifecycle](#prober-lifecycle)
-      - [Creation of a probe](#creation-of-a-probe)
-      - [Removal of a probe](#removal-of-a-probe)
-    - [Internal and External probes](#internal-and-external-probes)
-    - [Scaler Flow](#scaler-flow)
-    - [Metrics](#metrics)
-  - [Release dependencies](#release-dependencies)
+    - [Prober Changes](#prober-changes)
+      - [Prober Configuration](#prober-configuration)
+        - [Scaling level](#scaling-level)
+      - [Prober lifecycle](#prober-lifecycle)
+        - [Creation of a probe](#creation-of-a-probe)
+        - [Removal of a probe](#removal-of-a-probe)
+      - [Internal and External probes](#internal-and-external-probes)
+      - [Scaler Flow](#scaler-flow)
+      - [Metrics](#metrics)
+  - [Weeder Changes](#weeder-changes)
+    - [Release dependencies](#release-dependencies)
 
 ## Summary
 
@@ -68,9 +70,10 @@ API server probes. If this generality is required then further changes can be ta
 
 ## Proposal
 
+### Prober Changes
 Several changes are proposed in the design of the prober.
 
-### Prober Configuration
+#### Prober Configuration
 
 To allow both sequential (ordered) and concurrent scaling up/down of resources we propose to change to the prober
 configuration. Following will be the new configuration:
@@ -143,7 +146,7 @@ dependentResourceInfos:
 > 
 
 
-#### Scaling level
+##### Scaling level
 
 Each dependent resource that should be scaled up or down is associated to a level. Levels are ordered and processed in
 ascending order (starting with 0). In the above sample configuration for a `Scale-down` operation
@@ -151,7 +154,7 @@ both `kube-controller-manager` and `machine-controller-manager`  will be scale d
 same level). Only once they have been successfully scaled down will `cluster-autoscaler` which is level 1 be scaled
 down.
 
-### Prober lifecycle
+#### Prober lifecycle
 
 In the current code probers for each shoot cluster were destroyed and re-created upon receipt of CRUD events for
 internal/external secrets for the shoot and also for cluster update events. This was done asynchronously and resulted in
@@ -162,14 +165,14 @@ In the new proposal we have attempted to significantly simplify the lifecycle of
 A reconciler which is registered to a controller-runtime `Manager` will be only listening actively for CRUD events
 on `Cluster` resources.
 
-#### Creation of a probe
+##### Creation of a probe
 
 When a `Reconciler` receives a request for a `Cluster` change, it will query the extension kube-api server to get
 the `Cluster` resource.
 If there is no existing running probe found, it will create a new probe, only if the cluster state is not `hibernated`
 OR if `cluster.shoot.spec.hibernation.enabled` is not set to true.
 
-#### Removal of a probe
+##### Removal of a probe
 
 There are only two events which can cause an active probe to be removed for a shoot cluster.
 
@@ -208,14 +211,14 @@ any existing probe for this shoot cluster will be cancelled.
 > An [gardener#5878](https://github.com/gardener/gardener/issues/5878) has been raised to enhance reconciliation done in gardener.
 >
 
-### Internal and External probes
+#### Internal and External probes
 
 Each `Probe` periodically polls the internal and external DNS endpoints for the shoot Kube API server. KubeConfig secrets will get rotated periodically. In the existing design the reconciler actively watches secrets and if the secret change event is received for kubeconfig secrets for a shoot then the existing probe is cancelled and a new probe is started. We found that this approach does not offer real benefits but only causes race conditions as there is more than one trigger which can result in cancelling an existing probe and this can cause in-deterministic behavior.
 
 It was decided to significantly simplify the design and leverage the cache that `controller-runtime` creates for every reconciler when a `GET` request is made for a resource. It will automatically also create a `Watch` on the resource and keep its cache up-to-date. A probe once created will not be cancelled on change of any secret, instead for every poll it will freshly `GET` the kube-config secret, create a kubernetes client and use that to run the probe. This will hit the cache most of the times and not result in adding load to the Kube API server.
 
 
-### Scaler Flow
+#### Scaler Flow
 
 Resources to be scaled and the order in which the scaling needs to be done in defined as part of a `ConfigMap` which is created in the `garden` namespace at the time of seed creation. This configuration does not change during the lifetime of DWD `Prober`. The configuation now allows concurrent scale up or scale down of resources. 
 
@@ -226,7 +229,7 @@ DWD now represents the dependent resources, their start order and their relative
 
 It is now possible to unit test creation of the flow to ensure that proper order has been set and concurrent tasks are properly set as well. Additional unit tests have been created which programmatically brings up a vanilla `KIND` cluster to test the `Flow`s.
 
-### Metrics
+#### Metrics
 
 At present DWD does not expose any metrics. We propose to capture and expose the following metrics:
 
@@ -246,7 +249,11 @@ At present DWD does not expose any metrics. We propose to capture and expose the
 
 TODO: Find out where the changes needs to be made in `gardener/gardener`.
 
-## Release dependencies
+## Weeder Changes
+
+> NOTE: Will be added in the next iteration of this document.
+
+### Release dependencies
 
 To release this version of `DWD` following are the upstream dependent changes:
 
