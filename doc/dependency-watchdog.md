@@ -20,6 +20,10 @@
 
 ## Summary
 
+`DWD` has primarily two functions:
+1. It periodically checks the reachability of shoot API server by trying to reach it via internal and external endpoints. If the shoot API server is no longer reachable via external probe then it will initiate the scale down of dependent resources in the order as defined in the DWD prober `ConfigMap`. If and when the shoot API server reachability is restored it will scale back the dependent resources in the order as defined in the DWD prober `ConfigMap`.
+2. If and when `etcd` is unavailable and subsequently recovers after some time then it checks if the dependent control-plane components are in `CrashLookBackoff`. If they are in this state then it will delete this pods, forcing a restart to reduce the unavailability of dependent control plane components.
+
 The current design of Dependency-Watchdog (a.k.a `DWD`) has flaws which results in race conditions, non-deterministic
 behavior due to heavy usage of `un-substantiated` sleep and timeout values and complex goroutine handling leading to
 inconsistent behavior w.r.t scaling of dependent resource. The proposal is to revamp the design and make it testable and
@@ -134,6 +138,10 @@ dependentResourceInfos:
 
 ```
 
+> NOTE: Only `Level` configuration is defined in a separate section. For semantic of other configuration properties check the comments that have been added against each configuration item.
+> 
+
+
 #### Scaling level
 
 Each dependent resource that should be scaled up or down is associated to a level. Levels are ordered and processed in
@@ -204,7 +212,7 @@ any existing probe for this shoot cluster will be cancelled.
 Resources to be scaled and the order in which the scaling needs to be done in defined as part of a `ConfigMap` which is created in the `garden` namespace at the time of seed creation. This configuration does not change during the lifetime of DWD `Prober`. The configuation now allows concurrent scale up or scale down of resources. 
 
 DWD now represents the dependent resources, their start order and their relative dependencies by representing it as a `Graph`. It leverages an existing [flow](https://github.com/gardener/gardener/tree/master/pkg/utils/flow) framework to do the following:
-1. Create the flow consisting of scale up/down of dependent resources at the time of creation of a probe for a shoot cluster.
+1. Creates the flow consisting of scale up/down of dependent resources at the time of creation of a probe for a shoot cluster.
 2. Utilizes `taskFn.Parallel` to model actions on dependent resources having the same `Level`.
 3. Utilizes the capability to specify `Dependencies` between two nodes in a `Graph` to establish clear order for scaling operations.
 
