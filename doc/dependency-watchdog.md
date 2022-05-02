@@ -73,7 +73,7 @@ API server probes. If this generality is required then further changes can be ta
 ### Prober Changes
 Several changes are proposed in the design of the prober.
 
-#### Prober Configuration
+#### Configuration
 
 To allow both sequential (ordered) and concurrent scaling up/down of resources we propose to change to the prober
 configuration. Following will be the new configuration:
@@ -253,7 +253,7 @@ TODO: Find out where the changes needs to be made in `gardener/gardener`.
 
 > NOTE: Will be added in the next iteration of this document.
 
-### Release dependencies
+## Release dependencies
 
 To release this version of `DWD` following are the upstream dependent changes:
 
