@@ -16,6 +16,7 @@
       - [Removal of a probe](#removal-of-a-probe)
     - [Scaler Flow](#scaler-flow)
     - [Metrics](#metrics)
+  - [Release dependencies:](#release-dependencies)
 
 ## Summary
 
@@ -227,4 +228,14 @@ At present DWD does not expose any metrics. We propose to capture and expose the
 * Total number of scaling (Up/Down) attempts
 
 TODO: Find out where the changes needs to be made in `gardener/gardener`.
+
+## Release dependencies:
+
+To release this version of `DWD` following are the upstream dependent changes:
+
+1. Update of docs [here](https://github.com/gardener/gardener/blob/master/docs/usage/seed_bootstrapping.md).
+2. Implementation of [Gardener Enhancement: #5878](https://github.com/gardener/gardener/issues/5878)
+3. Change the configuration for the DWD prober [here](https://github.com/gardener/gardener/blob/master/pkg/operation/botanist/component/kubeapiserver/dependency_watchdog.go)
+
+
 
