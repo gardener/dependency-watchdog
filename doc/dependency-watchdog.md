@@ -14,6 +14,7 @@
     - [Prober lifecycle](#prober-lifecycle)
       - [Creation of a probe](#creation-of-a-probe)
       - [Removal of a probe](#removal-of-a-probe)
+    - [Internal and External probes](#internal-and-external-probes)
     - [Scaler Flow](#scaler-flow)
     - [Metrics](#metrics)
   - [Release dependencies](#release-dependencies)
@@ -206,6 +207,13 @@ any existing probe for this shoot cluster will be cancelled.
 > Therefore, the decision was to only cancel the probe if the cluster has been marked for `hibernation`. 
 > An [gardener#5878](https://github.com/gardener/gardener/issues/5878) has been raised to enhance reconciliation done in gardener.
 >
+
+### Internal and External probes
+
+Each `Probe` periodically polls the internal and external DNS endpoints for the shoot Kube API server. KubeConfig secrets will get rotated periodically. In the existing design the reconciler actively watches secrets and if the secret change event is received for kubeconfig secrets for a shoot then the existing probe is cancelled and a new probe is started. We found that this approach does not offer real benefits but only causes race conditions as there is more than one trigger which can result in cancelling an existing probe and this can cause in-deterministic behavior.
+
+It was decided to significantly simplify the design and leverage the cache that `controller-runtime` creates for every reconciler when a `GET` request is made for a resource. It will automatically also create a `Watch` on the resource and keep its cache up-to-date. A probe once created will not be cancelled on change of any secret, instead for every poll it will freshly `GET` the kube-config secret, create a kubernetes client and use that to run the probe. This will hit the cache most of the times and not result in adding load to the Kube API server.
+
 
 ### Scaler Flow
 
