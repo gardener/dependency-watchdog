@@ -10,7 +10,7 @@
     - [Out of scope](#out-of-scope)
   - [Proposal](#proposal)
     - [Prober Changes](#prober-changes)
-      - [Prober Configuration](#prober-configuration)
+      - [Configuration](#configuration)
         - [Scaling level](#scaling-level)
       - [Prober lifecycle](#prober-lifecycle)
         - [Creation of a probe](#creation-of-a-probe)
@@ -19,7 +19,7 @@
       - [Scaler Flow](#scaler-flow)
       - [Metrics](#metrics)
   - [Weeder Changes](#weeder-changes)
-    - [Release dependencies](#release-dependencies)
+  - [Release dependencies](#release-dependencies)
 
 ## Summary
 
