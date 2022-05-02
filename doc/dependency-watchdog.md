@@ -16,7 +16,7 @@
       - [Removal of a probe](#removal-of-a-probe)
     - [Scaler Flow](#scaler-flow)
     - [Metrics](#metrics)
-  - [Release dependencies:](#release-dependencies)
+  - [Release dependencies](#release-dependencies)
 
 ## Summary
 
@@ -56,9 +56,10 @@ leading to a lot of manual effort in testing and leaving DWD codebase vulnerable
 
 ### Out of scope
 
-DWD currently only scales dependent control plane components based on the result of internal and external probe to the
+* DWD currently only scales dependent control plane components based on the result of internal and external probe to the
 shoot API server. It is not the intent of this proposal to allow consumers to define custom probe endpoint(s) other than
 API server probes. If this generality is required then further changes can be taken up at a later point in time.
+* The current version of the document only details out the `Prober` part of DWD. This document will be enhanced with other function of DWD which has now been renamed to `Weeder` (previously known as `Endpoint`).
 
 ## Proposal
 
@@ -229,7 +230,7 @@ At present DWD does not expose any metrics. We propose to capture and expose the
 
 TODO: Find out where the changes needs to be made in `gardener/gardener`.
 
-## Release dependencies:
+## Release dependencies
 
 To release this version of `DWD` following are the upstream dependent changes:
 
