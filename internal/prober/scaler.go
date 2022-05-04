@@ -48,7 +48,7 @@ func NewDeploymentScaler(namespace string, config *Config, client client.Client,
 
 // scaleableResourceInfo contains a flattened scaleUp or scaleDown resource info for a given resource reference
 type scaleableResourceInfo struct {
-	ref          autoscalingv1.CrossVersionObjectReference
+	ref          *autoscalingv1.CrossVersionObjectReference
 	level        int
 	initialDelay time.Duration
 	timeout      time.Duration
@@ -230,7 +230,7 @@ func (ds *deploymentScaler) resourceMatchDesiredReplicas(ctx context.Context, re
 	if !isIgnoreScalingAnnotationSet(d) {
 		actualReplicas := d.Status.Replicas
 		if !mismatchReplicas(actualReplicas, resInfo.replicas) {
-			logger.V(4).Info("resource has still not been scaled to the desired replicas", "namespace", ds.namespace, "deploymentToScale", d.Name, "resourceInfo", resInfo, "actualReplicas", actualReplicas)
+			logger.V(4).Info("resource has been scaled to the desired replicas", "namespace", ds.namespace, "deploymentToScale", d.Name, "resourceInfo", resInfo, "actualReplicas", actualReplicas)
 			return true
 		} else {
 			return false
@@ -275,7 +275,7 @@ func (ds *deploymentScaler) doScale(ctx context.Context, resourceInfo scaleableR
 	return ds.scaler.Update(ctx, gr, scale, metav1.UpdateOptions{})
 }
 
-func (ds *deploymentScaler) getGroupResource(resourceRef autoscalingv1.CrossVersionObjectReference) (schema.GroupResource, error) {
+func (ds *deploymentScaler) getGroupResource(resourceRef *autoscalingv1.CrossVersionObjectReference) (schema.GroupResource, error) {
 	gv, _ := schema.ParseGroupVersion(resourceRef.APIVersion) // Ignoring the error as this validation has already been done when initially validating the Config
 	gk := schema.GroupKind{
 		Group: gv.Group,

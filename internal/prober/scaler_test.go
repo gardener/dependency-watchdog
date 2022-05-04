@@ -21,9 +21,9 @@ import (
 var (
 	defaultInitialDelay = 10 * time.Millisecond
 	defaultTimeout      = 20 * time.Millisecond
-	mcmRef              = autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "machine-controller-manager", APIVersion: "apps/v1"}
-	kcmRef              = autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "kube-controller-manager", APIVersion: "apps/v1"}
-	caRef               = autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "cluster-autoscaler", APIVersion: "apps/v1"}
+	mcmRef              = &autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "machine-controller-manager", APIVersion: "apps/v1"}
+	kcmRef              = &autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "kube-controller-manager", APIVersion: "apps/v1"}
+	caRef               = &autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "cluster-autoscaler", APIVersion: "apps/v1"}
 	kindTestEnv         test.KindCluster
 	cfg                 *rest.Config
 	probeCfg            *Config
@@ -38,37 +38,34 @@ const (
 	ignoreScaleAnnotationKey = "dependency-watchdog.gardener.cloud/ignore-scaling"
 )
 
-func beforAll(g *WithT) {
+func beforeAll(g *WithT) {
 	var err error
 	kindTestEnv, err = test.CreateKindCluster(test.KindConfig{Name: "test"})
 	g.Expect(err).To(BeNil())
 	cfg = kindTestEnv.GetRestConfig()
 	scalesGetter, err = util.CreateScalesGetter(cfg)
 	g.Expect(err).To(BeNil())
-	createProbeConfig()
-
-	ds = NewDeploymentScaler(namespace, probeCfg, kindTestEnv.GetClient(), scalesGetter,
-		withDependentResourceCheckTimeout(10*time.Second), withDependentResourceCheckInterval(100*time.Millisecond))
 }
 
 func TestScalerSuite(t *testing.T) {
 	g := NewWithT(t)
-	beforAll(g)
+	beforeAll(g)
+	createProbeConfig()
+	ds = NewDeploymentScaler(namespace, probeCfg, kindTestEnv.GetClient(), scalesGetter,
+		withDependentResourceCheckTimeout(10*time.Second), withDependentResourceCheckInterval(100*time.Millisecond))
 	tests := []struct {
 		title string
 		run   func(t *testing.T)
-		after func(namespace string) error
 	}{
-		{"test scaling when deployment is not found", testScalingWhenDeploymentNotFound, kindTestEnv.DeleteAllDeployments},
-		{"test scaling when all deployments are found", testScalingWhenAllDeploymentsAreFound, kindTestEnv.DeleteAllDeployments},
+		{"test when kind of CA dependent resource is wrong", testWhenKindOfDependentResourceIsWrong},
+		{"test scaling when deployment is not found", testScalingWhenDeploymentNotFound},
+		{"test scaling when all deployments are found", testScalingWhenAllDeploymentsAreFound},
 	}
 	for _, test := range tests {
 		t.Run(test.title, func(t *testing.T) {
 			test.run(t)
-			if test.after != nil {
-				err := test.after(namespace)
-				g.Expect(err).To(BeNil())
-			}
+			err := kindTestEnv.DeleteAllDeployments(namespace)
+			g.Expect(err).To(BeNil())
 		})
 	}
 	kindTestEnv.Delete()
@@ -115,7 +112,8 @@ func testScalingWhenAllDeploymentsAreFound(t *testing.T) {
 		matchStatusReplicas(g, namespace, caRef.Name, entry.expectedScaledCAReplicas)
 		matchStatusReplicas(g, namespace, kcmRef.Name, entry.expectedScaledKCMReplicas)
 		matchStatusReplicas(g, namespace, mcmRef.Name, entry.expectedScaledMCMReplicas)
-		kindTestEnv.DeleteAllDeployments(namespace)
+		err = kindTestEnv.DeleteAllDeployments(namespace)
+		g.Expect(err).To(BeNil())
 	}
 }
 
@@ -143,6 +141,42 @@ func testScalingWhenDeploymentNotFound(t *testing.T) {
 		g.Expect(err.Error()).To(ContainSubstring("\"" + kcmRef.Name + "\" not found"))
 		matchSpecReplicas(g, namespace, mcmRef.Name, entry.expectedScaledMCMReplicas)
 		matchSpecReplicas(g, namespace, caRef.Name, entry.expectedScaledCAReplicas)
+		err = kindTestEnv.DeleteAllDeployments(namespace)
+		g.Expect(err).To(BeNil())
+	}
+}
+
+func testWhenKindOfDependentResourceIsWrong(t *testing.T) {
+	g := NewWithT(t)
+	faultyProbeCfg := createFaultyProbeConfig()
+	newDS := NewDeploymentScaler(namespace, faultyProbeCfg, kindTestEnv.GetClient(), scalesGetter,
+		withDependentResourceCheckTimeout(10*time.Second), withDependentResourceCheckInterval(100*time.Millisecond))
+	table := []struct {
+		mcmReplicas               int32
+		kcmReplicas               int32
+		caReplicas                int32
+		expectedScaledMCMReplicas int32
+		expectedScaledKCMReplicas int32
+		expectedScaledCAReplicas  int32
+		scalingFn                 func(context.Context) error
+	}{
+		{0, 0, 0, 0, 0, 0, newDS.ScaleUp},
+		{1, 1, 1, 0, 0, 1, newDS.ScaleDown},
+	}
+	for _, entry := range table {
+		createDeployment(g, namespace, mcmRef.Name, deploymentImageName, entry.mcmReplicas, nil)
+		createDeployment(g, namespace, caRef.Name, deploymentImageName, entry.caReplicas, nil)
+		createDeployment(g, namespace, kcmRef.Name, deploymentImageName, entry.kcmReplicas, nil)
+
+		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, mcmRef.Name, entry.mcmReplicas) }, 10*time.Second, 100*time.Millisecond).Should(BeTrue())
+		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, caRef.Name, entry.caReplicas) }, 10*time.Second, 100*time.Millisecond).Should(BeTrue())
+		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, kcmRef.Name, entry.kcmReplicas) }, 10*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		err := entry.scalingFn(ctx)
+		g.Expect(err).ToNot(BeNil())
+		matchStatusReplicas(g, namespace, caRef.Name, entry.expectedScaledCAReplicas)
+		matchStatusReplicas(g, namespace, kcmRef.Name, entry.expectedScaledKCMReplicas)
+		matchStatusReplicas(g, namespace, mcmRef.Name, entry.expectedScaledMCMReplicas)
 		err = kindTestEnv.DeleteAllDeployments(namespace)
 		g.Expect(err).To(BeNil())
 	}
@@ -272,7 +306,7 @@ func createScaleableResourceInfos(numResInfosByLevel map[int]int) []scaleableRes
 	for k, v := range numResInfosByLevel {
 		for i := 0; i < v; i++ {
 			resInfos = append(resInfos, scaleableResourceInfo{
-				ref:   autoscalingv1.CrossVersionObjectReference{Name: fmt.Sprintf("resource-%d%d", k, i)},
+				ref:   &autoscalingv1.CrossVersionObjectReference{Name: fmt.Sprintf("resource-%d%d", k, i)},
 				level: k,
 			})
 		}
@@ -282,7 +316,7 @@ func createScaleableResourceInfos(numResInfosByLevel map[int]int) []scaleableRes
 
 func createDependentResourceInfo(name string, scaleUpLevel, scaleDownLevel int, scaleUpReplicas, scaleDownReplicas int32) DependentResourceInfo {
 	return DependentResourceInfo{
-		Ref: autoscalingv1.CrossVersionObjectReference{Name: name, Kind: "Deployment", APIVersion: "apps/v1"},
+		Ref: &autoscalingv1.CrossVersionObjectReference{Name: name, Kind: "Deployment", APIVersion: "apps/v1"},
 		ScaleUpInfo: &ScaleInfo{
 			Level:        scaleUpLevel,
 			InitialDelay: &defaultInitialDelay,
@@ -336,9 +370,20 @@ func matchStatusReplicas(g *WithT, namespace string, name string, expectedReplic
 }
 
 func createProbeConfig() {
+	dependentResourceInfos := createDepResourceInfoArray()
+	probeCfg = &Config{Namespace: namespace, DependentResourceInfos: dependentResourceInfos}
+}
+
+func createFaultyProbeConfig() *Config {
+	dependentResourceInfos := createDepResourceInfoArray()
+	dependentResourceInfos[2].Ref.Kind = "Depoyment"
+	return &Config{Namespace: namespace, DependentResourceInfos: dependentResourceInfos}
+}
+
+func createDepResourceInfoArray() []DependentResourceInfo {
 	var dependentResourceInfos []DependentResourceInfo
 	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(mcmRef.Name, 2, 0, 1, 0))
 	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(kcmRef.Name, 1, 0, 1, 0))
 	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(caRef.Name, 0, 1, 1, 0))
-	probeCfg = &Config{Namespace: namespace, DependentResourceInfos: dependentResourceInfos}
+	return dependentResourceInfos
 }

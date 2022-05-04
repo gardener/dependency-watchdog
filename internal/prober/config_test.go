@@ -37,25 +37,52 @@ func TestCheckIfDefaultValuesAreSetForAllOptionalMissingValues(t *testing.T) {
 		g.Expect(*resInfo.ScaleDownInfo.Replicas).To(Equal(DefaultScaleDownReplicas), fmt.Sprintf("LoadConfig should set scale down replicas for %v to DefaultScaleDownReplicas if not set in the config file", resInfo.Ref.Name))
 		g.Expect(resInfo.ScaleDownInfo.Timeout.Milliseconds()).To(Equal(DefaultScaleUpdateTimeout.Milliseconds()), fmt.Sprintf("LoadConfig should set scale down timeout for %v to DefaultScaleDownTimeout if not set in the config file", resInfo.Ref.Name))
 	}
-
 	t.Log("All missing values are set")
 }
 
 func TestMissingConfigValuesShouldReturnErrorAndNilConfig(t *testing.T) {
+	table := []struct {
+		fileName         string
+		expectedErrCount int
+	}{
+		{"config_missing_mandatory_values.yaml", 7},
+		{"config_missing_mandatory_values_2.yaml", 4},
+	}
+
+	for _, entry := range table {
+		g := NewWithT(t)
+		validateIfFileExists(testdataPath, t)
+		configPath := filepath.Join(testdataPath, entry.fileName)
+		validateIfFileExists(configPath, t)
+		config, err := LoadConfig(configPath)
+
+		g.Expect(err).To(HaveOccurred(), "LoadConfig should return error for a config with missing mandatory values")
+		g.Expect(config).To(BeNil(), "LoadConfig should return a nil config for a file with missing mandatory values")
+		if merr, ok := err.(*multierr.Error); ok {
+			g.Expect(len(merr.Errors)).To(Equal(entry.expectedErrCount), "LoadConfig did not return all the errors for a faulty config")
+		}
+	}
+	t.Log("All the missing mandatory values are identified")
+}
+
+func TestConfigFileNotFound(t *testing.T) {
+	g := NewWithT(t)
+	config, err := LoadConfig(filepath.Join(testdataPath, "notfound.yaml"))
+	g.Expect(err).To(HaveOccurred(), "LoadConfig should give error if config file is not found")
+	g.Expect(config).To(BeNil(), "LoadConfig should return a nil config if config file is not found")
+	g.Expect(err.Error()).To(ContainSubstring("no such file or directory"), "LoadConfig did not load all the dependent resources")
+}
+
+func TestErrorInUnMarshallingYaml(t *testing.T) {
 	g := NewWithT(t)
 	validateIfFileExists(testdataPath, t)
 
-	configPath := filepath.Join(testdataPath, "config_missing_mandatory_values.yaml")
+	configPath := filepath.Join(testdataPath, "invalidsyntax.yaml")
 	validateIfFileExists(configPath, t)
 	config, err := LoadConfig(configPath)
-
-	g.Expect(err).To(HaveOccurred(), "LoadConfig should return error for a config with missing mandatory values")
-	g.Expect(config).To(BeNil(), "LoadConfig should return a nil config for a file with missing mandatory values")
-	if merr, ok := err.(*multierr.Error); ok {
-		g.Expect(len(merr.Errors)).To(Equal(6), "LoadConfig did not return all the errors for a faulty config")
-	}
-
-	t.Log("All the missing mandatory values are identified")
+	g.Expect(err).To(HaveOccurred(), "LoadConfig should not give error for a valid config")
+	g.Expect(config).To(BeNil(), "LoadConfig should got nil config for a valid file")
+	g.Expect(err.Error()).To(ContainSubstring("string was used where mapping is expected"), "Wrong error recieved")
 }
 
 func TestValidConfigShouldPassAllValidations(t *testing.T) {

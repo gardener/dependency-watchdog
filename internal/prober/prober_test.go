@@ -1,6 +1,7 @@
 package prober
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	version "k8s.io/apimachinery/pkg/version"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -30,7 +32,7 @@ var (
 	internalProbeFailureBackoffDuration = time.Millisecond
 )
 
-type entry struct {
+type probeStatusEntry struct {
 	name                              string
 	err                               error
 	expectedInternalProbeSuccessCount int
@@ -40,7 +42,7 @@ type entry struct {
 }
 
 func TestInternalProbeErrorCount(t *testing.T) {
-	table := []entry{
+	table := []probeStatusEntry{
 		{"Success Count is less than Threshold", nil, 1, 0, 0, 0},
 		{"Unignorable error is returned by doProbe", notIgnorableErr, 0, 1, 0, 0},
 		{"Not found error is returned by doProbe", apierrors.NewNotFound(schema.GroupResource{}, "test"), 0, 0, 0, 0},
@@ -49,49 +51,49 @@ func TestInternalProbeErrorCount(t *testing.T) {
 		{"Throttling error is returned by doProbe", apierrors.NewTooManyRequests("Too many requests", 10), 0, 0, 0, 0},
 	}
 
-	for _, entry := range table {
-		t.Run(entry.name, func(t *testing.T) {
+	for _, probeStatusEntry := range table {
+		t.Run(probeStatusEntry.name, func(t *testing.T) {
 			setupProberTest(t)
 			config = createConfig(2, 1, 2*time.Millisecond, 0.2)
 
 			msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).Times(1)
 			mki.EXPECT().Discovery().Return(mdi).Times(1)
-			mdi.EXPECT().ServerVersion().Return(nil, entry.err).Times(1)
+			mdi.EXPECT().ServerVersion().Return(nil, probeStatusEntry.err).Times(1)
 
-			runProberAndCheckStatus(t, time.Millisecond, entry)
+			runProberAndCheckStatus(t, time.Millisecond, probeStatusEntry)
 		})
 	}
 }
 
 func TestHealthyProbesShouldRunScaleUp(t *testing.T) {
-	table := []entry{
+	table := []probeStatusEntry{
 		{"Scale Up Succeeds", nil, 1, 0, 1, 0},
 		{"Scale Up Fails", errors.New("Scale Up failed"), 1, 0, 1, 0},
 	}
 
-	for _, entry := range table {
-		t.Run(entry.name, func(t *testing.T) {
+	for _, probeStatusEntry := range table {
+		t.Run(probeStatusEntry.name, func(t *testing.T) {
 			setupProberTest(t)
 			config = createConfig(1, 1, 2*time.Millisecond, 0.2)
 
 			msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).Times(2)
 			mki.EXPECT().Discovery().Return(mdi).AnyTimes().Times(2)
 			mdi.EXPECT().ServerVersion().Return(nil, nil).Times(2)
-			mds.EXPECT().ScaleUp(gomock.Any()).Return(entry.err).Times(1)
+			mds.EXPECT().ScaleUp(gomock.Any()).Return(probeStatusEntry.err).Times(1)
 
-			runProberAndCheckStatus(t, time.Millisecond, entry)
+			runProberAndCheckStatus(t, time.Millisecond, probeStatusEntry)
 		})
 	}
 }
 
 func TestExternalProbeFailingShouldRunScaleDown(t *testing.T) {
-	table := []entry{
+	table := []probeStatusEntry{
 		{"Scale Down Succeeds", nil, 2, 0, 0, 2},
 		{"Scale Down Fails", errors.New("Scale Down failed"), 2, 0, 0, 2},
 	}
 
-	for _, entry := range table {
-		t.Run(entry.name, func(t *testing.T) {
+	for _, probeStatusEntry := range table {
+		t.Run(probeStatusEntry.name, func(t *testing.T) {
 			setupProberTest(t)
 			config = createConfig(1, 2, 5*time.Millisecond, 0.2)
 			runCounter := 0
@@ -105,23 +107,23 @@ func TestExternalProbeFailingShouldRunScaleDown(t *testing.T) {
 				}
 				return nil, notIgnorableErr
 			}).Times(4)
-			mds.EXPECT().ScaleDown(gomock.Any()).Return(entry.err).Times(1)
+			mds.EXPECT().ScaleDown(gomock.Any()).Return(probeStatusEntry.err).Times(1)
 
-			runProberAndCheckStatus(t, 8*time.Millisecond, entry)
+			runProberAndCheckStatus(t, 8*time.Millisecond, probeStatusEntry)
 		})
 	}
 }
 
 func TestUnchangedExternalErrorCountForIgnorableErrors(t *testing.T) {
-	table := []entry{
+	table := []probeStatusEntry{
 		{"Not found error is returned by doProbe", apierrors.NewNotFound(schema.GroupResource{}, "test"), 2, 0, 0, 0},
 		{"Forbidden request error is returned by doProbe", apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden")), 2, 0, 0, 0},
 		{"Unauthorized request error is returned by doProbe", apierrors.NewUnauthorized("unauthorized"), 2, 0, 0, 0},
 		{"Throttling error is returned by doProbe", apierrors.NewTooManyRequests("Too many requests", 10), 2, 0, 0, 0},
 	}
 
-	for _, entry := range table {
-		t.Run(entry.name, func(t *testing.T) {
+	for _, probeStatusEntry := range table {
+		t.Run(probeStatusEntry.name, func(t *testing.T) {
 			setupProberTest(t)
 			config = createConfig(1, 2, 5*time.Millisecond, 0.2)
 			runCounter := 0
@@ -133,15 +135,57 @@ func TestUnchangedExternalErrorCountForIgnorableErrors(t *testing.T) {
 				if runCounter%2 == 1 {
 					return nil, nil
 				}
-				return nil, entry.err
+				return nil, probeStatusEntry.err
 			}).MinTimes(2).MaxTimes(4)
 
-			runProberAndCheckStatus(t, 8*time.Millisecond, entry)
+			runProberAndCheckStatus(t, 8*time.Millisecond, probeStatusEntry)
 		})
 	}
 }
 
-func runProberAndCheckStatus(t *testing.T, duration time.Duration, entry entry) {
+func TestInternalProbeShouldNotRunIfClientNotCreated(t *testing.T) {
+	err := errors.New("cannot create kubernetes client")
+	setupProberTest(t)
+	entry := probeStatusEntry{
+		name:                              "internal probe should not run if client to access it is not created",
+		err:                               err,
+		expectedInternalProbeSuccessCount: 0,
+		expectedInternalProbeErrorCount:   0,
+		expectedExternalProbeSuccessCount: 0,
+		expectedExternalProbeErrorCount:   0,
+	}
+	config = createConfig(1, 2, 5*time.Millisecond, 0.2)
+	msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, err).Times(2)
+	runProberAndCheckStatus(t, 8*time.Millisecond, entry)
+}
+
+func TestExternalProbeShouldNotRunIfClientNotCreated(t *testing.T) {
+	err := errors.New("cannot create kubernetes client")
+	setupProberTest(t)
+	counter := 0
+	entry := probeStatusEntry{
+		name:                              "external probe should not run if client to access it is not created",
+		err:                               err,
+		expectedInternalProbeSuccessCount: 2,
+		expectedInternalProbeErrorCount:   0,
+		expectedExternalProbeSuccessCount: 0,
+		expectedExternalProbeErrorCount:   0,
+	}
+	config = createConfig(1, 2, 5*time.Millisecond, 0.2)
+	msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(context.Context, string, string) (kubernetes.Interface, error) {
+		counter++
+		if counter%2 == 1 {
+			return mki, nil
+		} else {
+			return nil, err
+		}
+	}).Times(4)
+	mki.EXPECT().Discovery().Return(mdi).Times(2)
+	mdi.EXPECT().ServerVersion().Return(nil, nil).Times(2)
+	runProberAndCheckStatus(t, 8*time.Millisecond, entry)
+}
+
+func runProberAndCheckStatus(t *testing.T, duration time.Duration, probeStatusEntry probeStatusEntry) {
 	g := NewWithT(t)
 	p := NewProber("default", config, fakeClient, mds, msc)
 	g.Expect(p.IsClosed()).To(BeFalse())
@@ -149,8 +193,8 @@ func runProberAndCheckStatus(t *testing.T, duration time.Duration, entry entry) 
 	runProber(p, duration)
 
 	g.Expect(p.IsClosed()).To(BeTrue())
-	checkProbeStatus(t, p.internalProbeStatus, entry.expectedInternalProbeSuccessCount, entry.expectedInternalProbeErrorCount)
-	checkProbeStatus(t, p.externalProbeStatus, entry.expectedExternalProbeSuccessCount, entry.expectedExternalProbeErrorCount)
+	checkProbeStatus(t, p.internalProbeStatus, probeStatusEntry.expectedInternalProbeSuccessCount, probeStatusEntry.expectedInternalProbeErrorCount)
+	checkProbeStatus(t, p.externalProbeStatus, probeStatusEntry.expectedExternalProbeSuccessCount, probeStatusEntry.expectedExternalProbeErrorCount)
 }
 
 func runProber(p *Prober, d time.Duration) {

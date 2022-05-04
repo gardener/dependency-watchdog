@@ -6,13 +6,13 @@ probeInterval: 20s
 initialDelay: 5s
 successThreshold: 1
 failureThreshold: 3
-backOffDuration: 30s
+internalProbeFailureBackoffDuration: 30s
 backOffJitterFactor: 0.2
 dependentResourceInfos:
   - ref:
       kind: "Deployment"
       name: "kube-controller-manager"
-      apiVersion: "apps/v1"
+      apiVersion: "apps/v/1"
   - ref:
       kind: "Deployment"
       name: "machine-controller-manager"

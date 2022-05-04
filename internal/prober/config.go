@@ -4,7 +4,7 @@ import (
 	"io/ioutil"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	"github.com/goccy/go-yaml"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 )
 
@@ -38,9 +38,9 @@ type Config struct {
 
 type DependentResourceInfo struct {
 	// Ref identifies a resource
-	Ref           autoscalingv1.CrossVersionObjectReference `yaml:"ref"`
-	ScaleUpInfo   *ScaleInfo                                `yaml:"scaleUp,omitempty"`
-	ScaleDownInfo *ScaleInfo                                `yaml:"scaleDown,omitempty"`
+	Ref           *autoscalingv1.CrossVersionObjectReference `yaml:"ref"`
+	ScaleUpInfo   *ScaleInfo                                 `yaml:"scaleUp,omitempty"`
+	ScaleDownInfo *ScaleInfo                                 `yaml:"scaleDown,omitempty"`
 }
 
 type ScaleInfo struct {
@@ -88,7 +88,7 @@ func (c *Config) validate() error {
 	v.mustNotBeEmpty("Name", c.Name)
 	v.mustNotBeEmpty("InternalKubeConfigSecretName", c.InternalKubeConfigSecretName)
 	v.mustNotBeEmpty("ExternalKubeConfigSecretName", c.ExternalKubeConfigSecretName)
-	v.mustNotBeEmpty("ScaleDownResourceInfos", c.DependentResourceInfos)
+	v.mustNotBeEmpty("ScaleResourceInfos", c.DependentResourceInfos)
 	for _, resInfo := range c.DependentResourceInfos {
 		v.resourceRefMustBeValid(resInfo.Ref)
 		v.mustNotBeNil("scaleUp", resInfo.ScaleUpInfo)

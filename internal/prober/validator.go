@@ -43,7 +43,7 @@ func (v *validator) mustNotBeNil(key string, value interface{}) bool {
 	return true
 }
 
-func (v *validator) resourceRefMustBeValid(resourceRef autoscalingv1.CrossVersionObjectReference) bool {
+func (v *validator) resourceRefMustBeValid(resourceRef *autoscalingv1.CrossVersionObjectReference) bool {
 	_, err := schema.ParseGroupVersion(resourceRef.APIVersion)
 	if err != nil {
 		v.error = multierr.Append(v.error, err)

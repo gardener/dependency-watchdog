@@ -9,27 +9,21 @@ dependentResourceInfos:
       apiVersion: "apps/v1"
     scaleUp:
       level: 0
-      replicas: 1
     scaleDown:
       level: 1
-      replicas: 0
   - ref:
       kind: "Deployment"
       name: "machine-controller-manager"
       apiVersion: "apps/v1"
     scaleUp:
       level: 1
-      replicas: 1
     scaleDown:
       level: 0
-      replicas: 0
   - ref:
       kind: "Deployment"
       name: "cluster-autoscaler"
       apiVersion: "apps/v1"
     scaleUp:
       level: 0
-      replicas: 1
     scaleDown:
       level: 1
-      replicas: 0
