@@ -151,10 +151,6 @@ func createTaskName(resInfos []scaleableResourceInfo, level int) string {
 // should be invoked concurrently. In this case it will construct a flow.Parallel. If there is only one DependentResourceInfo passed
 // then it indicates that at a specific level there is only one DependentResourceInfo that needs to be scaled.
 func (ds *deploymentScaler) createScaleTaskFn(namespace string, resourceInfos []scaleableResourceInfo, mismatchReplicasCheckFn func(replicas, targetReplicas int32) bool, waitOnResourceInfos []scaleableResourceInfo) flow.TaskFn {
-	if len(resourceInfos) == 0 {
-		logger.V(4).Info("(createScaleTaskFn) [unexpected] resourceInfos. This should never be the case.", "namespace", namespace)
-		return nil
-	}
 	taskFns := make([]flow.TaskFn, 0, len(resourceInfos))
 	for _, resourceInfo := range resourceInfos {
 		taskFn := ds.doCreateTaskFn(namespace, resourceInfo, mismatchReplicasCheckFn, waitOnResourceInfos)

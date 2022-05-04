@@ -52,13 +52,11 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	logger := log.FromContext(ctx)
 	cluster, notFound, err := r.getCluster(ctx, req.Namespace, req.Name)
 	if err != nil {
-		fmt.Printf("Unable to get cluster resource Error is %v", err)
 		logger.Error(err, "Unable to get the cluster resource, requeing for reconciliation", "namespace", req.Namespace, "name", req.Name)
 		return ctrl.Result{}, err
 	}
 	// If the cluster is not found then any existing probes if present will be unregistered
 	if notFound {
-		fmt.Println("Cluster not found")
 		logger.V(4).Info("Cluster not found, any existing probes will be removed if present", "namespace", req.Namespace, "name", req.Name)
 		r.ProberMgr.Unregister(req.Name)
 		return ctrl.Result{}, nil
@@ -66,7 +64,6 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	// If cluster is marked for deletion then any existing probes will be unregistered
 	if cluster.DeletionTimestamp != nil {
-		fmt.Println("deletion time stamp is set")
 		logger.V(4).Info("Cluster has been marked for deletion, any existing probes will be removed if present", "namespace", req.Namespace, "name", req.Name)
 		r.ProberMgr.Unregister(req.Name)
 		return ctrl.Result{}, nil
@@ -74,26 +71,21 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	shoot, err := extensionscontroller.ShootFromCluster(cluster)
 	if err != nil {
-		fmt.Println("Error extracting shoot from cluster")
 		logger.Error(err, "Error extracting shoot from cluster.", "namespace", req.Namespace, "name", req.Name)
 		return ctrl.Result{}, err
 	}
 
 	// if hibernation is enabled then we will remove any existing prober
 	if gardencorev1beta1helper.HibernationIsEnabled(shoot) {
-		fmt.Println("Hibernation enabled")
 		logger.V(4).Info("Cluster hibernation is enabled, prober will be removed if present", "namespace", req.Namespace, "name", req.Name)
 		r.ProberMgr.Unregister(req.Name)
-	} else {
-		if shoot.Status.IsHibernated {
-			fmt.Println("shoot is hibernated")
-			logger.V(4).Info("Cluster is waking up and is not yet ready, it is too early to start probing for this shoot. Any existing probes will be removed if present", "namespace", req.Namespace, "name", req.Name)
-			r.ProberMgr.Unregister(req.Name)
-		} else {
-			fmt.Println("new shoot encountered, create corresponding prober")
-			logger.V(4).Info("Starting a new probe for cluster if not present", "namespace", req.Namespace, "name", req.Name)
-			r.startProber(req.Name)
-		}
+		return ctrl.Result{}, nil
+	}
+
+	// if the cluster is waking up then no prober should be added till the cluster is completely woken up
+	if !shoot.Status.IsHibernated {
+		logger.V(4).Info("Starting a new probe for cluster if not present", "namespace", req.Namespace, "name", req.Name)
+		r.startProber(req.Name)
 	}
 	return ctrl.Result{}, nil
 }

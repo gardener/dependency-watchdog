@@ -81,15 +81,16 @@ func testScalingWhenAllDeploymentsAreFound(t *testing.T) {
 		expectedScaledCAReplicas  int32
 		applyKCMAnnotation        bool
 		scalingFn                 func(context.Context) error
+		isFnScaleUp               bool
 	}{
-		{0, 0, 0, 1, 1, 1, false, ds.ScaleUp},
-		{0, 1, 0, 1, 1, 1, false, ds.ScaleUp},
-		{0, 0, 0, 1, 0, 1, true, ds.ScaleUp},
-		{0, 1, 0, 1, 1, 1, true, ds.ScaleUp},
-		{1, 1, 1, 0, 0, 0, false, ds.ScaleDown},
-		{0, 1, 0, 0, 0, 0, false, ds.ScaleDown},
-		{1, 1, 1, 0, 1, 0, true, ds.ScaleDown},
-		{1, 0, 1, 0, 0, 0, true, ds.ScaleDown},
+		{0, 0, 0, 1, 1, 1, false, ds.ScaleUp, true},
+		{0, 1, 0, 1, 1, 1, false, ds.ScaleUp, true},
+		{0, 0, 0, 1, 0, 1, true, ds.ScaleUp, true},
+		{0, 1, 0, 1, 1, 1, true, ds.ScaleUp, true},
+		{1, 1, 1, 0, 0, 0, false, ds.ScaleDown, false},
+		{0, 1, 0, 0, 0, 0, false, ds.ScaleDown, false},
+		{1, 1, 1, 0, 1, 0, true, ds.ScaleDown, false},
+		{1, 0, 1, 0, 0, 0, true, ds.ScaleDown, false},
 	}
 
 	for _, entry := range table {
@@ -103,15 +104,21 @@ func testScalingWhenAllDeploymentsAreFound(t *testing.T) {
 			createDeployment(g, namespace, kcmRef.Name, deploymentImageName, entry.kcmReplicas, nil)
 		}
 
-		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, mcmRef.Name, entry.mcmReplicas) }, 10*time.Second, 100*time.Millisecond).Should(BeTrue())
-		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, caRef.Name, entry.caReplicas) }, 10*time.Second, 100*time.Millisecond).Should(BeTrue())
-		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, kcmRef.Name, entry.kcmReplicas) }, 10*time.Second, 100*time.Millisecond).Should(BeTrue())
+		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, mcmRef.Name, entry.mcmReplicas) }, 10*time.Second, time.Second).Should(BeTrue())
+		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, caRef.Name, entry.caReplicas) }, 10*time.Second, time.Second).Should(BeTrue())
+		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, kcmRef.Name, entry.kcmReplicas) }, 10*time.Second, time.Second).Should(BeTrue())
 
 		err := entry.scalingFn(ctx)
 		g.Expect(err).To(BeNil())
-		matchStatusReplicas(g, namespace, caRef.Name, entry.expectedScaledCAReplicas)
-		matchStatusReplicas(g, namespace, kcmRef.Name, entry.expectedScaledKCMReplicas)
-		matchStatusReplicas(g, namespace, mcmRef.Name, entry.expectedScaledMCMReplicas)
+		if entry.isFnScaleUp {
+			matchStatusReplicas(g, namespace, caRef.Name, entry.expectedScaledCAReplicas)
+			matchStatusReplicas(g, namespace, kcmRef.Name, entry.expectedScaledKCMReplicas)
+			matchSpecReplicas(g, namespace, mcmRef.Name, entry.expectedScaledMCMReplicas)
+		} else {
+			matchSpecReplicas(g, namespace, caRef.Name, entry.expectedScaledCAReplicas)
+			matchStatusReplicas(g, namespace, kcmRef.Name, entry.expectedScaledKCMReplicas)
+			matchStatusReplicas(g, namespace, mcmRef.Name, entry.expectedScaledMCMReplicas)
+		}
 		err = kindTestEnv.DeleteAllDeployments(namespace)
 		g.Expect(err).To(BeNil())
 	}
@@ -133,8 +140,8 @@ func testScalingWhenDeploymentNotFound(t *testing.T) {
 		createDeployment(g, namespace, mcmRef.Name, deploymentImageName, entry.mcmReplicas, nil)
 		createDeployment(g, namespace, caRef.Name, deploymentImageName, entry.caReplicas, nil)
 
-		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, mcmRef.Name, entry.mcmReplicas) }, 10*time.Second, 100*time.Millisecond).Should(BeTrue())
-		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, caRef.Name, entry.caReplicas) }, 10*time.Second, 100*time.Millisecond).Should(BeTrue())
+		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, mcmRef.Name, entry.mcmReplicas) }, 10*time.Second, time.Second).Should(BeTrue())
+		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, caRef.Name, entry.caReplicas) }, 10*time.Second, time.Second).Should(BeTrue())
 
 		err := entry.scalingFn(ctx)
 		g.Expect(err).ToNot(BeNil())
@@ -168,9 +175,9 @@ func testWhenKindOfDependentResourceIsWrong(t *testing.T) {
 		createDeployment(g, namespace, caRef.Name, deploymentImageName, entry.caReplicas, nil)
 		createDeployment(g, namespace, kcmRef.Name, deploymentImageName, entry.kcmReplicas, nil)
 
-		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, mcmRef.Name, entry.mcmReplicas) }, 10*time.Second, 100*time.Millisecond).Should(BeTrue())
-		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, caRef.Name, entry.caReplicas) }, 10*time.Second, 100*time.Millisecond).Should(BeTrue())
-		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, kcmRef.Name, entry.kcmReplicas) }, 10*time.Second, 100*time.Millisecond).Should(BeTrue())
+		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, mcmRef.Name, entry.mcmReplicas) }, 10*time.Second, time.Second).Should(BeTrue())
+		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, caRef.Name, entry.caReplicas) }, 10*time.Second, time.Second).Should(BeTrue())
+		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, kcmRef.Name, entry.kcmReplicas) }, 10*time.Second, time.Second).Should(BeTrue())
 
 		err := entry.scalingFn(ctx)
 		g.Expect(err).ToNot(BeNil())
