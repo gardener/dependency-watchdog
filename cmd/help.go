@@ -10,7 +10,7 @@ import (
 var (
 	cliHelpTemplate = `
 NAME:
-{{printf "dwd %s - %s" .Name .ShortDesc}}
+{{printf "%s - %s" .Name .ShortDesc}}
 
 USAGE:
 {{printf "\t%s" .UsageLine}}
@@ -25,8 +25,8 @@ to scale up, scale down or stop pods (forcing a restart) based on watches/probes
 kubernetes resources.
 
 Usage:
-	dwd <sub-command> [arguments]
-Supported sub-commands:
+	<command> [arguments]
+Supported commands:
 {{range .}}
 	{{printf "\t%s: " .Name}} {{.ShortDesc}}
 {{end}}

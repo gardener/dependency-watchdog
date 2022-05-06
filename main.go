@@ -46,15 +46,14 @@ func init() {
 }
 
 func main() {
-	var fs flag.FlagSet
-	var command cmd.Command
-
 	args := os.Args[1:]
 	checkArgs(args)
-	parseCommand(args, &fs, &command)
+	cmdArgs, command, err := parseCommand(args)
+	if err != nil {
+		os.Exit(2)
+	}
 
 	ctx := ctrl.SetupSignalHandler()
-
 	opts := zap.Options{
 		Development: true,
 	}
@@ -62,7 +61,7 @@ func main() {
 	flag.Parse()
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	mgr, err := command.Run(ctx, fs.Args(), logger)
+	mgr, err := command.Run(ctx, cmdArgs, logger)
 	if err != nil {
 		logger.Error(err, "failed to run command %s", command.Name)
 		os.Exit(1)
@@ -106,14 +105,14 @@ func getCommand(cmdName string) (*cmd.Command, error) {
 	return nil, fmt.Errorf("unknown command %s. Supported commands are: %v", cmdName, supportedCmdNames)
 }
 
-func parseCommand(args []string, fs *flag.FlagSet, command *cmd.Command) {
+func parseCommand(args []string) ([]string, *cmd.Command, error) {
 	requestedCmdName := args[0]
 	command, err := getCommand(requestedCmdName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "unexpected error when fetching matching command %s. This should have been checked earlier. Error: %v", requestedCmdName, err)
-		os.Exit(2)
+		return nil, nil, err
 	}
-	fs = flag.NewFlagSet(requestedCmdName, flag.ContinueOnError)
+	fs := flag.NewFlagSet(requestedCmdName, flag.ContinueOnError)
 	fs.Usage = func() {}
 	if command.AddFlags != nil {
 		command.AddFlags(fs)
@@ -121,9 +120,10 @@ func parseCommand(args []string, fs *flag.FlagSet, command *cmd.Command) {
 	if err := fs.Parse(args[1:]); err != nil {
 		if err == flag.ErrHelp {
 			cmd.PrintHelp(requestedCmdName, os.Stdout)
-			os.Exit(0)
+			return nil, nil, err
 		}
 		cmd.PrintHelp(requestedCmdName, os.Stderr)
-		os.Exit(2)
+		return nil, nil, err
 	}
+	return fs.Args(), command, nil
 }
