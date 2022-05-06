@@ -22,6 +22,8 @@ import (
 	"os"
 
 	"github.com/gardener/dependency-watchdog/cmd"
+	"go.uber.org/zap/zapcore"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -48,22 +50,22 @@ func init() {
 func main() {
 	args := os.Args[1:]
 	checkArgs(args)
+	ctx := ctrl.SetupSignalHandler()
+	opts := zap.Options{
+		Development: true,
+		Level:       zapcore.DebugLevel,
+	}
+	opts.BindFlags(flag.CommandLine)
 	cmdArgs, command, err := parseCommand(args)
 	if err != nil {
 		os.Exit(2)
 	}
-
-	ctx := ctrl.SetupSignalHandler()
-	opts := zap.Options{
-		Development: true,
-	}
-	opts.BindFlags(flag.CommandLine)
-	flag.Parse()
+	// flag.Parse()
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	mgr, err := command.Run(ctx, cmdArgs, logger)
 	if err != nil {
-		logger.Error(err, "failed to run command %s", command.Name)
+		logger.Error(err, fmt.Sprintf("failed to run command %s", command.Name))
 		os.Exit(1)
 	}
 
@@ -112,7 +114,7 @@ func parseCommand(args []string) ([]string, *cmd.Command, error) {
 		fmt.Fprintf(os.Stderr, "unexpected error when fetching matching command %s. This should have been checked earlier. Error: %v", requestedCmdName, err)
 		return nil, nil, err
 	}
-	fs := flag.NewFlagSet(requestedCmdName, flag.ContinueOnError)
+	fs := flag.CommandLine
 	fs.Usage = func() {}
 	if command.AddFlags != nil {
 		command.AddFlags(fs)

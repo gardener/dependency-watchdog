@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/gardener/dependency-watchdog/internal/prober"
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
@@ -48,7 +47,6 @@ type ClusterReconciler struct {
 // Reconcile listens to create/update/delete events for `Cluster` resources and
 // manages probes for the shoot control namespace for these clusters by looking at the cluster state.
 func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	fmt.Printf("Request is: %v\n", req)
 	logger := log.FromContext(ctx)
 	cluster, notFound, err := r.getCluster(ctx, req.Namespace, req.Name)
 	if err != nil {
@@ -84,7 +82,7 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	// if the cluster is waking up then no prober should be added till the cluster is completely woken up
 	if !shoot.Status.IsHibernated {
-		logger.V(4).Info("Starting a new probe for cluster if not present", "namespace", req.Namespace, "name", req.Name)
+		logger.V(1).Info("Starting a new probe for cluster if not present", "namespace", req.Namespace, "name", req.Name)
 		r.startProber(req.Name)
 	}
 	return ctrl.Result{}, nil

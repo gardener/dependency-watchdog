@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"flag"
+
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/go-logr/logr"
@@ -32,8 +33,8 @@ type Command struct {
 }
 
 type SharedOpts struct {
-	// ConfigFile is the command specific configuration file path which is typically a mounted config-map YAML file
-	ConfigFile string
+	// ConfigPath is the command specific configuration file path which is typically a mounted config-map YAML file
+	ConfigPath string
 	// ConcurrentReconciles is the maximum number of concurrent reconciles which can be run
 	ConcurrentReconciles int
 	// LeaderElectionNamespace is the namespace in which leader election resource will be created
@@ -51,7 +52,7 @@ type SharedOpts struct {
 }
 
 func SetSharedOpts(fs *flag.FlagSet, opts *SharedOpts) {
-	fs.StringVar(&opts.ConfigFile, "config-file", "", "Path of the config file containing the configuration")
+	fs.StringVar(&opts.ConfigPath, "config-path", "", "Path of the config file containing the configuration")
 	fs.IntVar(&opts.ConcurrentReconciles, "concurrent-reconciles", defaultConcurrentReconciles, "Maximum number of concurrent reconciles")
 	fs.StringVar(&opts.LeaderElectionNamespace, "leader-election-namespace", "garden", "Namespace in which leader election resource will be created. It should be the same namespace where DWD pods are deployed")
 	fs.BoolVar(&opts.EnableLeaderElection, "enable-leader-election", false, "Determines if leader election should be used when starting the manager")

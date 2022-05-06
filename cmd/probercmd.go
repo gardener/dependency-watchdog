@@ -32,8 +32,10 @@ If the API server continues to be un-reachable beyond a threshold then it scales
 server is again reachable then it will restore by scaling up the dependent controllers.
 
 Flags:
-	--config-file
+	--config-path
 		Path of the configuration file containing probe configuration and scaling controller-reference information
+	--kubeconfig
+		Path to the kubeconfig file. If not specified, then it will default to the service account token to connect to the kube-api-server
 	--concurrent-reconciles
 		Maximum number of concurrent reconciles which can be run. <optional>
 	--leader-election-namespace
@@ -73,12 +75,13 @@ func addProbeFlags(fs *flag.FlagSet) {
 }
 
 func startProberControllerMgr(ctx context.Context, args []string, logger logr.Logger) (manager.Manager, error) {
-	proberConfig, err := prober.LoadConfig(opts.SharedOpts.ConfigFile)
+	proberConfig, err := prober.LoadConfig(opts.ConfigPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse prober config file %s : %w", opts.SharedOpts.ConfigFile, err)
+		return nil, fmt.Errorf("failed to parse prober config file %s : %w", opts.ConfigPath, err)
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	restConf := ctrl.GetConfigOrDie()
+	mgr, err := ctrl.NewManager(restConf, ctrl.Options{
 		Scheme:                     scheme,
 		MetricsBindAddress:         opts.SharedOpts.MetricsBindAddress,
 		HealthProbeBindAddress:     opts.SharedOpts.HealthBindAddress,

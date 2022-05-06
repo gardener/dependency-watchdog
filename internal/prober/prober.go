@@ -109,8 +109,9 @@ func (p *Prober) probeInternal(ctx context.Context) {
 		if !p.internalProbeStatus.canIgnoreProbeError(err) {
 			p.internalProbeStatus.recordFailure(err, *p.config.FailureThreshold, *p.config.InternalProbeFailureBackoffDuration)
 			logger.Error(err, "recording internal probe failure", "failedAttempts", p.internalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
+		} else {
+			logger.Error(err, "internal probe was not successful. ignoring this error, will retry probe", "namespace", p.namespace)
 		}
-		logger.Error(err, "internal probe was not successful. ignoring this error, will retry probe", "namespace", p.namespace)
 		return
 	}
 	p.internalProbeStatus.recordSuccess(*p.config.SuccessThreshold)
