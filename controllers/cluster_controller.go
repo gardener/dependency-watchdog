@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-
 	"github.com/gardener/dependency-watchdog/internal/prober"
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	gardencorev1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
@@ -83,7 +82,7 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// if the cluster is waking up then no prober should be added till the cluster is completely woken up
 	if !shoot.Status.IsHibernated {
 		logger.V(1).Info("Starting a new probe for cluster if not present", "namespace", req.Namespace, "name", req.Name)
-		r.startProber(req.Name)
+		r.startProber(ctx, req.Name)
 	}
 	return ctrl.Result{}, nil
 }
@@ -102,12 +101,13 @@ func (r *ClusterReconciler) getCluster(ctx context.Context, namespace string, na
 
 // startProber sets up a new probe against a given key which uniquely identifies the probe.
 // Typically, the key in case of a shoot cluster is the shoot namespace
-func (r *ClusterReconciler) startProber(key string) {
+func (r *ClusterReconciler) startProber(ctx context.Context, key string) {
 	_, ok := r.ProberMgr.GetProber(key)
 	if !ok {
-		deploymentScaler := prober.NewDeploymentScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter)
+		pLogger := log.FromContext(ctx).WithName(key).WithName("prober")
+		deploymentScaler := prober.NewDeploymentScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter, pLogger.WithName("scaler"))
 		shootClientCreator := prober.NewShootClientCreator(r.Client)
-		p := prober.NewProber(key, r.ProbeConfig, r.Client, deploymentScaler, shootClientCreator)
+		p := prober.NewProber(key, r.ProbeConfig, r.Client, deploymentScaler, shootClientCreator, pLogger)
 		r.ProberMgr.Register(*p)
 		go p.Run()
 	}

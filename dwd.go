@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/go-logr/logr"
 	"os"
 
 	"github.com/gardener/dependency-watchdog/cmd"
@@ -38,7 +39,7 @@ import (
 
 var (
 	scheme = runtime.NewScheme()
-	logger = ctrl.Log.WithName("dwd")
+	logger logr.Logger
 )
 
 func init() {
@@ -62,6 +63,7 @@ func main() {
 	}
 	// flag.Parse()
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	logger = ctrl.Log.WithName("dwd")
 
 	mgr, err := command.Run(ctx, cmdArgs, logger)
 	if err != nil {
