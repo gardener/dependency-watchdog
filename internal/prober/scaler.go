@@ -101,6 +101,10 @@ type scaleStepInfo struct {
 	waitOnResourceInfos []scaleableResourceInfo
 }
 
+func (s scaleStepInfo) String() string {
+	return fmt.Sprintf("{taskID: %s, dependentTaskIDs: %s, waitOnResourceInfos: %v}", s.taskID, s.dependentTaskIDs, s.waitOnResourceInfos)
+}
+
 func newScaleFlow() *scaleFlow {
 	return &scaleFlow{
 		flowStepInfos: make([]scaleStepInfo, 0, 1),
