@@ -2,8 +2,9 @@ package prober
 
 import (
 	"context"
-	"github.com/go-logr/logr"
 	"time"
+
+	"github.com/go-logr/logr"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -25,20 +26,20 @@ type Prober struct {
 	shootclientCreator  ShootClientCreator
 	internalProbeStatus probeStatus
 	externalProbeStatus probeStatus
-	stopC               <-chan struct{}
+	ctx                 context.Context
 	cancelFn            context.CancelFunc
 	l                   logr.Logger
 }
 
-func NewProber(namespace string, config *Config, ctrlClient client.Client, scaler DeploymentScaler, shootClientCreator ShootClientCreator, logger logr.Logger) *Prober {
-	ctx, cancelFn := context.WithCancel(context.Background())
+func NewProber(parentCtx context.Context, namespace string, config *Config, ctrlClient client.Client, scaler DeploymentScaler, shootClientCreator ShootClientCreator, logger logr.Logger) *Prober {
+	ctx, cancelFn := context.WithCancel(parentCtx)
 	return &Prober{
 		namespace:          namespace,
 		config:             config,
 		client:             ctrlClient,
 		scaler:             scaler,
 		shootclientCreator: shootClientCreator,
-		stopC:              ctx.Done(),
+		ctx:                ctx,
 		cancelFn:           cancelFn,
 		l:                  logger,
 	}
@@ -51,7 +52,7 @@ func (p *Prober) Close() {
 // IsClosed checks if the context of the prober is cancelled or not.
 func (p *Prober) IsClosed() bool {
 	select {
-	case <-p.stopC:
+	case <-p.ctx.Done():
 		return true
 	default:
 		return false
@@ -59,12 +60,11 @@ func (p *Prober) IsClosed() bool {
 }
 
 func (p *Prober) Run() {
-	ctx, cancelFn := context.WithCancel(context.Background())
-	defer cancelFn()
-	wait.JitterUntilWithContext(ctx, func(ctx context.Context) {
+	wait.JitterUntilWithContext(p.ctx, func(ctx context.Context) {
 		select {
-		case <-p.stopC:
+		case <-p.ctx.Done():
 			p.l.V(3).Info("stop has been called for prober", "namespace", p.namespace)
+			p.cancelFn()
 			return
 		default:
 			p.probe(ctx)
@@ -73,9 +73,19 @@ func (p *Prober) Run() {
 }
 
 func (p *Prober) probe(ctx context.Context) {
-	p.probeInternal(ctx)
+	internalShootClient, err := p.setupProbeClient(ctx, p.namespace, p.config.InternalKubeConfigSecretName)
+	if err != nil {
+		p.l.Error(err, "failed to create shoot client using internal secret, ignoring error, internal probe will be re-attempted", "namespace", p.namespace)
+		return
+	}
+	p.probeInternal(ctx, internalShootClient)
 	if p.internalProbeStatus.isHealthy(*p.config.SuccessThreshold) {
-		p.probeExternal(ctx)
+		externalShootClient, err := p.setupProbeClient(ctx, p.namespace, p.config.ExternalKubeConfigSecretName)
+		if err != nil {
+			p.l.Error(err, "failed to create shoot client using external secret, ignoring error, probe will be re-attempted", "namespace", p.namespace)
+			return
+		}
+		p.probeExternal(ctx, externalShootClient)
 		// based on the external probe result it will either scale up or scale down
 		if p.externalProbeStatus.isUnhealthy(*p.config.FailureThreshold) {
 			p.l.V(4).Info("external probe is un-healthy, checking if scale down is already done or is still pending", "namespace", p.namespace)
@@ -97,14 +107,17 @@ func (p *Prober) probe(ctx context.Context) {
 	}
 }
 
-func (p *Prober) probeInternal(ctx context.Context) {
-	backOffIfNeeded(&p.internalProbeStatus)
+func (p *Prober) setupProbeClient(ctx context.Context, namespace string, name string) (kubernetes.Interface, error) {
 	shootClient, err := p.shootclientCreator.CreateClient(ctx, p.namespace, p.config.InternalKubeConfigSecretName)
 	if err != nil {
-		p.l.Error(err, "failed to create shoot client using internal secret, ignoring error, probe will be re-attempted", "namespace", p.namespace)
-		return
+		return nil, err
 	}
-	err = p.doProbe(shootClient)
+	return shootClient, nil
+}
+
+func (p *Prober) probeInternal(ctx context.Context, shootClient kubernetes.Interface) {
+	backOffIfNeeded(&p.internalProbeStatus)
+	err := p.doProbe(shootClient)
 	if err != nil {
 		if !p.internalProbeStatus.canIgnoreProbeError(err) {
 			p.internalProbeStatus.recordFailure(err, *p.config.FailureThreshold, *p.config.InternalProbeFailureBackoffDuration)
@@ -118,18 +131,14 @@ func (p *Prober) probeInternal(ctx context.Context) {
 	p.l.V(4).Info("internal probe is successful", "namespace", p.namespace, "successfulAttempts", p.internalProbeStatus.successCount)
 }
 
-func (p *Prober) probeExternal(ctx context.Context) {
+func (p *Prober) probeExternal(ctx context.Context, shootClient kubernetes.Interface) {
 	backOffIfNeeded(&p.externalProbeStatus)
-	shootClient, err := p.shootclientCreator.CreateClient(ctx, p.namespace, p.config.ExternalKubeConfigSecretName)
-	if err != nil {
-		p.l.Error(err, "failed to create shoot client using external secret, ignoring error, probe will be re-attempted", "namespace", p.namespace)
-		return
-	}
-	err = p.doProbe(shootClient)
+	err := p.doProbe(shootClient)
 	if err != nil {
 		if !p.externalProbeStatus.canIgnoreProbeError(err) {
 			p.externalProbeStatus.recordFailure(err, *p.config.FailureThreshold, 0)
 			p.l.Error(err, "recording external probe failure", "failedAttempts", p.externalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
+			return
 		}
 		p.l.Error(err, "external probe was not successful. ignoring this error, will retry probe", "namespace", p.namespace)
 		return

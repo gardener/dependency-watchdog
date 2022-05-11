@@ -17,6 +17,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var (
@@ -30,6 +31,7 @@ var (
 	mdi                                 *mockdiscovery.MockDiscoveryInterface
 	notIgnorableErr                     = errors.New("Not Ignorable error")
 	internalProbeFailureBackoffDuration = time.Millisecond
+	pLogger                             = log.FromContext(context.Background()).WithName("proberLogger")
 )
 
 type probeStatusEntry struct {
@@ -187,7 +189,7 @@ func TestExternalProbeShouldNotRunIfClientNotCreated(t *testing.T) {
 
 func runProberAndCheckStatus(t *testing.T, duration time.Duration, probeStatusEntry probeStatusEntry) {
 	g := NewWithT(t)
-	p := NewProber("default", config, fakeClient, mds, msc)
+	p := NewProber(context.Background(), "default", config, fakeClient, mds, msc, pLogger)
 	g.Expect(p.IsClosed()).To(BeFalse())
 
 	runProber(p, duration)
@@ -205,7 +207,7 @@ func runProber(p *Prober, d time.Duration) {
 		case <-exitAfter.C:
 			p.Close()
 			return
-		case <-p.stopC:
+		case <-p.ctx.Done():
 			return
 		}
 	}

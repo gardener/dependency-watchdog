@@ -16,6 +16,7 @@ import (
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/scale"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var (
@@ -30,6 +31,7 @@ var (
 	scalesGetter        scale.ScalesGetter
 	ds                  DeploymentScaler
 	ctx                 = context.Background()
+	sLogger             = log.FromContext(context.Background()).WithName("scalerLogger")
 )
 
 const (
@@ -51,7 +53,7 @@ func TestScalerSuite(t *testing.T) {
 	g := NewWithT(t)
 	beforeAll(g)
 	createProbeConfig()
-	ds = NewDeploymentScaler(namespace, probeCfg, kindTestEnv.GetClient(), scalesGetter,
+	ds = NewDeploymentScaler(namespace, probeCfg, kindTestEnv.GetClient(), scalesGetter, sLogger,
 		withDependentResourceCheckTimeout(10*time.Second), withDependentResourceCheckInterval(100*time.Millisecond))
 	tests := []struct {
 		title string
@@ -156,7 +158,7 @@ func testScalingWhenDeploymentNotFound(t *testing.T) {
 func testWhenKindOfDependentResourceIsWrong(t *testing.T) {
 	g := NewWithT(t)
 	faultyProbeCfg := createFaultyProbeConfig()
-	newDS := NewDeploymentScaler(namespace, faultyProbeCfg, kindTestEnv.GetClient(), scalesGetter,
+	newDS := NewDeploymentScaler(namespace, faultyProbeCfg, kindTestEnv.GetClient(), scalesGetter, sLogger,
 		withDependentResourceCheckTimeout(10*time.Second), withDependentResourceCheckInterval(100*time.Millisecond))
 	table := []struct {
 		mcmReplicas               int32
@@ -208,7 +210,7 @@ func TestCreateResourceScaleFlowParallel(t *testing.T) {
 func TestCreateScaleFlowSequential(t *testing.T) {
 	g := NewWithT(t)
 
-	depScaler := deploymentScaler{}
+	depScaler := deploymentScaler{l: sLogger}
 	var scri []scaleableResourceInfo
 	scri = append(scri, scaleableResourceInfo{ref: caRef, level: 0, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1})
 	scri = append(scri, scaleableResourceInfo{ref: kcmRef, level: 1, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1})
@@ -240,13 +242,13 @@ func checkCreatedFlow(g *WithT, sf *scaleFlow, waitOnResourceInfos [][]scaleable
 func TestSleepWithContextInScale(t *testing.T) {
 	g := NewWithT(t)
 	var err error
-	depScaler := deploymentScaler{}
+	depScaler := deploymentScaler{l: sLogger}
 	cancelableCtx, cancelFn := context.WithCancel(ctx)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err = depScaler.scale(cancelableCtx, scaleableResourceInfo{initialDelay: 100 * time.Millisecond}, nil, nil)
+		err = depScaler.scale(cancelableCtx, scaleableResourceInfo{ref: caRef, level: 0, initialDelay: defaultInitialDelay, timeout: 100 * time.Millisecond, replicas: 1}, nil, nil)
 	}()
 	cancelFn()
 	wg.Wait()

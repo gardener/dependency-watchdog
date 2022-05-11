@@ -1,10 +1,14 @@
 package prober
 
 import (
+	"context"
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
+
+var pmLogger = log.Log.WithName("test")
 
 func setupMgrTest(t *testing.T) (Manager, func(mgr Manager)) {
 	g := NewWithT(t)
@@ -24,7 +28,7 @@ func TestRegisterNewProberAndCheckIfItExistsAndIsNotClosed(t *testing.T) {
 	defer tearDownTest(mgr)
 
 	const namespace = "bingo"
-	p := NewProber(namespace, &Config{Name: "bingo"}, nil, nil, nil)
+	p := NewProber(context.Background(), namespace, &Config{Name: "bingo"}, nil, nil, nil, pmLogger)
 	g.Expect(p).ShouldNot(BeNil(), "NewProber should have returned a non nil Prober")
 	g.Expect(p.namespace).Should(Equal(namespace), "The namespace of the created prober should match")
 	g.Expect(mgr.Register(*p)).To(BeTrue(), "mgr.Register should register a new prober")
@@ -44,10 +48,10 @@ func TestProberRegistrationWithSameKeyShouldNotOverwriteExistingProber(t *testin
 	defer tearDownTest(mgr)
 
 	const namespace = "bingo"
-	p1 := NewProber(namespace, &Config{Name: "bingo"}, nil, nil, nil)
+	p1 := NewProber(context.Background(), namespace, &Config{Name: "bingo"}, nil, nil, nil, pmLogger)
 	g.Expect(mgr.Register(*p1)).To(BeTrue(), "mgr.Register should register a new prober")
 
-	p2 := NewProber(namespace, &Config{Name: "zingo"}, nil, nil, nil)
+	p2 := NewProber(context.Background(), namespace, &Config{Name: "zingo"}, nil, nil, nil, pmLogger)
 	g.Expect(mgr.Register(*p2)).To(BeFalse(), "mgr.Register should return false if a prober with the same key is already registered")
 
 	foundProber, ok := mgr.GetProber(namespace)
@@ -64,7 +68,7 @@ func TestUnregisterExistingProberShouldCloseItAndRemoveItFromManager(t *testing.
 	defer tearDownTest(mgr)
 
 	const namespace = "bingo"
-	p := NewProber(namespace, &Config{Name: "bingo"}, nil, nil, nil)
+	p := NewProber(context.Background(), namespace, &Config{Name: "bingo"}, nil, nil, nil, pmLogger)
 	g.Expect(mgr.Register(*p)).To(BeTrue(), "mgr.Register should register a new prober")
 
 	mgr.Unregister(namespace)

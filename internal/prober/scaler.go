@@ -3,11 +3,12 @@ package prober
 import (
 	"context"
 	"fmt"
-	"github.com/go-logr/logr"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/go-logr/logr"
 
 	"github.com/gardener/dependency-watchdog/internal/util"
 	"github.com/gardener/gardener/pkg/utils/flow"
@@ -37,12 +38,13 @@ func NewDeploymentScaler(namespace string, config *Config, client client.Client,
 		scaler:    scalerGetter.Scales(namespace),
 		client:    client,
 		options:   opts,
+		l:         logger,
 	}
 	scaleDownFlow := ds.createResourceScaleFlow(namespace, fmt.Sprintf("scale-down-%s", namespace), createScaleDownResourceInfos(config.DependentResourceInfos), util.ScaleDownReplicasMismatch)
-	ds.l.V(5).Info("created scaleDownFlow %#v for namespace: %s", scaleDownFlow.flowStepInfos, namespace)
+	ds.l.V(5).Info(fmt.Sprintf("created scaleDownFlow with flowStepInfos as %#v", scaleDownFlow.flowStepInfos))
 	ds.scaleDownFlow = scaleDownFlow.flow
 	scaleUpFlow := ds.createResourceScaleFlow(namespace, fmt.Sprintf("scale-up-%s", namespace), createScaleUpResourceInfos(config.DependentResourceInfos), util.ScaleUpReplicasMismatch)
-	ds.l.V(5).Info("created scaleUpfor %#v for namespace: %s", scaleUpFlow.flowStepInfos, namespace)
+	ds.l.V(5).Info(fmt.Sprintf("created scaleUpFlow with flowStepInfos as %#v", scaleUpFlow.flowStepInfos))
 	ds.scaleUpFlow = scaleUpFlow.flow
 	return &ds
 }
@@ -54,6 +56,11 @@ type scaleableResourceInfo struct {
 	initialDelay time.Duration
 	timeout      time.Duration
 	replicas     int32
+}
+
+func (r scaleableResourceInfo) String() string {
+	return fmt.Sprintf("{Resource ref: %#v, level: %d, initialDelay: %#v, timeout: %#v, replicas: %d}",
+		*r.ref, r.level, r.initialDelay, r.timeout, r.replicas)
 }
 
 type mismatchReplicasCheckFn func(replicas, targetReplicas int32) bool
@@ -176,26 +183,27 @@ func (ds *deploymentScaler) doCreateTaskFn(namespace string, resInfo scaleableRe
 			defaultMaxResourceScalingAttempts,
 			defaultScaleResourceBackoff,
 			util.AlwaysRetry)
-		ds.l.V(4).Info("resource has been scaled", "namespace", namespace, "resource", resInfo)
 		return result.Err
 	}
 }
 func (ds *deploymentScaler) scale(ctx context.Context, resourceInfo scaleableResourceInfo, mismatchReplicas mismatchReplicasCheckFn, waitOnResourceInfos []scaleableResourceInfo) error {
 	var err error
-	ds.l.V(4).Info("Attempting to scale: %#v\n", resourceInfo)
+	ds.l.V(4).Info("Attempting to scale resource", "resourceInfo", resourceInfo)
 	// sleep for initial delay
 	err = util.SleepWithContext(ctx, resourceInfo.initialDelay)
 	if err != nil {
-		ds.l.Error(err, "looks like the context has been cancelled. exiting scaling operation", "namespace", ds.namespace, "resourceInfo", resourceInfo)
+		ds.l.Error(err, "looks like the context has been cancelled. exiting scaling operation", "resourceInfo", resourceInfo)
 		return err
 	}
 	deployment, err := util.GetDeploymentFor(ctx, ds.namespace, resourceInfo.ref.Name, ds.client)
 	if err != nil {
-		ds.l.Error(err, "error getting deployment for resource, skipping scaling operation", "namespace", ds.namespace, "resourceInfo", resourceInfo)
+		ds.l.Error(err, "scaling operation skipped due to error in getting deployment", "resourceInfo", resourceInfo)
 		return err
 	}
 	if ds.shouldScale(ctx, deployment, resourceInfo.replicas, mismatchReplicas, waitOnResourceInfos) {
-		_, err = ds.doScale(ctx, resourceInfo)
+		if _, err = ds.doScale(ctx, resourceInfo); err == nil {
+			ds.l.V(4).Info("resource has been scaled", "resInfo", resourceInfo)
+		}
 	}
 	return err
 }
@@ -228,11 +236,14 @@ func (ds *deploymentScaler) resourceMatchDesiredReplicas(ctx context.Context, re
 	if !isIgnoreScalingAnnotationSet(d) {
 		actualReplicas := d.Status.Replicas
 		if !mismatchReplicas(actualReplicas, resInfo.replicas) {
-			ds.l.V(4).Info("resource has been scaled to the desired replicas", "namespace", ds.namespace, "deploymentToScale", d.Name, "resourceInfo", resInfo, "actualReplicas", actualReplicas)
+			ds.l.V(4).Info("upstream resource has been scaled to desired replicas", "namespace", ds.namespace, "name", d.Name, "resInfo", resInfo, "replicas", actualReplicas)
 			return true
 		} else {
+			ds.l.V(5).Info("upstream resource has not been scaled to desored replicas", "namespace", ds.namespace, "name", d.Name, "resInfo", resInfo, "actualReplicas", actualReplicas)
 			return false
 		}
+	} else {
+		ds.l.V(5).Info("ignoring upstream resource due to explicit instruction via annotation", "namespace", ds.namespace, "name", d.Name, "resInfo", resInfo, "annotation", ignoreScalingAnnotationKey)
 	}
 	return true
 }
