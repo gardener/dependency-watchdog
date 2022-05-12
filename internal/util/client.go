@@ -3,6 +3,7 @@ package util
 import (
 	"context"
 	"fmt"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -67,13 +68,21 @@ func CreateScalesGetter(config *rest.Config) (scale.ScalesGetter, error) {
 	return scale.New(clientSet.RESTClient(), mapper, dynamic.LegacyAPIPathResolverFunc, resolver), nil
 }
 
-func GetDeploymentFor(ctx context.Context, namespace string, name string, client client.Client) (*appsv1.Deployment, error) {
+func GetDeploymentFor(ctx context.Context, namespace string, name string, client client.Client, timeout *time.Duration) (*appsv1.Deployment, error) {
+	childCtx := ctx
+	var cancelFn context.CancelFunc
+	if timeout != nil {
+		childCtx, cancelFn = context.WithTimeout(ctx, *timeout)
+	}
+	if cancelFn != nil {
+		defer cancelFn()
+	}
 	key := types.NamespacedName{
 		Namespace: namespace,
 		Name:      name,
 	}
 	deployment := appsv1.Deployment{}
-	err := client.Get(ctx, key, &deployment)
+	err := client.Get(childCtx, key, &deployment)
 	if err != nil {
 		return nil, err
 	}

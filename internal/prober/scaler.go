@@ -199,7 +199,7 @@ func (ds *deploymentScaler) scale(ctx context.Context, resourceInfo scaleableRes
 		ds.l.Error(err, "looks like the context has been cancelled. exiting scaling operation", "resourceInfo", resourceInfo)
 		return err
 	}
-	deployment, err := util.GetDeploymentFor(ctx, ds.namespace, resourceInfo.ref.Name, ds.client)
+	deployment, err := util.GetDeploymentFor(ctx, ds.namespace, resourceInfo.ref.Name, ds.client, nil)
 	if err != nil {
 		ds.l.Error(err, "scaling operation skipped due to error in getting deployment", "resourceInfo", resourceInfo)
 		return err
@@ -236,7 +236,7 @@ func (ds *deploymentScaler) shouldScale(ctx context.Context, deployment *appsv1.
 }
 
 func (ds *deploymentScaler) resourceMatchDesiredReplicas(ctx context.Context, resInfo scaleableResourceInfo, mismatchReplicas mismatchReplicasCheckFn) bool {
-	d, err := util.GetDeploymentFor(ctx, ds.namespace, resInfo.ref.Name, ds.client)
+	d, err := util.GetDeploymentFor(ctx, ds.namespace, resInfo.ref.Name, ds.client, nil)
 	if err != nil {
 		ds.l.Error(err, "error trying to get Deployment for resource", "resource", resInfo.ref)
 		return false
@@ -284,12 +284,21 @@ func (ds *deploymentScaler) doScale(ctx context.Context, resourceInfo scaleableR
 	if err != nil {
 		return nil, err
 	}
-	scale, err := ds.scaler.Get(ctx, gr, resourceInfo.ref.Name, metav1.GetOptions{})
+	scale, err := func() (*autoscalingv1.Scale, error) {
+		childCtx, cancelFn := context.WithTimeout(ctx, resourceInfo.timeout)
+		defer cancelFn()
+		return ds.scaler.Get(childCtx, gr, resourceInfo.ref.Name, metav1.GetOptions{})
+
+	}()
 	if err != nil {
 		return nil, err
 	}
-	scale.Spec.Replicas = resourceInfo.replicas
-	return ds.scaler.Update(ctx, gr, scale, metav1.UpdateOptions{})
+	return func() (*autoscalingv1.Scale, error) {
+		childCtx, cancelFn := context.WithTimeout(ctx, resourceInfo.timeout)
+		defer cancelFn()
+		scale.Spec.Replicas = resourceInfo.replicas
+		return ds.scaler.Update(childCtx, gr, scale, metav1.UpdateOptions{})
+	}()
 }
 
 func (ds *deploymentScaler) getGroupResource(resourceRef *autoscalingv1.CrossVersionObjectReference) (schema.GroupResource, error) {

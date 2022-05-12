@@ -157,6 +157,7 @@ func testScalingWhenDeploymentNotFound(t *testing.T) {
 
 func testWhenKindOfDependentResourceIsWrong(t *testing.T) {
 	g := NewWithT(t)
+	// creates a probeConfig where kind of CA is depoyment instead of deployment.
 	faultyProbeCfg := createFaultyProbeConfig()
 	newDS := NewDeploymentScaler(namespace, faultyProbeCfg, kindTestEnv.GetClient(), scalesGetter, sLogger,
 		withDependentResourceCheckTimeout(10*time.Second), withDependentResourceCheckInterval(100*time.Millisecond))
@@ -380,13 +381,13 @@ func matchStatusReplicas(g *WithT, namespace string, name string, expectedReplic
 
 func createProbeConfig() {
 	dependentResourceInfos := createDepResourceInfoArray()
-	probeCfg = &Config{Namespace: namespace, DependentResourceInfos: dependentResourceInfos}
+	probeCfg = &Config{DependentResourceInfos: dependentResourceInfos}
 }
 
 func createFaultyProbeConfig() *Config {
 	dependentResourceInfos := createDepResourceInfoArray()
 	dependentResourceInfos[2].Ref.Kind = "Depoyment"
-	return &Config{Namespace: namespace, DependentResourceInfos: dependentResourceInfos}
+	return &Config{DependentResourceInfos: dependentResourceInfos}
 }
 
 func createDepResourceInfoArray() []DependentResourceInfo {

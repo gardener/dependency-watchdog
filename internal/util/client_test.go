@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/gardener/dependency-watchdog/internal/test"
 	. "github.com/onsi/gomega"
@@ -47,6 +48,7 @@ func TestSuite(t *testing.T) {
 		{"Extract Kubeconfig from secret", testExtractKubeConfigFromSecret},
 		{"Deployment not found ", testDeploymentNotFound},
 		{"Deployment is found", testFoundDeployment},
+		{"Timeout before getting the deployment", testTimeoutBeforeGettingDeployment},
 		{"Create Scales Getter", testCreateScalesGetter},
 		{"Create client from kubeconfig", testCreateClientFromKubeconfigBytes},
 	}
@@ -55,8 +57,17 @@ func TestSuite(t *testing.T) {
 		t.Run(test.title, func(t *testing.T) {
 			test.run(t)
 		})
+		deleteAllDeployments(t)
 	}
+	t.Log("deleting envTest")
 	testEnv.Delete()
+}
+
+func deleteAllDeployments(t *testing.T) {
+	g := NewWithT(t)
+	opts := []client.DeleteAllOfOption{client.InNamespace("default")}
+	err := k8sClient.DeleteAllOf(ctx, &appsv1.Deployment{}, opts...)
+	g.Expect(err).To(BeNil())
 }
 
 func testSecretNotFound(t *testing.T) {
@@ -100,28 +111,62 @@ func testExtractKubeConfigFromSecret(t *testing.T) {
 }
 
 func testDeploymentNotFound(t *testing.T) {
-	g := NewWithT(t)
-	deployment := setupGetDeploymentTest(t)
-	actual, err := GetDeploymentFor(ctx, deployment.ObjectMeta.Namespace, deployment.ObjectMeta.Name, k8sClient)
-	g.Expect(apierrors.IsNotFound(err)).Should(BeTrue())
-	g.Expect(actual).Should(BeNil())
+	timeout := 20 * time.Millisecond
+	table := []struct {
+		timeout *time.Duration
+	}{
+		{nil},
+		{&timeout},
+	}
+	for _, entry := range table {
+		g := NewWithT(t)
+		deployment := setupGetDeploymentTest(t)
+		actual, err := GetDeploymentFor(ctx, deployment.ObjectMeta.Namespace, deployment.ObjectMeta.Name, k8sClient, entry.timeout)
+		g.Expect(err).ShouldNot(BeNil())
+		g.Expect(actual).Should(BeNil())
+	}
+
 }
 
 func testFoundDeployment(t *testing.T) {
+	timeout := 20 * time.Millisecond
+	table := []struct {
+		timeout *time.Duration
+	}{
+		{nil},
+		{&timeout},
+	}
+	for _, entry := range table {
+		g := NewWithT(t)
+		deployment := setupGetDeploymentTest(t)
+
+		err := k8sClient.Create(ctx, deployment)
+		g.Expect(err).Should(BeNil())
+
+		actual, err := GetDeploymentFor(ctx, deployment.ObjectMeta.Namespace, deployment.ObjectMeta.Name, k8sClient, entry.timeout)
+		g.Expect(err).Should(BeNil())
+		g.Expect(actual).ShouldNot(BeNil())
+		g.Expect(actual.ObjectMeta.Name).Should(Equal(deployment.ObjectMeta.Name))
+		g.Expect(actual.ObjectMeta.Namespace).Should(Equal(deployment.ObjectMeta.Namespace))
+
+		err = k8sClient.Delete(ctx, deployment)
+		g.Expect(err).Should(BeNil())
+	}
+
+}
+
+func testTimeoutBeforeGettingDeployment(t *testing.T) {
 	g := NewWithT(t)
 	deployment := setupGetDeploymentTest(t)
 
 	err := k8sClient.Create(ctx, deployment)
 	g.Expect(err).Should(BeNil())
 
-	actual, err := GetDeploymentFor(ctx, deployment.ObjectMeta.Namespace, deployment.ObjectMeta.Name, k8sClient)
-	g.Expect(err).Should(BeNil())
-	g.Expect(actual).ShouldNot(BeNil())
-	g.Expect(actual.ObjectMeta.Name).Should(Equal(deployment.ObjectMeta.Name))
-	g.Expect(actual.ObjectMeta.Namespace).Should(Equal(deployment.ObjectMeta.Namespace))
-
-	err = k8sClient.Delete(ctx, deployment)
-	g.Expect(err).Should(BeNil())
+	timeout := time.Nanosecond
+	actual, err := GetDeploymentFor(ctx, deployment.ObjectMeta.Namespace, deployment.ObjectMeta.Name, k8sClient, &timeout)
+	g.Expect(err).ShouldNot(BeNil())
+	g.Expect(err).To(Equal(context.DeadlineExceeded))
+	g.Expect(actual).Should(BeNil())
 }
 
 func testCreateScalesGetter(t *testing.T) {

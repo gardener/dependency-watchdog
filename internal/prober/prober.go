@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/gardener/dependency-watchdog/internal/util"
 	"github.com/go-logr/logr"
 
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -60,6 +61,7 @@ func (p *Prober) IsClosed() bool {
 }
 
 func (p *Prober) Run() {
+	util.SleepWithContext(p.ctx, *p.config.InitialDelay)
 	wait.JitterUntilWithContext(p.ctx, p.probe, *p.config.ProbeInterval, *p.config.BackoffJitterFactor, true)
 }
 
@@ -120,7 +122,7 @@ func (p *Prober) probeInternal(shootClient kubernetes.Interface) {
 		return
 	}
 	p.internalProbeStatus.recordSuccess(*p.config.SuccessThreshold)
-	p.l.V(4).Info("internal probe is successful", "namespace", p.namespace, "successfulAttempts", p.internalProbeStatus.successCount)
+	p.l.V(4).Info("internal probe is successful", "namespace", p.namespace, "successfulAttempts", p.internalProbeStatus.successCount, "successThreshold", p.config.SuccessThreshold)
 }
 
 func (p *Prober) probeExternal(shootClient kubernetes.Interface) {

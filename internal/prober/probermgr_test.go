@@ -28,7 +28,7 @@ func TestRegisterNewProberAndCheckIfItExistsAndIsNotClosed(t *testing.T) {
 	defer tearDownTest(mgr)
 
 	const namespace = "bingo"
-	p := NewProber(context.Background(), namespace, &Config{Name: "bingo"}, nil, nil, nil, pmLogger)
+	p := NewProber(context.Background(), namespace, &Config{}, nil, nil, nil, pmLogger)
 	g.Expect(p).ShouldNot(BeNil(), "NewProber should have returned a non nil Prober")
 	g.Expect(p.namespace).Should(Equal(namespace), "The namespace of the created prober should match")
 	g.Expect(mgr.Register(*p)).To(BeTrue(), "mgr.Register should register a new prober")
@@ -48,16 +48,16 @@ func TestProberRegistrationWithSameKeyShouldNotOverwriteExistingProber(t *testin
 	defer tearDownTest(mgr)
 
 	const namespace = "bingo"
-	p1 := NewProber(context.Background(), namespace, &Config{Name: "bingo"}, nil, nil, nil, pmLogger)
+	p1 := NewProber(context.Background(), namespace, &Config{InternalKubeConfigSecretName: "bingo"}, nil, nil, nil, pmLogger)
 	g.Expect(mgr.Register(*p1)).To(BeTrue(), "mgr.Register should register a new prober")
 
-	p2 := NewProber(context.Background(), namespace, &Config{Name: "zingo"}, nil, nil, nil, pmLogger)
+	p2 := NewProber(context.Background(), namespace, &Config{InternalKubeConfigSecretName: "zingo"}, nil, nil, nil, pmLogger)
 	g.Expect(mgr.Register(*p2)).To(BeFalse(), "mgr.Register should return false if a prober with the same key is already registered")
 
 	foundProber, ok := mgr.GetProber(namespace)
 	g.Expect(ok).Should(BeTrue(), "mgr.Register should not remove the existing prober")
-	g.Expect(foundProber.config.Name).ShouldNot(Equal(p2.config.Name), "mgr.Register should not replace the existing prober with a new one")
-	g.Expect(foundProber.config.Name).Should(Equal(p1.config.Name))
+	g.Expect(foundProber.config.InternalKubeConfigSecretName).ShouldNot(Equal(p2.config.InternalKubeConfigSecretName), "mgr.Register should not replace the existing prober with a new one")
+	g.Expect(foundProber.config.InternalKubeConfigSecretName).Should(Equal(p1.config.InternalKubeConfigSecretName))
 
 	t.Log("Existing prober is not overwritten by the Register method")
 }
@@ -68,7 +68,7 @@ func TestUnregisterExistingProberShouldCloseItAndRemoveItFromManager(t *testing.
 	defer tearDownTest(mgr)
 
 	const namespace = "bingo"
-	p := NewProber(context.Background(), namespace, &Config{Name: "bingo"}, nil, nil, nil, pmLogger)
+	p := NewProber(context.Background(), namespace, &Config{}, nil, nil, nil, pmLogger)
 	g.Expect(mgr.Register(*p)).To(BeTrue(), "mgr.Register should register a new prober")
 
 	mgr.Unregister(namespace)

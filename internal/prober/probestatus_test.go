@@ -92,18 +92,27 @@ func TestCanIgnoreProbeError(t *testing.T) {
 	err := errors.New("test")
 
 	g.Expect(ps.canIgnoreProbeError(err)).To(BeFalse(), fmt.Sprintf("CanIgnoreProbeError should return false for %v", err))
-	g.Expect(ps.canIgnoreProbeError(apierrors.NewNotFound(schema.GroupResource{}, "test"))).To(BeTrue(),
-		"CanIgnoreProbeError should return true for a NotFound error")
 	g.Expect(ps.canIgnoreProbeError(apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden")))).To(BeTrue(),
 		"CanIgnoreProbeError should return true for a Forbidden request error")
 	g.Expect(ps.canIgnoreProbeError(apierrors.NewUnauthorized("unauthorized"))).To(BeTrue(),
 		"CanIgnoreProbeError should return true for an Unauthorized request error")
 	g.Expect(ps.canIgnoreProbeError(apierrors.NewTooManyRequests("Too many requests", 10))).To(BeTrue(),
 		"CanIgnoreProbeError should return true for a TooManyRequests error")
-	g.Expect(ps.backOff).ToNot(BeNil(), "CanIgnoreProbeError should reset backOff in case of TooManyRequests error")
+
+	t.Log("CanIgnoreProbeError Passed")
+}
+
+func TestHandleIgnorableError(t *testing.T) {
+	g := NewWithT(t)
+	ps := createProbeStatus(0, 0, nil, nil)
+	ps.handleIgnorableError(apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden")))
+	g.Expect(ps.backOff).To(BeNil(),
+		"handleIgnorableError should not reset backOff timer for errors other than throttling error.")
+	ps.handleIgnorableError(apierrors.NewTooManyRequests("Too many requests", 10))
+	g.Expect(ps.backOff).ToNot(BeNil(), "handleIgnorableError should reset backOff timer for throttling error")
 
 	ps.backOff.Stop()
-	t.Log("CanIgnoreProbeError Passed")
+	t.Log("HandleIgnorableError Passed")
 }
 
 func createProbeStatus(successCount int, errCount int, lastErr error, backOff *time.Timer) *probeStatus {

@@ -12,19 +12,17 @@ const (
 	ScaleUp int = iota
 	ScaleDown
 	DefaultProbeInterval                             = 10 * time.Second
-	DefaultInitialDelay                              = 0 * time.Second
+	DefaultInitialDelay                              = 30 * time.Second
 	DefaultInternalProbeFailureBackoffDuration       = 30 * time.Second
 	DefaultSuccessThreshold                          = 1
 	DefaultFailureThreshold                          = 3
 	DefaultBackoffJitterFactor                       = 0.2
 	DefaultScaleUpReplicas                     int32 = 1
 	DefaultScaleDownReplicas                   int32 = 0
-	DefaultScaleUpdateTimeout                        = 10 * time.Second
+	DefaultScaleUpdateTimeout                        = 30 * time.Second
 )
 
 type Config struct {
-	Name                                string                  `yaml:"name"`
-	Namespace                           string                  `yaml:"namespace,omitempty"`
 	InternalKubeConfigSecretName        string                  `yaml:"internalKubeConfigSecretName"`
 	ExternalKubeConfigSecretName        string                  `yaml:"externalKubeConfigSecretName"`
 	ProbeInterval                       *time.Duration          `yaml:"probeInterval,omitempty"`
@@ -85,7 +83,6 @@ func readAndUnmarshal(file string) (*Config, error) {
 func (c *Config) validate() error {
 	v := new(validator)
 	// Check the mandatory config parameters for which a default will not be set
-	v.mustNotBeEmpty("Name", c.Name)
 	v.mustNotBeEmpty("InternalKubeConfigSecretName", c.InternalKubeConfigSecretName)
 	v.mustNotBeEmpty("ExternalKubeConfigSecretName", c.ExternalKubeConfigSecretName)
 	v.mustNotBeEmpty("ScaleResourceInfos", c.DependentResourceInfos)

@@ -26,7 +26,6 @@ func (ps *probeStatus) handleIgnorableError(err error) {
 	if apiServerThrottledRequests {
 		ps.resetBackoff(backOffDurationForThrottledRequests)
 	}
-	//ps.successCount = 0
 }
 
 func (ps *probeStatus) recordFailure(err error, failureThreshold int, failureThresholdBackoffDuration time.Duration) {

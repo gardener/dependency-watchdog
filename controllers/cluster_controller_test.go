@@ -244,15 +244,28 @@ func testInvalidShootInClusterSpec(t *testing.T, k8sClient client.Client, reconc
 	deleteClusterAndCheckIfProberRemoved(g, k8sClient, cluster, reconciler)
 }
 
+func updateShootDeletionTimeStamp(g *WithT, k8sClient client.Client, cluster *gardenerv1alpha1.Cluster, shoot *gardencorev1beta1.Shoot) {
+	deletionTimeStamp, _ := time.Parse(time.RFC3339, "2022-05-05T08:34:05Z")
+	shoot.DeletionTimestamp = &metav1.Time{
+		Time: deletionTimeStamp,
+	}
+	cluster.Spec.Shoot = runtime.RawExtension{
+		Object: shoot,
+	}
+	err := k8sClient.Update(context.Background(), cluster)
+	g.Expect(err).To(BeNil())
+}
+
 func testProberShouldBeRemovedIfDeletionTimeStampIsSet(t *testing.T, k8sClient client.Client, reconciler *ClusterReconciler) {
 	g := NewWithT(t)
-	cluster, _ := createClusterResource()
+	cluster, shoot := createClusterResource()
 	cluster.ObjectMeta.Finalizers = append(cluster.ObjectMeta.Finalizers, "gardener")
 	err := k8sClient.Create(context.Background(), cluster)
 	g.Expect(err).To(BeNil())
 	// sleep is added to ensure that reconciler is able to complete its execution before any checks are done
 	time.Sleep(2 * time.Second)
 	proberShouldBePresent(g, reconciler, cluster)
+	updateShootDeletionTimeStamp(g, k8sClient, cluster, shoot)
 	deleteClusterAndCheckIfProberRemoved(g, k8sClient, cluster, reconciler)
 }
 

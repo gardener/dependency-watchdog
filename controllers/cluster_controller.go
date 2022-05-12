@@ -60,17 +60,17 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
-	// If cluster is marked for deletion then any existing probes will be unregistered
-	if cluster.DeletionTimestamp != nil {
-		logger.V(4).Info("Cluster has been marked for deletion, any existing probes will be removed if present", "namespace", req.Namespace, "name", req.Name)
-		r.ProberMgr.Unregister(req.Name)
-		return ctrl.Result{}, nil
-	}
-
 	shoot, err := extensionscontroller.ShootFromCluster(cluster)
 	if err != nil {
 		logger.Error(err, "Error extracting shoot from cluster.", "namespace", req.Namespace, "name", req.Name)
 		return ctrl.Result{}, err
+	}
+
+	// If shoot is marked for deletion then any existing probes will be unregistered
+	if shoot.DeletionTimestamp != nil {
+		logger.V(4).Info("Cluster has been marked for deletion, any existing probes will be removed if present", "namespace", req.Namespace, "name", req.Name)
+		r.ProberMgr.Unregister(req.Name)
+		return ctrl.Result{}, nil
 	}
 
 	// if hibernation is enabled then we will remove any existing prober
