@@ -16,16 +16,21 @@ type probeStatus struct {
 func (ps *probeStatus) canIgnoreProbeError(err error) bool {
 	// we now create new shoot client by fetching the secret for every probe, we can ignore an error where probes fail due to authentication/authorization failures
 	secretsRotated := apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err)
+	apiServerThrottledRequests := apierrors.IsTooManyRequests(err)
+	return secretsRotated || apiServerThrottledRequests
+}
+
+func (ps *probeStatus) handleIgnorableError(err error) {
 	// if kube API server throttled requests then we should back-off a bit
 	apiServerThrottledRequests := apierrors.IsTooManyRequests(err)
 	if apiServerThrottledRequests {
 		ps.resetBackoff(backOffDurationForThrottledRequests)
 	}
-	return apiServerThrottledRequests || apierrors.IsNotFound(err) || secretsRotated
+	//ps.successCount = 0
 }
 
 func (ps *probeStatus) recordFailure(err error, failureThreshold int, failureThresholdBackoffDuration time.Duration) {
-	if ps.errorCount <= failureThreshold {
+	if ps.errorCount < failureThreshold {
 		ps.errorCount++
 	}
 	ps.lastErr = err
@@ -38,7 +43,7 @@ func (ps *probeStatus) recordFailure(err error, failureThreshold int, failureThr
 func (ps *probeStatus) recordSuccess(successThreshold int) {
 	ps.errorCount = 0
 	ps.lastErr = nil
-	if ps.successCount <= successThreshold {
+	if ps.successCount < successThreshold {
 		ps.successCount++
 	}
 	ps.resetBackoff(0)
