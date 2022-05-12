@@ -46,7 +46,7 @@ func TestSuite(t *testing.T) {
 
 func testSecretNotFound(t *testing.T) {
 	g := NewWithT(t)
-	setupShootCLientTest(t)
+	setupShootClientTest(t)
 	k8sInterface, err := clientCreator.CreateClient(sctx, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name)
 	g.Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	g.Expect(k8sInterface).To(BeNil())
@@ -54,7 +54,7 @@ func testSecretNotFound(t *testing.T) {
 
 func testConfigNotFound(t *testing.T) {
 	g := NewWithT(t)
-	teardown := setupShootCLientTest(t)
+	teardown := setupShootClientTest(t)
 	defer teardown()
 	err := sk8sClient.Create(sctx, secret)
 	g.Expect(err).To(BeNil())
@@ -67,7 +67,7 @@ func testConfigNotFound(t *testing.T) {
 
 func testCreateShootClient(t *testing.T) {
 	g := NewWithT(t)
-	teardown := setupShootCLientTest(t)
+	teardown := setupShootClientTest(t)
 	defer teardown()
 	kubeconfig, err := test.ReadFile(kubeConfigPath)
 	g.Expect(err).To(BeNil())
@@ -83,7 +83,7 @@ func testCreateShootClient(t *testing.T) {
 	g.Expect(shootClient).ToNot(BeNil())
 }
 
-func setupShootCLientTest(t *testing.T) func() {
+func setupShootClientTest(t *testing.T) func() {
 	var err error
 	g := NewWithT(t)
 	test.FileExistsOrFail(secretPath)

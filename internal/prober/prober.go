@@ -64,14 +64,14 @@ func (p *Prober) Run() {
 }
 
 func (p *Prober) probe(ctx context.Context) {
-	internalShootClient, err := p.setupProbeClient(ctx)
+	internalShootClient, err := p.setupProbeClient(ctx, p.namespace, p.config.InternalKubeConfigSecretName)
 	if err != nil {
 		p.l.Error(err, "failed to create shoot client using internal secret, ignoring error, internal probe will be re-attempted", "namespace", p.namespace)
 		return
 	}
 	p.probeInternal(internalShootClient)
 	if p.internalProbeStatus.isHealthy(*p.config.SuccessThreshold) {
-		externalShootClient, err := p.setupProbeClient(ctx)
+		externalShootClient, err := p.setupProbeClient(ctx, p.namespace, p.config.ExternalKubeConfigSecretName)
 		if err != nil {
 			p.l.Error(err, "failed to create shoot client using external secret, ignoring error, probe will be re-attempted", "namespace", p.namespace)
 			return
@@ -98,8 +98,8 @@ func (p *Prober) probe(ctx context.Context) {
 	}
 }
 
-func (p *Prober) setupProbeClient(ctx context.Context) (kubernetes.Interface, error) {
-	shootClient, err := p.shootclientCreator.CreateClient(ctx, p.namespace, p.config.InternalKubeConfigSecretName)
+func (p *Prober) setupProbeClient(ctx context.Context, namespace string, kubeConfigSecretName string) (kubernetes.Interface, error) {
+	shootClient, err := p.shootclientCreator.CreateClient(ctx, namespace, kubeConfigSecretName)
 	if err != nil {
 		return nil, err
 	}

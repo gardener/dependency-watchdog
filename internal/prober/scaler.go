@@ -41,10 +41,10 @@ func NewDeploymentScaler(namespace string, config *Config, client client.Client,
 		l:         logger,
 	}
 	scaleDownFlow := ds.createResourceScaleFlow(namespace, fmt.Sprintf("scale-down-%s", namespace), createScaleDownResourceInfos(config.DependentResourceInfos), util.ScaleDownReplicasMismatch)
-	ds.l.V(5).Info(fmt.Sprintf("created scaleDownFlow with flowStepInfos as %#v", scaleDownFlow.flowStepInfos))
+	ds.l.V(5).Info(fmt.Sprintf("created scaleDownFlow with flowStepInfos as %v", scaleDownFlow.flowStepInfos))
 	ds.scaleDownFlow = scaleDownFlow.flow
 	scaleUpFlow := ds.createResourceScaleFlow(namespace, fmt.Sprintf("scale-up-%s", namespace), createScaleUpResourceInfos(config.DependentResourceInfos), util.ScaleUpReplicasMismatch)
-	ds.l.V(5).Info(fmt.Sprintf("created scaleUpFlow with flowStepInfos as %#v", scaleUpFlow.flowStepInfos))
+	ds.l.V(5).Info(fmt.Sprintf("created scaleUpFlow with flowStepInfos as %v", scaleUpFlow.flowStepInfos))
 	ds.scaleUpFlow = scaleUpFlow.flow
 	return &ds
 }
@@ -226,7 +226,11 @@ func (ds *deploymentScaler) shouldScale(ctx context.Context, deployment *appsv1.
 	// check if all resources this resource should wait on have been scaled, if not then we cannot scale this resource.
 	// Check for currently available replicas and not the desired replicas on the upstream resource dependencies.
 	if len(waitOnResourceInfos) > 0 {
-		return ds.waitUntilUpstreamResourcesAreScaled(ctx, waitOnResourceInfos, mismatchReplicas)
+		areUpstreamResourcesScaled := ds.waitUntilUpstreamResourcesAreScaled(ctx, waitOnResourceInfos, mismatchReplicas)
+		if !areUpstreamResourcesScaled {
+			ds.l.V(4).Info("Upstream resources are not scaled. scaling for this resource is skipped", "namespace", ds.namespace, "deploymentName", deployment.Name)
+		}
+		return areUpstreamResourcesScaled
 	}
 	return true
 }
@@ -243,7 +247,7 @@ func (ds *deploymentScaler) resourceMatchDesiredReplicas(ctx context.Context, re
 			ds.l.V(4).Info("upstream resource has been scaled to desired replicas", "namespace", ds.namespace, "name", d.Name, "resInfo", resInfo, "replicas", actualReplicas)
 			return true
 		} else {
-			ds.l.V(5).Info("upstream resource has not been scaled to desored replicas", "namespace", ds.namespace, "name", d.Name, "resInfo", resInfo, "actualReplicas", actualReplicas)
+			ds.l.V(5).Info("upstream resource has not been scaled to desired replicas", "namespace", ds.namespace, "name", d.Name, "resInfo", resInfo, "actualReplicas", actualReplicas)
 			return false
 		}
 	} else {
@@ -260,7 +264,7 @@ func (ds *deploymentScaler) waitUntilUpstreamResourcesAreScaled(ctx context.Cont
 		resInfo := resInfo
 		go func() {
 			defer wg.Done()
-			operation := fmt.Sprintf("wait for upstream resource: %s to reach replicas %d", resInfo.ref.Name, resInfo.replicas)
+			operation := fmt.Sprintf("wait for upstream resource: %s in namespace %s to reach replicas %d", resInfo.ref.Name, ds.namespace, resInfo.replicas)
 			resultC <- util.RetryUntilPredicate(ctx, operation, func() bool { return ds.resourceMatchDesiredReplicas(ctx, resInfo, mismatchReplicas) }, *ds.options.dependentResourceCheckTimeout, *ds.options.dependentResourceCheckInterval)
 		}()
 	}
