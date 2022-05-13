@@ -14,23 +14,16 @@ import (
 	. "github.com/onsi/gomega"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/scale"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var (
 	defaultInitialDelay = 10 * time.Millisecond
-	defaultTimeout      = 20 * time.Millisecond
+	defaultTimeout      = 10 * time.Second
 	mcmRef              = &autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "machine-controller-manager", APIVersion: "apps/v1"}
 	kcmRef              = &autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "kube-controller-manager", APIVersion: "apps/v1"}
 	caRef               = &autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "cluster-autoscaler", APIVersion: "apps/v1"}
 	kindTestEnv         test.KindCluster
-	cfg                 *rest.Config
-	probeCfg            *Config
-	scalesGetter        scale.ScalesGetter
-	ds                  DeploymentScaler
-	ctx                 = context.Background()
 	sLogger             = log.FromContext(context.Background()).WithName("scalerLogger")
 )
 
@@ -40,40 +33,50 @@ const (
 	ignoreScaleAnnotationKey = "dependency-watchdog.gardener.cloud/ignore-scaling"
 )
 
-func beforeAll(g *WithT) {
+func beforeAllScalerEnvTests(g *WithT) func(g *WithT) {
 	var err error
 	kindTestEnv, err = test.CreateKindCluster(test.KindConfig{Name: "test"})
 	g.Expect(err).To(BeNil())
-	cfg = kindTestEnv.GetRestConfig()
-	scalesGetter, err = util.CreateScalesGetter(cfg)
+	return func(g *WithT) {
+		err := kindTestEnv.Delete()
+		g.Expect(err).To(BeNil())
+	}
+}
+
+func createDeploymentScaler(g *WithT, probeCfg *Config) DeploymentScaler {
+	cfg := kindTestEnv.GetRestConfig()
+	scalesGetter, err := util.CreateScalesGetter(cfg)
 	g.Expect(err).To(BeNil())
+	ds := NewDeploymentScaler(namespace, probeCfg, kindTestEnv.GetClient(), scalesGetter, sLogger,
+		withDependentResourceCheckTimeout(10*time.Second), withDependentResourceCheckInterval(100*time.Millisecond))
+	return ds
 }
 
 func TestScalerSuite(t *testing.T) {
 	g := NewWithT(t)
-	beforeAll(g)
-	createProbeConfig()
-	ds = NewDeploymentScaler(namespace, probeCfg, kindTestEnv.GetClient(), scalesGetter, sLogger,
-		withDependentResourceCheckTimeout(10*time.Second), withDependentResourceCheckInterval(100*time.Millisecond))
+	afterAllScalerTests := beforeAllScalerEnvTests(g)
+	defer afterAllScalerTests(g)
 	tests := []struct {
 		title string
 		run   func(t *testing.T)
 	}{
-		{"test when kind of CA dependent resource is wrong", testWhenKindOfDependentResourceIsWrong},
-		{"test scaling when deployment is not found", testScalingWhenDeploymentNotFound},
+		{"test doScale returns an error", testDoScaleReturnsError},
+		{"test scaling when KCM deployment is not found", testScalingWhenKCMDeploymentNotFound},
 		{"test scaling when all deployments are found", testScalingWhenAllDeploymentsAreFound},
 	}
 	for _, test := range tests {
 		t.Run(test.title, func(t *testing.T) {
 			test.run(t)
-			err := kindTestEnv.DeleteAllDeployments(namespace)
-			g.Expect(err).To(BeNil())
 		})
+		err := kindTestEnv.DeleteAllDeployments(namespace)
+		g.Expect(err).To(BeNil())
 	}
-	kindTestEnv.Delete()
 }
 
 func testScalingWhenAllDeploymentsAreFound(t *testing.T) {
+	g := NewWithT(t)
+	probeCfg := createProbeConfig(nil)
+	ds := createDeploymentScaler(g, probeCfg)
 	table := []struct {
 		mcmReplicas               int32
 		kcmReplicas               int32
@@ -96,8 +99,6 @@ func testScalingWhenAllDeploymentsAreFound(t *testing.T) {
 	}
 
 	for _, entry := range table {
-		g := NewWithT(t)
-
 		createDeployment(g, namespace, mcmRef.Name, deploymentImageName, entry.mcmReplicas, nil)
 		createDeployment(g, namespace, caRef.Name, deploymentImageName, entry.caReplicas, nil)
 		if entry.applyKCMAnnotation {
@@ -110,7 +111,7 @@ func testScalingWhenAllDeploymentsAreFound(t *testing.T) {
 		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, caRef.Name, entry.caReplicas) }, 10*time.Second, time.Second).Should(BeTrue())
 		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, kcmRef.Name, entry.kcmReplicas) }, 10*time.Second, time.Second).Should(BeTrue())
 
-		err := entry.scalingFn(ctx)
+		err := entry.scalingFn(context.Background())
 		g.Expect(err).To(BeNil())
 		if entry.isFnScaleUp {
 			matchStatusReplicas(g, namespace, caRef.Name, entry.expectedScaledCAReplicas)
@@ -126,7 +127,10 @@ func testScalingWhenAllDeploymentsAreFound(t *testing.T) {
 	}
 }
 
-func testScalingWhenDeploymentNotFound(t *testing.T) {
+func testScalingWhenKCMDeploymentNotFound(t *testing.T) {
+	g := NewWithT(t)
+	probeCfg := createProbeConfig(nil)
+	ds := createDeploymentScaler(g, probeCfg)
 	table := []struct {
 		mcmReplicas               int32
 		caReplicas                int32
@@ -138,14 +142,13 @@ func testScalingWhenDeploymentNotFound(t *testing.T) {
 		{1, 1, 0, 1, ds.ScaleDown},
 	}
 	for _, entry := range table {
-		g := NewWithT(t)
 		createDeployment(g, namespace, mcmRef.Name, deploymentImageName, entry.mcmReplicas, nil)
 		createDeployment(g, namespace, caRef.Name, deploymentImageName, entry.caReplicas, nil)
 
 		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, mcmRef.Name, entry.mcmReplicas) }, 10*time.Second, time.Second).Should(BeTrue())
 		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, caRef.Name, entry.caReplicas) }, 10*time.Second, time.Second).Should(BeTrue())
 
-		err := entry.scalingFn(ctx)
+		err := entry.scalingFn(context.Background())
 		g.Expect(err).ToNot(BeNil())
 		g.Expect(err.Error()).To(ContainSubstring("\"" + kcmRef.Name + "\" not found"))
 		matchSpecReplicas(g, namespace, mcmRef.Name, entry.expectedScaledMCMReplicas)
@@ -155,12 +158,14 @@ func testScalingWhenDeploymentNotFound(t *testing.T) {
 	}
 }
 
-func testWhenKindOfDependentResourceIsWrong(t *testing.T) {
+func testDoScaleReturnsError(t *testing.T) {
 	g := NewWithT(t)
-	// creates a probeConfig where kind of CA is depoyment instead of deployment.
-	faultyProbeCfg := createFaultyProbeConfig()
-	newDS := NewDeploymentScaler(namespace, faultyProbeCfg, kindTestEnv.GetClient(), scalesGetter, sLogger,
-		withDependentResourceCheckTimeout(10*time.Second), withDependentResourceCheckInterval(100*time.Millisecond))
+	faultyProbeCfg := createProbeConfig(nil)
+	faultyProbeCfg.DependentResourceInfos[2].Ref.Kind = "Depoyment"
+	ds1 := createDeploymentScaler(g, faultyProbeCfg)
+	timeout := time.Nanosecond
+	probeCfg := createProbeConfig(&timeout)
+	ds2 := createDeploymentScaler(g, probeCfg)
 	table := []struct {
 		mcmReplicas               int32
 		kcmReplicas               int32
@@ -169,10 +174,14 @@ func testWhenKindOfDependentResourceIsWrong(t *testing.T) {
 		expectedScaledKCMReplicas int32
 		expectedScaledCAReplicas  int32
 		scalingFn                 func(context.Context) error
+		errorString               string
 	}{
-		{0, 0, 0, 0, 0, 0, newDS.ScaleUp},
-		{1, 1, 1, 0, 0, 1, newDS.ScaleDown},
+		{0, 0, 0, 0, 0, 0, ds1.ScaleUp, "no matches for kind \"Depoyment\" in version \"apps/v1\""},
+		{1, 1, 1, 0, 0, 1, ds1.ScaleDown, "no matches for kind \"Depoyment\" in version \"apps/v1\""},
+		{0, 0, 0, 0, 0, 0, ds2.ScaleUp, "context deadline exceeded"},
+		{1, 1, 1, 1, 1, 1, ds2.ScaleDown, "context deadline exceeded"},
 	}
+
 	for _, entry := range table {
 		createDeployment(g, namespace, mcmRef.Name, deploymentImageName, entry.mcmReplicas, nil)
 		createDeployment(g, namespace, caRef.Name, deploymentImageName, entry.caReplicas, nil)
@@ -182,8 +191,9 @@ func testWhenKindOfDependentResourceIsWrong(t *testing.T) {
 		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, caRef.Name, entry.caReplicas) }, 10*time.Second, time.Second).Should(BeTrue())
 		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, kcmRef.Name, entry.kcmReplicas) }, 10*time.Second, time.Second).Should(BeTrue())
 
-		err := entry.scalingFn(ctx)
+		err := entry.scalingFn(context.Background())
 		g.Expect(err).ToNot(BeNil())
+		g.Expect(err.Error()).To(ContainSubstring(entry.errorString))
 		matchStatusReplicas(g, namespace, caRef.Name, entry.expectedScaledCAReplicas)
 		matchStatusReplicas(g, namespace, kcmRef.Name, entry.expectedScaledKCMReplicas)
 		matchStatusReplicas(g, namespace, mcmRef.Name, entry.expectedScaledMCMReplicas)
@@ -195,7 +205,7 @@ func testWhenKindOfDependentResourceIsWrong(t *testing.T) {
 func TestCreateResourceScaleFlowParallel(t *testing.T) {
 	g := NewWithT(t)
 
-	depScaler := deploymentScaler{}
+	depScaler := deploymentScaler{l: sLogger}
 	var scri []scaleableResourceInfo
 	scri = append(scri, scaleableResourceInfo{ref: caRef, level: 1, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 0})
 	scri = append(scri, scaleableResourceInfo{ref: mcmRef, level: 0, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 0})
@@ -244,7 +254,7 @@ func TestSleepWithContextInScale(t *testing.T) {
 	g := NewWithT(t)
 	var err error
 	depScaler := deploymentScaler{l: sLogger}
-	cancelableCtx, cancelFn := context.WithCancel(ctx)
+	cancelableCtx, cancelFn := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -276,9 +286,9 @@ func TestSortAndGetUniqueLevelsForEmptyScaleableResourceInfos(t *testing.T) {
 func TestCreateScaleUpResourceInfos(t *testing.T) {
 	g := NewWithT(t)
 	var depResInfos []DependentResourceInfo
-	depResInfos = append(depResInfos, createDependentResourceInfo(mcmRef.Name, 2, 0, 1, 0))
-	depResInfos = append(depResInfos, createDependentResourceInfo(caRef.Name, 0, 1, 1, 0))
-	depResInfos = append(depResInfos, createDependentResourceInfo(kcmRef.Name, 1, 0, 1, 0))
+	depResInfos = append(depResInfos, createDependentResourceInfo(mcmRef.Name, 2, 0, 1, 0, nil))
+	depResInfos = append(depResInfos, createDependentResourceInfo(caRef.Name, 0, 1, 1, 0, nil))
+	depResInfos = append(depResInfos, createDependentResourceInfo(kcmRef.Name, 1, 0, 1, 0, nil))
 
 	scaleUpResInfos := createScaleUpResourceInfos(depResInfos)
 	g.Expect(scaleUpResInfos).ToNot(BeNil())
@@ -293,9 +303,9 @@ func TestCreateScaleUpResourceInfos(t *testing.T) {
 func TestCreateScaleDownResourceInfos(t *testing.T) {
 	g := NewWithT(t)
 	var depResInfos []DependentResourceInfo
-	depResInfos = append(depResInfos, createDependentResourceInfo(mcmRef.Name, 1, 0, 1, 0))
-	depResInfos = append(depResInfos, createDependentResourceInfo(caRef.Name, 0, 1, 2, 1))
-	depResInfos = append(depResInfos, createDependentResourceInfo(kcmRef.Name, 1, 0, 1, 0))
+	depResInfos = append(depResInfos, createDependentResourceInfo(mcmRef.Name, 1, 0, 1, 0, nil))
+	depResInfos = append(depResInfos, createDependentResourceInfo(caRef.Name, 0, 1, 2, 1, nil))
+	depResInfos = append(depResInfos, createDependentResourceInfo(kcmRef.Name, 1, 0, 1, 0, nil))
 
 	scaleDownResInfos := createScaleDownResourceInfos(depResInfos)
 	g.Expect(scaleDownResInfos).ToNot(BeNil())
@@ -324,19 +334,22 @@ func createScaleableResourceInfos(numResInfosByLevel map[int]int) []scaleableRes
 	return resInfos
 }
 
-func createDependentResourceInfo(name string, scaleUpLevel, scaleDownLevel int, scaleUpReplicas, scaleDownReplicas int32) DependentResourceInfo {
+func createDependentResourceInfo(name string, scaleUpLevel, scaleDownLevel int, scaleUpReplicas, scaleDownReplicas int32, timeout *time.Duration) DependentResourceInfo {
+	if timeout == nil {
+		timeout = &defaultTimeout
+	}
 	return DependentResourceInfo{
 		Ref: &autoscalingv1.CrossVersionObjectReference{Name: name, Kind: "Deployment", APIVersion: "apps/v1"},
 		ScaleUpInfo: &ScaleInfo{
 			Level:        scaleUpLevel,
 			InitialDelay: &defaultInitialDelay,
-			Timeout:      &defaultTimeout,
+			Timeout:      timeout,
 			Replicas:     &scaleUpReplicas,
 		},
 		ScaleDownInfo: &ScaleInfo{
 			Level:        scaleDownLevel,
 			InitialDelay: &defaultInitialDelay,
-			Timeout:      &defaultTimeout,
+			Timeout:      timeout,
 			Replicas:     &scaleDownReplicas,
 		},
 	}
@@ -379,21 +392,21 @@ func matchStatusReplicas(g *WithT, namespace string, name string, expectedReplic
 	g.Expect(deploy.Status.Replicas).Should(Equal(expectedReplicas))
 }
 
-func createProbeConfig() {
-	dependentResourceInfos := createDepResourceInfoArray()
-	probeCfg = &Config{DependentResourceInfos: dependentResourceInfos}
-}
-
-func createFaultyProbeConfig() *Config {
-	dependentResourceInfos := createDepResourceInfoArray()
-	dependentResourceInfos[2].Ref.Kind = "Depoyment"
+func createProbeConfig(timeout *time.Duration) *Config {
+	dependentResourceInfos := createDepResourceInfoArray(timeout)
 	return &Config{DependentResourceInfos: dependentResourceInfos}
 }
 
-func createDepResourceInfoArray() []DependentResourceInfo {
+// func createFaultyProbeConfig(timeout *time.Duration) *Config {
+// 	dependentResourceInfos := createDepResourceInfoArray(timeout)
+// 	dependentResourceInfos[2].Ref.Kind = "Depoyment"
+// 	return &Config{DependentResourceInfos: dependentResourceInfos}
+// }
+
+func createDepResourceInfoArray(timeout *time.Duration) []DependentResourceInfo {
 	var dependentResourceInfos []DependentResourceInfo
-	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(mcmRef.Name, 2, 0, 1, 0))
-	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(kcmRef.Name, 1, 0, 1, 0))
-	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(caRef.Name, 0, 1, 1, 0))
+	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(mcmRef.Name, 2, 0, 1, 0, timeout))
+	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(kcmRef.Name, 1, 0, 1, 0, timeout))
+	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(caRef.Name, 0, 1, 1, 0, timeout))
 	return dependentResourceInfos
 }
