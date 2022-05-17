@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
 
 	"github.com/gardener/dependency-watchdog/internal/prober"
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
@@ -73,15 +74,21 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
-	// if hibernation is enabled then we will remove any existing prober
+	// if hibernation is enabled then we will remove any existing prober. Any resource scaling that is required in case of hibernation will now be handled as part of worker reconciliation in extension controllers.
 	if gardencorev1beta1helper.HibernationIsEnabled(shoot) {
 		logger.V(4).Info("Cluster hibernation is enabled, prober will be removed if present", "namespace", req.Namespace, "name", req.Name)
 		r.ProberMgr.Unregister(req.Name)
 		return ctrl.Result{}, nil
 	}
 
-	// if the cluster is waking up then no prober should be added till the cluster is completely woken up
-	if !shoot.Status.IsHibernated {
+	// if control plane migration has started for a shoot, then any existing probe should be removed as it is no longer needed.
+	if shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeMigrate {
+		logger.V(4).Info("Cluster migration is enabled, prober will be removed if present", "namespace", req.Namespace, "name", req.Name)
+		r.ProberMgr.Unregister(req.Name)
+		return ctrl.Result{}, nil
+	}
+
+	if canStartProber(shoot) {
 		logger.V(1).Info("Starting a new probe for cluster if not present", "namespace", req.Namespace, "name", req.Name)
 		r.startProber(ctx, req.Name)
 	}
@@ -98,6 +105,26 @@ func (r *ClusterReconciler) getCluster(ctx context.Context, namespace string, na
 		return nil, false, err
 	}
 	return cluster, false, nil
+}
+
+// canStartProber checks if a probe can be registered and started.
+// shoot.Status.LastOperation.Type provides an insight into the current state of the cluster. It is important to identify the following cases:
+// 1. Cluster has been created successfully => This will ensure that the current state of shoot Kube API Server can be acted upon to decide on scaling operations. If the cluster
+// is in the process of creation, then it is possible that the control plane components have not completely come up. If the probe starts prematurely then it could start to scale down resources.
+// 2. During control plane migration, the value of shoot.Status.LastOperation.Type will be "Restore" => During this time it is imperative that probe is started early to ensure
+// that MCM is scaled down in case connectivity to the Kube API server of the shoot on the destination seed is broken, else it will try and recreate machines.
+//
+// If the shoot.Status.LastOperation.Type == "Reconcile" then it is assumed that the cluster has been successfully created at-least once and it is safe to start the probe
+func canStartProber(shoot *v1beta1.Shoot) bool {
+	if shoot.Status.IsHibernated {
+		return false
+	}
+	if shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeReconcile ||
+		shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeRestore ||
+		(shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeCreate && shoot.Status.LastOperation.State == v1beta1.LastOperationStateSucceeded) {
+		return true
+	}
+	return false
 }
 
 // startProber sets up a new probe against a given key which uniquely identifies the probe.
