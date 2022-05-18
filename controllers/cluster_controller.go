@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
 
 	"github.com/gardener/dependency-watchdog/internal/prober"
@@ -82,7 +83,7 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// if control plane migration has started for a shoot, then any existing probe should be removed as it is no longer needed.
-	if shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeMigrate {
+	if shoot.Status.LastOperation != nil && shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeMigrate {
 		logger.V(4).Info("Cluster migration is enabled, prober will be removed if present", "namespace", req.Namespace, "name", req.Name)
 		r.ProberMgr.Unregister(req.Name)
 		return ctrl.Result{}, nil
@@ -116,7 +117,7 @@ func (r *ClusterReconciler) getCluster(ctx context.Context, namespace string, na
 //
 // If the shoot.Status.LastOperation.Type == "Reconcile" then it is assumed that the cluster has been successfully created at-least once and it is safe to start the probe
 func canStartProber(shoot *v1beta1.Shoot) bool {
-	if shoot.Status.IsHibernated {
+	if shoot.Status.IsHibernated || shoot.Status.LastOperation == nil {
 		return false
 	}
 	if shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeReconcile ||
