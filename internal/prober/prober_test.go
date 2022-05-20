@@ -32,6 +32,7 @@ var (
 	notIgnorableErr                     = errors.New("Not Ignorable error")
 	internalProbeFailureBackoffDuration = time.Millisecond
 	pLogger                             = log.FromContext(context.Background()).WithName("proberLogger")
+	defaultProbeTimeout                 = 40 * time.Second
 )
 
 type probeStatusEntry struct {
@@ -57,7 +58,7 @@ func TestInternalProbeErrorCount(t *testing.T) {
 			setupProberTest(t)
 			config = createConfig(2, 1, 2*time.Millisecond, time.Microsecond, 0.2)
 
-			msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).Times(1)
+			msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).Times(1)
 			mki.EXPECT().Discovery().Return(mdi).Times(1)
 			mdi.EXPECT().ServerVersion().Return(nil, probeStatusEntry.err).Times(1)
 
@@ -77,7 +78,7 @@ func TestHealthyProbesShouldRunScaleUp(t *testing.T) {
 			setupProberTest(t)
 			config = createConfig(1, 1, 2*time.Millisecond, time.Microsecond, 0.2)
 
-			msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).Times(2)
+			msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).Times(2)
 			mki.EXPECT().Discovery().Return(mdi).AnyTimes().Times(2)
 			mdi.EXPECT().ServerVersion().Return(nil, nil).Times(2)
 			mds.EXPECT().ScaleUp(gomock.Any()).Return(probeStatusEntry.err).Times(1)
@@ -99,7 +100,7 @@ func TestExternalProbeFailingShouldRunScaleDown(t *testing.T) {
 			config = createConfig(1, 2, 5*time.Millisecond, time.Microsecond, 0.2)
 			runCounter := 0
 
-			msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).Times(4)
+			msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).Times(4)
 			mki.EXPECT().Discovery().Return(mdi).AnyTimes().Times(4)
 			mdi.EXPECT().ServerVersion().DoAndReturn(func() (*version.Info, error) {
 				runCounter++
@@ -128,7 +129,7 @@ func TestUnchangedExternalErrorCountForIgnorableErrors(t *testing.T) {
 			config = createConfig(1, 2, 5*time.Millisecond, time.Microsecond, 0.2)
 			runCounter := 0
 
-			msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).MinTimes(2).MaxTimes(4)
+			msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).MinTimes(2).MaxTimes(4)
 			mki.EXPECT().Discovery().Return(mdi).AnyTimes().Times(4).MinTimes(2).MaxTimes(4)
 			mdi.EXPECT().ServerVersion().DoAndReturn(func() (*version.Info, error) {
 				runCounter++
@@ -155,7 +156,7 @@ func TestInternalProbeShouldNotRunIfClientNotCreated(t *testing.T) {
 		expectedExternalProbeErrorCount:   0,
 	}
 	config = createConfig(1, 2, 5*time.Millisecond, time.Microsecond, 0.2)
-	msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, err).Times(2)
+	msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, err).Times(2)
 	runProberAndCheckStatus(t, 8*time.Millisecond, entry)
 }
 
@@ -172,7 +173,7 @@ func TestExternalProbeShouldNotRunIfClientNotCreated(t *testing.T) {
 		expectedExternalProbeErrorCount:   0,
 	}
 	config = createConfig(1, 2, 5*time.Millisecond, time.Microsecond, 0.2)
-	msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(context.Context, string, string) (kubernetes.Interface, error) {
+	msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(context.Context, string, string, time.Duration) (kubernetes.Interface, error) {
 		counter++
 		if counter%2 == 1 {
 			return mki, nil
@@ -235,5 +236,6 @@ func createConfig(successThreshold int, failureThreshold int, probeInterval time
 		BackoffJitterFactor:                 &backoffJitterFactor,
 		InternalProbeFailureBackoffDuration: &internalProbeFailureBackoffDuration,
 		InitialDelay:                        &initialDelay,
+		ProbeTimeout:                        &defaultProbeTimeout,
 	}
 }

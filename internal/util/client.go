@@ -45,7 +45,7 @@ func GetKubeConfigFromSecret(ctx context.Context, namespace, secretName string, 
 	return kubeConfig, nil
 }
 
-func CreateClientFromKubeConfigBytes(kubeConfigBytes []byte) (kubernetes.Interface, error) {
+func CreateClientFromKubeConfigBytes(kubeConfigBytes []byte, connectionTimeout time.Duration) (kubernetes.Interface, error) {
 	clientConfig, err := clientcmd.NewClientConfigFromBytes(kubeConfigBytes)
 	if err != nil {
 		return nil, err
@@ -54,6 +54,7 @@ func CreateClientFromKubeConfigBytes(kubeConfigBytes []byte) (kubernetes.Interfa
 	if err != nil {
 		return nil, err
 	}
+	config.Timeout = connectionTimeout
 	return kubernetes.NewForConfig(config)
 }
 

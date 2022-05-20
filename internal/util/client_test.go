@@ -183,7 +183,7 @@ func testCreateClientFromKubeconfigBytes(t *testing.T) {
 	kubeconfig := kubeconfigBuffer.Bytes()
 	g.Expect(kubeconfig).ShouldNot(BeNil())
 
-	cfg, err := CreateClientFromKubeConfigBytes(kubeconfig)
+	cfg, err := CreateClientFromKubeConfigBytes(kubeconfig, time.Second)
 	g.Expect(err).Should(BeNil())
 	g.Expect(cfg).ShouldNot(BeNil())
 }

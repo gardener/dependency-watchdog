@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/gardener/dependency-watchdog/internal/test"
 	. "github.com/onsi/gomega"
@@ -47,7 +48,7 @@ func TestSuite(t *testing.T) {
 func testSecretNotFound(t *testing.T) {
 	g := NewWithT(t)
 	setupShootClientTest(t)
-	k8sInterface, err := clientCreator.CreateClient(sctx, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name)
+	k8sInterface, err := clientCreator.CreateClient(sctx, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, time.Second)
 	g.Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	g.Expect(k8sInterface).To(BeNil())
 }
@@ -58,7 +59,7 @@ func testConfigNotFound(t *testing.T) {
 	defer teardown()
 	err := sk8sClient.Create(sctx, secret)
 	g.Expect(err).To(BeNil())
-	shootClient, err := clientCreator.CreateClient(sctx, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name)
+	shootClient, err := clientCreator.CreateClient(sctx, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, time.Second)
 	g.Expect(err).ToNot(BeNil())
 	g.Expect(apierrors.IsNotFound(err)).To(BeFalse())
 	g.Expect(shootClient).To(BeNil())
@@ -78,7 +79,7 @@ func testCreateShootClient(t *testing.T) {
 	err = sk8sClient.Create(sctx, secret)
 	g.Expect(err).To(BeNil())
 
-	shootClient, err := clientCreator.CreateClient(sctx, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name)
+	shootClient, err := clientCreator.CreateClient(sctx, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, time.Second)
 	g.Expect(err).To(BeNil())
 	g.Expect(shootClient).ToNot(BeNil())
 }

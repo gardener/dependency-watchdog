@@ -3,6 +3,7 @@ package prober
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/gardener/dependency-watchdog/internal/util"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -11,7 +12,7 @@ import (
 )
 
 type ShootClientCreator interface {
-	CreateClient(ctx context.Context, namespace string, secretName string) (kubernetes.Interface, error)
+	CreateClient(ctx context.Context, namespace string, secretName string, connectionTimeout time.Duration) (kubernetes.Interface, error)
 }
 
 func NewShootClientCreator(client client.Client) ShootClientCreator {
@@ -22,7 +23,7 @@ type shootclientCreator struct {
 	client.Client
 }
 
-func (s *shootclientCreator) CreateClient(ctx context.Context, namespace string, secretName string) (kubernetes.Interface, error) {
+func (s *shootclientCreator) CreateClient(ctx context.Context, namespace string, secretName string, connectionTimeout time.Duration) (kubernetes.Interface, error) {
 	operation := fmt.Sprintf("get-secret-%s-for-namespace-%s", secretName, namespace)
 	retryResult := util.Retry(ctx,
 		operation,
@@ -33,7 +34,7 @@ func (s *shootclientCreator) CreateClient(ctx context.Context, namespace string,
 	if retryResult.Err != nil {
 		return nil, retryResult.Err
 	}
-	return util.CreateClientFromKubeConfigBytes(retryResult.Value)
+	return util.CreateClientFromKubeConfigBytes(retryResult.Value, connectionTimeout)
 }
 
 func canRetrySecretGet(err error) bool {

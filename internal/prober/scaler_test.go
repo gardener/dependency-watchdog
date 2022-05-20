@@ -397,12 +397,6 @@ func createProbeConfig(timeout *time.Duration) *Config {
 	return &Config{DependentResourceInfos: dependentResourceInfos}
 }
 
-// func createFaultyProbeConfig(timeout *time.Duration) *Config {
-// 	dependentResourceInfos := createDepResourceInfoArray(timeout)
-// 	dependentResourceInfos[2].Ref.Kind = "Depoyment"
-// 	return &Config{DependentResourceInfos: dependentResourceInfos}
-// }
-
 func createDepResourceInfoArray(timeout *time.Duration) []DependentResourceInfo {
 	var dependentResourceInfos []DependentResourceInfo
 	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(mcmRef.Name, 2, 0, 1, 0, timeout))

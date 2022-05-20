@@ -13,6 +13,7 @@ const (
 	ScaleDown
 	DefaultProbeInterval                             = 10 * time.Second
 	DefaultInitialDelay                              = 30 * time.Second
+	DefaultProbeTimeout                              = 40 * time.Second
 	DefaultInternalProbeFailureBackoffDuration       = 30 * time.Second
 	DefaultSuccessThreshold                          = 1
 	DefaultFailureThreshold                          = 3
@@ -27,6 +28,7 @@ type Config struct {
 	ExternalKubeConfigSecretName        string                  `yaml:"externalKubeConfigSecretName"`
 	ProbeInterval                       *time.Duration          `yaml:"probeInterval,omitempty"`
 	InitialDelay                        *time.Duration          `yaml:"initialDelay,omitempty"`
+	ProbeTimeout                        *time.Duration          `yaml:"probeTimeout,omitempty"`
 	SuccessThreshold                    *int                    `yaml:"successThreshold,omitempty"`
 	FailureThreshold                    *int                    `yaml:"failureThreshold,omitempty"`
 	InternalProbeFailureBackoffDuration *time.Duration          `yaml:"internalProbeFailureBackoffDuration,omitempty"`
@@ -105,6 +107,10 @@ func (c *Config) fillDefaultValues() {
 	if c.InitialDelay == nil {
 		c.InitialDelay = new(time.Duration)
 		*c.InitialDelay = DefaultInitialDelay
+	}
+	if c.ProbeTimeout == nil {
+		c.ProbeTimeout = new(time.Duration)
+		*c.ProbeTimeout = DefaultProbeTimeout
 	}
 	if c.InternalProbeFailureBackoffDuration == nil {
 		c.InternalProbeFailureBackoffDuration = new(time.Duration)

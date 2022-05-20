@@ -101,7 +101,7 @@ func (p *Prober) probe(ctx context.Context) {
 }
 
 func (p *Prober) setupProbeClient(ctx context.Context, namespace string, kubeConfigSecretName string) (kubernetes.Interface, error) {
-	shootClient, err := p.shootclientCreator.CreateClient(ctx, namespace, kubeConfigSecretName)
+	shootClient, err := p.shootclientCreator.CreateClient(ctx, namespace, kubeConfigSecretName, *p.config.ProbeTimeout)
 	if err != nil {
 		return nil, err
 	}
