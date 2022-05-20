@@ -3,14 +3,18 @@ FROM golang:1.18 as builder
 
 WORKDIR /workspace
 # Copy the go source
-COPY . .
+COPY internal ./internal
+COPY vendor ./vendor
+COPY cmd ./cmd
+COPY controllers ./controllers
+COPY go.mod go.sum ./
+COPY *.go ./
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager dwd.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dwdprober -ldflags -a .
 
-
-FROM alpine
+FROM alpine:3.15.4
 WORKDIR /
-COPY --from=builder /workspace/manager .
+COPY --from=builder /workspace/dwdprober .
 
-ENTRYPOINT ["/manager"]
+ENTRYPOINT ["./dwdprober"]
