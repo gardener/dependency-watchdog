@@ -3,6 +3,7 @@ package prober
 import (
 	"context"
 	"fmt"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sort"
 	"strings"
 	"sync"
@@ -52,6 +53,7 @@ func NewDeploymentScaler(namespace string, config *Config, client client.Client,
 // scaleableResourceInfo contains a flattened scaleUp or scaleDown resource info for a given resource reference
 type scaleableResourceInfo struct {
 	ref          *autoscalingv1.CrossVersionObjectReference
+	shouldExist  bool
 	level        int
 	initialDelay time.Duration
 	timeout      time.Duration
@@ -201,6 +203,10 @@ func (ds *deploymentScaler) scale(ctx context.Context, resourceInfo scaleableRes
 	}
 	deployment, err := util.GetDeploymentFor(ctx, ds.namespace, resourceInfo.ref.Name, ds.client, nil)
 	if err != nil {
+		if !resourceInfo.shouldExist && apierrors.IsNotFound(err) {
+			ds.l.V(4).Info("Skipping scaling of resource as it is not found", "resourceInfo", resourceInfo)
+			return nil
+		}
 		ds.l.Error(err, "scaling operation skipped due to error in getting deployment", "resourceInfo", resourceInfo)
 		return err
 	}
@@ -348,6 +354,7 @@ func createScaleUpResourceInfos(dependentResourceInfos []DependentResourceInfo) 
 	for _, depResInfo := range dependentResourceInfos {
 		resInfo := scaleableResourceInfo{
 			ref:          depResInfo.Ref,
+			shouldExist:  *depResInfo.ShouldExist,
 			level:        depResInfo.ScaleUpInfo.Level,
 			initialDelay: *depResInfo.ScaleUpInfo.InitialDelay,
 			timeout:      *depResInfo.ScaleUpInfo.Timeout,

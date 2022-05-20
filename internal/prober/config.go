@@ -39,6 +39,7 @@ type Config struct {
 type DependentResourceInfo struct {
 	// Ref identifies a resource
 	Ref           *autoscalingv1.CrossVersionObjectReference `yaml:"ref"`
+	ShouldExist   *bool                                      `yaml:"shouldExist"`
 	ScaleUpInfo   *ScaleInfo                                 `yaml:"scaleUp,omitempty"`
 	ScaleDownInfo *ScaleInfo                                 `yaml:"scaleDown,omitempty"`
 }
@@ -90,6 +91,7 @@ func (c *Config) validate() error {
 	v.mustNotBeEmpty("ScaleResourceInfos", c.DependentResourceInfos)
 	for _, resInfo := range c.DependentResourceInfos {
 		v.resourceRefMustBeValid(resInfo.Ref)
+		v.mustNotBeNil("shouldExist", resInfo.ShouldExist)
 		v.mustNotBeNil("scaleUp", resInfo.ScaleUpInfo)
 		v.mustNotBeNil("scaleDown", resInfo.ScaleDownInfo)
 	}
