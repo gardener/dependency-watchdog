@@ -45,7 +45,7 @@ func TestMissingConfigValuesShouldReturnErrorAndNilConfig(t *testing.T) {
 		fileName         string
 		expectedErrCount int
 	}{
-		{"config_missing_mandatory_values.yaml", 6},
+		{"config_missing_mandatory_values.yaml", 9},
 		{"config_missing_mandatory_values_2.yaml", 3},
 	}
 

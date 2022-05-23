@@ -200,9 +200,9 @@ func deleteClusterAndCheckIfProberRemoved(g *WithT, k8sClient client.Client, rec
 	proberShouldNotBePresent(g, reconciler, cluster)
 }
 
-func updateShootHibernationSpecAndCheckProber(g *WithT, k8sClient client.Client, cluster *gardenerv1alpha1.Cluster, shoot *gardencorev1beta1.Shoot, IsHibernationEnabled *bool,
+func updateShootHibernationSpecAndCheckProber(g *WithT, k8sClient client.Client, cluster *gardenerv1alpha1.Cluster, shoot *gardencorev1beta1.Shoot, isHibernationEnabled *bool,
 	reconciler *ClusterReconciler, checkProber func(g *WithT, reconciler *ClusterReconciler, cluster *gardenerv1alpha1.Cluster)) {
-	shoot.Spec.Hibernation.Enabled = IsHibernationEnabled
+	shoot.Spec.Hibernation.Enabled = isHibernationEnabled
 	cluster.Spec.Shoot = runtime.RawExtension{
 		Object: shoot,
 	}

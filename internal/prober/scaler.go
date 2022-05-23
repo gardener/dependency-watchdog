@@ -3,11 +3,12 @@ package prober
 import (
 	"context"
 	"fmt"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/go-logr/logr"
 
@@ -244,6 +245,10 @@ func (ds *deploymentScaler) shouldScale(ctx context.Context, deployment *appsv1.
 func (ds *deploymentScaler) resourceMatchDesiredReplicas(ctx context.Context, resInfo scaleableResourceInfo, mismatchReplicas mismatchReplicasCheckFn) bool {
 	d, err := util.GetDeploymentFor(ctx, ds.namespace, resInfo.ref.Name, ds.client, nil)
 	if err != nil {
+		if apierrors.IsNotFound(err) && !resInfo.shouldExist {
+			ds.l.V(4).Info("Upstream resource not found. Ignoring this resource as its existence is marked as optional", "resource", resInfo.ref)
+			return true
+		}
 		ds.l.Error(err, "error trying to get Deployment for resource", "resource", resInfo.ref)
 		return false
 	}
@@ -370,6 +375,7 @@ func createScaleDownResourceInfos(dependentResourceInfos []DependentResourceInfo
 	for _, depResInfo := range dependentResourceInfos {
 		resInfo := scaleableResourceInfo{
 			ref:          depResInfo.Ref,
+			shouldExist:  *depResInfo.ShouldExist,
 			level:        depResInfo.ScaleDownInfo.Level,
 			initialDelay: *depResInfo.ScaleDownInfo.InitialDelay,
 			timeout:      *depResInfo.ScaleDownInfo.Timeout,

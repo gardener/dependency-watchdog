@@ -61,7 +61,8 @@ func TestScalerSuite(t *testing.T) {
 		run   func(t *testing.T)
 	}{
 		{"test doScale returns an error", testDoScaleReturnsError},
-		{"test scaling when KCM deployment is not found", testScalingWhenKCMDeploymentNotFound},
+		{"test scaling when KCM deployment(shouldExist is true in resourceInfo) is not found", testScalingWhenKCMDeploymentNotFound},
+		{"test scaling when CA deployment(shouldExist is false in resourceInfo) is not found", testScalingWhenCADeploymentNotFound},
 		{"test scaling when all deployments are found", testScalingWhenAllDeploymentsAreFound},
 	}
 	for _, test := range tests {
@@ -158,6 +159,36 @@ func testScalingWhenKCMDeploymentNotFound(t *testing.T) {
 	}
 }
 
+func testScalingWhenCADeploymentNotFound(t *testing.T) {
+	g := NewWithT(t)
+	probeCfg := createProbeConfig(nil)
+	ds := createDeploymentScaler(g, probeCfg)
+	table := []struct {
+		mcmReplicas               int32
+		kcmReplicas               int32
+		expectedScaledMCMReplicas int32
+		expectedScaledCAReplicas  int32
+		scalingFn                 func(context.Context) error
+	}{
+		{0, 0, 1, 1, ds.ScaleUp},
+		{1, 1, 0, 0, ds.ScaleDown},
+	}
+	for _, entry := range table {
+		createDeployment(g, namespace, mcmRef.Name, deploymentImageName, entry.mcmReplicas, nil)
+		createDeployment(g, namespace, kcmRef.Name, deploymentImageName, entry.kcmReplicas, nil)
+
+		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, mcmRef.Name, entry.mcmReplicas) }, 10*time.Second, time.Second).Should(BeTrue())
+		g.Eventually(func() bool { return checkIfDeploymentReady(namespace, kcmRef.Name, entry.kcmReplicas) }, 10*time.Second, time.Second).Should(BeTrue())
+
+		err := entry.scalingFn(context.Background())
+		g.Expect(err).To(BeNil())
+		matchSpecReplicas(g, namespace, mcmRef.Name, entry.expectedScaledMCMReplicas)
+		matchSpecReplicas(g, namespace, kcmRef.Name, entry.expectedScaledCAReplicas)
+		err = kindTestEnv.DeleteAllDeployments(namespace)
+		g.Expect(err).To(BeNil())
+	}
+}
+
 func testDoScaleReturnsError(t *testing.T) {
 	g := NewWithT(t)
 	faultyProbeCfg := createProbeConfig(nil)
@@ -207,9 +238,9 @@ func TestCreateResourceScaleFlowParallel(t *testing.T) {
 
 	depScaler := deploymentScaler{l: sLogger}
 	var scri []scaleableResourceInfo
-	scri = append(scri, scaleableResourceInfo{ref: caRef, level: 1, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 0})
-	scri = append(scri, scaleableResourceInfo{ref: mcmRef, level: 0, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 0})
-	scri = append(scri, scaleableResourceInfo{ref: kcmRef, level: 0, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 0})
+	scri = append(scri, scaleableResourceInfo{ref: caRef, level: 1, shouldExist: false, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 0})
+	scri = append(scri, scaleableResourceInfo{ref: mcmRef, level: 0, shouldExist: true, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 0})
+	scri = append(scri, scaleableResourceInfo{ref: kcmRef, level: 0, shouldExist: true, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 0})
 
 	waitOnResourceInfos := [][]scaleableResourceInfo{
 		{scri[1], scri[2]},
@@ -223,9 +254,9 @@ func TestCreateScaleFlowSequential(t *testing.T) {
 
 	depScaler := deploymentScaler{l: sLogger}
 	var scri []scaleableResourceInfo
-	scri = append(scri, scaleableResourceInfo{ref: caRef, level: 0, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1})
-	scri = append(scri, scaleableResourceInfo{ref: kcmRef, level: 1, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1})
-	scri = append(scri, scaleableResourceInfo{ref: mcmRef, level: 2, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1})
+	scri = append(scri, scaleableResourceInfo{ref: caRef, level: 0, shouldExist: false, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1})
+	scri = append(scri, scaleableResourceInfo{ref: kcmRef, level: 1, shouldExist: true, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1})
+	scri = append(scri, scaleableResourceInfo{ref: mcmRef, level: 2, shouldExist: true, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1})
 
 	waitOnResourceInfos := [][]scaleableResourceInfo{
 		{scri[0]},
@@ -259,7 +290,7 @@ func TestSleepWithContextInScale(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err = depScaler.scale(cancelableCtx, scaleableResourceInfo{ref: caRef, level: 0, initialDelay: defaultInitialDelay, timeout: 100 * time.Millisecond, replicas: 1}, nil, nil)
+		err = depScaler.scale(cancelableCtx, scaleableResourceInfo{ref: caRef, level: 0, shouldExist: true, initialDelay: defaultInitialDelay, timeout: 100 * time.Millisecond, replicas: 1}, nil, nil)
 	}()
 	cancelFn()
 	wg.Wait()
@@ -286,35 +317,35 @@ func TestSortAndGetUniqueLevelsForEmptyScaleableResourceInfos(t *testing.T) {
 func TestCreateScaleUpResourceInfos(t *testing.T) {
 	g := NewWithT(t)
 	var depResInfos []DependentResourceInfo
-	depResInfos = append(depResInfos, createDependentResourceInfo(mcmRef.Name, 2, 0, 1, 0, nil))
-	depResInfos = append(depResInfos, createDependentResourceInfo(caRef.Name, 0, 1, 1, 0, nil))
-	depResInfos = append(depResInfos, createDependentResourceInfo(kcmRef.Name, 1, 0, 1, 0, nil))
+	depResInfos = append(depResInfos, createDependentResourceInfo(mcmRef.Name, 2, 0, 1, 0, nil, true))
+	depResInfos = append(depResInfos, createDependentResourceInfo(caRef.Name, 0, 1, 1, 0, nil, false))
+	depResInfos = append(depResInfos, createDependentResourceInfo(kcmRef.Name, 1, 0, 1, 0, nil, true))
 
 	scaleUpResInfos := createScaleUpResourceInfos(depResInfos)
 	g.Expect(scaleUpResInfos).ToNot(BeNil())
 	g.Expect(scaleUpResInfos).ToNot(BeEmpty())
 	g.Expect(len(scaleUpResInfos)).To(Equal(len(depResInfos)))
 
-	g.Expect(scaleableResourceMatchFound(scaleableResourceInfo{ref: mcmRef, level: 2, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1}, scaleUpResInfos)).To(BeTrue())
-	g.Expect(scaleableResourceMatchFound(scaleableResourceInfo{ref: caRef, level: 0, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1}, scaleUpResInfos)).To(BeTrue())
-	g.Expect(scaleableResourceMatchFound(scaleableResourceInfo{ref: kcmRef, level: 1, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1}, scaleUpResInfos)).To(BeTrue())
+	g.Expect(scaleableResourceMatchFound(scaleableResourceInfo{ref: mcmRef, level: 2, shouldExist: true, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1}, scaleUpResInfos)).To(BeTrue())
+	g.Expect(scaleableResourceMatchFound(scaleableResourceInfo{ref: caRef, level: 0, shouldExist: false, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1}, scaleUpResInfos)).To(BeTrue())
+	g.Expect(scaleableResourceMatchFound(scaleableResourceInfo{ref: kcmRef, level: 1, shouldExist: true, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1}, scaleUpResInfos)).To(BeTrue())
 }
 
 func TestCreateScaleDownResourceInfos(t *testing.T) {
 	g := NewWithT(t)
 	var depResInfos []DependentResourceInfo
-	depResInfos = append(depResInfos, createDependentResourceInfo(mcmRef.Name, 1, 0, 1, 0, nil))
-	depResInfos = append(depResInfos, createDependentResourceInfo(caRef.Name, 0, 1, 2, 1, nil))
-	depResInfos = append(depResInfos, createDependentResourceInfo(kcmRef.Name, 1, 0, 1, 0, nil))
+	depResInfos = append(depResInfos, createDependentResourceInfo(mcmRef.Name, 1, 0, 1, 0, nil, true))
+	depResInfos = append(depResInfos, createDependentResourceInfo(caRef.Name, 0, 1, 2, 1, nil, false))
+	depResInfos = append(depResInfos, createDependentResourceInfo(kcmRef.Name, 1, 0, 1, 0, nil, true))
 
 	scaleDownResInfos := createScaleDownResourceInfos(depResInfos)
 	g.Expect(scaleDownResInfos).ToNot(BeNil())
 	g.Expect(scaleDownResInfos).ToNot(BeEmpty())
 	g.Expect(len(scaleDownResInfos)).To(Equal(len(depResInfos)))
 
-	g.Expect(scaleableResourceMatchFound(scaleableResourceInfo{ref: mcmRef, level: 0, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 0}, scaleDownResInfos)).To(BeTrue())
-	g.Expect(scaleableResourceMatchFound(scaleableResourceInfo{ref: caRef, level: 1, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1}, scaleDownResInfos)).To(BeTrue())
-	g.Expect(scaleableResourceMatchFound(scaleableResourceInfo{ref: kcmRef, level: 0, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 0}, scaleDownResInfos)).To(BeTrue())
+	g.Expect(scaleableResourceMatchFound(scaleableResourceInfo{ref: mcmRef, level: 0, shouldExist: true, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 0}, scaleDownResInfos)).To(BeTrue())
+	g.Expect(scaleableResourceMatchFound(scaleableResourceInfo{ref: caRef, level: 1, shouldExist: false, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 1}, scaleDownResInfos)).To(BeTrue())
+	g.Expect(scaleableResourceMatchFound(scaleableResourceInfo{ref: kcmRef, level: 0, shouldExist: true, initialDelay: defaultInitialDelay, timeout: defaultTimeout, replicas: 0}, scaleDownResInfos)).To(BeTrue())
 }
 
 // utility methods to be used by tests
@@ -334,12 +365,13 @@ func createScaleableResourceInfos(numResInfosByLevel map[int]int) []scaleableRes
 	return resInfos
 }
 
-func createDependentResourceInfo(name string, scaleUpLevel, scaleDownLevel int, scaleUpReplicas, scaleDownReplicas int32, timeout *time.Duration) DependentResourceInfo {
+func createDependentResourceInfo(name string, scaleUpLevel, scaleDownLevel int, scaleUpReplicas, scaleDownReplicas int32, timeout *time.Duration, shouldExist bool) DependentResourceInfo {
 	if timeout == nil {
 		timeout = &defaultTimeout
 	}
 	return DependentResourceInfo{
-		Ref: &autoscalingv1.CrossVersionObjectReference{Name: name, Kind: "Deployment", APIVersion: "apps/v1"},
+		Ref:         &autoscalingv1.CrossVersionObjectReference{Name: name, Kind: "Deployment", APIVersion: "apps/v1"},
+		ShouldExist: &shouldExist,
 		ScaleUpInfo: &ScaleInfo{
 			Level:        scaleUpLevel,
 			InitialDelay: &defaultInitialDelay,
@@ -399,8 +431,8 @@ func createProbeConfig(timeout *time.Duration) *Config {
 
 func createDepResourceInfoArray(timeout *time.Duration) []DependentResourceInfo {
 	var dependentResourceInfos []DependentResourceInfo
-	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(mcmRef.Name, 2, 0, 1, 0, timeout))
-	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(kcmRef.Name, 1, 0, 1, 0, timeout))
-	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(caRef.Name, 0, 1, 1, 0, timeout))
+	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(mcmRef.Name, 2, 0, 1, 0, timeout, true))
+	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(kcmRef.Name, 1, 0, 1, 0, timeout, true))
+	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(caRef.Name, 0, 1, 1, 0, timeout, false))
 	return dependentResourceInfos
 }
