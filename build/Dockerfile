@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM alpine:3.15
+FROM alpine:3.15.4
 
 RUN apk add --update bash curl
 

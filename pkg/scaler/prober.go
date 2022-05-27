@@ -40,7 +40,8 @@ const (
 
 	defaultInitialDelaySeconds = 30
 	defaultPeriodSeconds       = 10
-	defaultTimeoutSeconds      = 10
+	defaultScaleTimeoutSeconds = 10
+	defaultProbeTimeoutSeconds = 30
 	defaultSuccessThreshold    = 1
 	defaultFailureThreshold    = 3
 	defaultMaxRetries          = 3
@@ -159,7 +160,7 @@ func (p *prober) getClientFromSecret(secretName string, oldSHA []byte) (kubernet
 		return nil, newSHA, err
 	}
 
-	config.Timeout = toDuration(p.probeDeps.Probe.TimeoutSeconds, defaultTimeoutSeconds)
+	config.Timeout = toDuration(p.probeDeps.Probe.ProbeTimeoutSeconds, defaultProbeTimeoutSeconds)
 
 	client, err := kubernetes.NewForConfig(config)
 	return client, newSHA, err
@@ -486,7 +487,7 @@ func retry(msg string, fn func() error, retries int) error {
 }
 
 func (p *prober) scaleTo(parentContext context.Context, msg string, replicas int32, checkFn func(oReplicas, nReplicas int32) bool) error {
-	timeout := toDuration(p.probeDeps.Probe.TimeoutSeconds, defaultTimeoutSeconds)
+	timeout := toDuration(p.probeDeps.Probe.TimeoutSeconds, defaultScaleTimeoutSeconds)
 	for _, dsd := range p.probeDeps.DependantScales {
 		if dsd == nil {
 			continue
@@ -618,7 +619,7 @@ func (p *prober) getScalingFn(parentContext context.Context, gr schema.GroupReso
 		s = s.DeepCopy()
 		s.Spec.Replicas = replicas
 
-		timeout := toDuration(p.probeDeps.Probe.TimeoutSeconds, defaultTimeoutSeconds)
+		timeout := toDuration(p.probeDeps.Probe.TimeoutSeconds, defaultScaleTimeoutSeconds)
 		_, cancelFn := context.WithTimeout(parentContext, timeout)
 		defer cancelFn()
 

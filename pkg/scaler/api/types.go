@@ -30,6 +30,7 @@ type ProbeConfig struct {
 	Internal            *ProbeDetails `json:"internal,omitempty"`
 	InitialDelaySeconds *int32        `json:"initialDelaySeconds,omitempty"`
 	TimeoutSeconds      *int32        `json:"timeoutSeconds,omitempty"`
+	ProbeTimeoutSeconds *int32        `json:"probeTimeoutSeconds,omitempty"`
 	PeriodSeconds       *int32        `json:"periodSeconds,omitempty"`
 	SuccessThreshold    *int32        `json:"successThreshold,omitempty"`
 	FailureThreshold    *int32        `json:"failureThreshold,omitempty"`
