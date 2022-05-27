@@ -13,7 +13,7 @@ const (
 	ScaleDown
 	DefaultProbeInterval                             = 10 * time.Second
 	DefaultInitialDelay                              = 30 * time.Second
-	DefaultProbeTimeout                              = 40 * time.Second
+	DefaultProbeTimeout                              = 30 * time.Second
 	DefaultInternalProbeFailureBackoffDuration       = 30 * time.Second
 	DefaultSuccessThreshold                          = 1
 	DefaultFailureThreshold                          = 3
