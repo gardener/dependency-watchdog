@@ -120,7 +120,7 @@ There are two types of end to end tests that were done:
 2. Tests that cannot be automated as Integration tests 
    
 
-#### Automation tests (Used for IT)
+#### Automation tests (Can be used for IT)
 | # | Test | Result |
 | :--- | :--- | :--- |
 | 1 | scale down kcm and mcm | both probes pass and are healthy, scaling up operation starts, `CA` is skipped as replica count matches the desired value, first `KCM` is scaled up and then `MCM`|

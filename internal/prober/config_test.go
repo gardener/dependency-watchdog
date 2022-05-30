@@ -23,17 +23,17 @@ func TestCheckIfDefaultValuesAreSetForAllOptionalMissingValues(t *testing.T) {
 
 	g.Expect(err).ToNot(HaveOccurred(), "LoadConfig should not give any error for a valid config file")
 	g.Expect(config).ToNot(BeNil(), "LoadConfig should not return nil for a valid config file")
-	g.Expect(config.InitialDelay.Milliseconds()).To(Equal(DefaultInitialDelay.Milliseconds()), "LoadConfig should set initial delay to DefaultInitialDelay if not set in the config file")
+	g.Expect(config.InitialDelay.Milliseconds()).To(Equal(DefaultProbeInitialDelay.Milliseconds()), "LoadConfig should set initial delay to DefaultInitialDelay if not set in the config file")
 	g.Expect(config.ProbeInterval.Milliseconds()).To(Equal(DefaultProbeInterval.Milliseconds()), "LoadConfig should set probe delay to DefaultProbeInterval if not set in the config file")
 	g.Expect(*config.SuccessThreshold).To(Equal(DefaultSuccessThreshold), "LoadConfig should set success threshold to DefaultSuccessThreshold if not set in the config file")
 	g.Expect(*config.FailureThreshold).To(Equal(DefaultFailureThreshold), "LoadConfig should set failure threshold to DefaultFailureThreshold if not set in the config file")
 	g.Expect(config.InternalProbeFailureBackoffDuration.Milliseconds()).To(Equal(DefaultInternalProbeFailureBackoffDuration.Milliseconds()), "LoadConfig should set backOff duration to DefaultInternalProbeFailureBackoffDuration if not set in the config file")
 	g.Expect(*config.BackoffJitterFactor).To(Equal(DefaultBackoffJitterFactor), "LoadConfig should set jitter factor to DefaultJitterFactor if not set in the config file")
 	for _, resInfo := range config.DependentResourceInfos {
-		g.Expect(resInfo.ScaleUpInfo.InitialDelay.Milliseconds()).To(Equal(DefaultInitialDelay.Milliseconds()), fmt.Sprintf("LoadConfig should set scale up initial delay for %v to DefaultInitialDelay if not set in the config file", resInfo.Ref.Name))
+		g.Expect(resInfo.ScaleUpInfo.InitialDelay.Milliseconds()).To(Equal(DefaultScaleInitialDelay.Milliseconds()), fmt.Sprintf("LoadConfig should set scale up initial delay for %v to DefaultInitialDelay if not set in the config file", resInfo.Ref.Name))
 		g.Expect(*resInfo.ScaleUpInfo.Replicas).To(Equal(DefaultScaleUpReplicas), fmt.Sprintf("LoadConfig should set scale up replicas for %v to DefaultScaleUpReplicas if not set in the config file", resInfo.Ref.Name))
 		g.Expect(resInfo.ScaleUpInfo.Timeout.Milliseconds()).To(Equal(DefaultScaleUpdateTimeout.Milliseconds()), fmt.Sprintf("LoadConfig should set scale up timeout for %v to DefaultScaleUpTimeout if not set in the config file", resInfo.Ref.Name))
-		g.Expect(resInfo.ScaleDownInfo.InitialDelay.Milliseconds()).To(Equal(DefaultInitialDelay.Milliseconds()), fmt.Sprintf("LoadConfig should set scale down initial delay for %v to DefaultInitialDelay if not set in the config file", resInfo.Ref.Name))
+		g.Expect(resInfo.ScaleDownInfo.InitialDelay.Milliseconds()).To(Equal(DefaultScaleInitialDelay.Milliseconds()), fmt.Sprintf("LoadConfig should set scale down initial delay for %v to DefaultInitialDelay if not set in the config file", resInfo.Ref.Name))
 		g.Expect(*resInfo.ScaleDownInfo.Replicas).To(Equal(DefaultScaleDownReplicas), fmt.Sprintf("LoadConfig should set scale down replicas for %v to DefaultScaleDownReplicas if not set in the config file", resInfo.Ref.Name))
 		g.Expect(resInfo.ScaleDownInfo.Timeout.Milliseconds()).To(Equal(DefaultScaleUpdateTimeout.Milliseconds()), fmt.Sprintf("LoadConfig should set scale down timeout for %v to DefaultScaleDownTimeout if not set in the config file", resInfo.Ref.Name))
 	}

@@ -12,7 +12,8 @@ const (
 	ScaleUp int = iota
 	ScaleDown
 	DefaultProbeInterval                             = 10 * time.Second
-	DefaultInitialDelay                              = 30 * time.Second
+	DefaultProbeInitialDelay                         = 30 * time.Second
+	DefaultScaleInitialDelay                         = 0 * time.Second
 	DefaultProbeTimeout                              = 30 * time.Second
 	DefaultInternalProbeFailureBackoffDuration       = 30 * time.Second
 	DefaultSuccessThreshold                          = 1
@@ -48,7 +49,7 @@ type ScaleInfo struct {
 	// Level is used to order the dependent resources. Highest level or the first level starts at 0 and increments. Each dependent resource on a level will have to wait for
 	// all resource in a previous level to finish their scaling operation. If there are more than one resource defined with the same level then they will be scaled concurrently.
 	Level int `yaml:"level"`
-	// InitialDelay is the time to delay (duration) the scale down/up of this resource. If not specified its default value will be 0.
+	// InitialDelay is the time to delay (duration) the scale down/up of this resource. If not specified its default value will be 30s.
 	InitialDelay *time.Duration `yaml:"initialDelay,omitempty"`
 	// ScaleTimeout is the time timeout duration to wait for when attempting to update the scaling sub-resource.
 	Timeout *time.Duration `yaml:"timeout,omitempty"`
@@ -108,7 +109,7 @@ func (c *Config) fillDefaultValues() {
 	}
 	if c.InitialDelay == nil {
 		c.InitialDelay = new(time.Duration)
-		*c.InitialDelay = DefaultInitialDelay
+		*c.InitialDelay = DefaultProbeInitialDelay
 	}
 	if c.ProbeTimeout == nil {
 		c.ProbeTimeout = new(time.Duration)
@@ -152,7 +153,7 @@ func fillDefaultValuesForScaleInfo(scaleType int, scaleInfo *ScaleInfo) {
 		}
 		if scaleInfo.InitialDelay == nil {
 			scaleInfo.InitialDelay = new(time.Duration)
-			*scaleInfo.InitialDelay = DefaultInitialDelay
+			*scaleInfo.InitialDelay = DefaultScaleInitialDelay
 		}
 	}
 }
