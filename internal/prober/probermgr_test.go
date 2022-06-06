@@ -2,6 +2,7 @@ package prober
 
 import (
 	"context"
+	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -28,7 +29,7 @@ func TestRegisterNewProberAndCheckIfItExistsAndIsNotClosed(t *testing.T) {
 	defer tearDownTest(mgr)
 
 	const namespace = "bingo"
-	p := NewProber(context.Background(), namespace, &Config{}, nil, nil, nil, pmLogger)
+	p := NewProber(context.Background(), namespace, &papi.Config{}, nil, nil, nil, pmLogger)
 	g.Expect(p).ShouldNot(BeNil(), "NewProber should have returned a non nil Prober")
 	g.Expect(p.namespace).Should(Equal(namespace), "The namespace of the created prober should match")
 	g.Expect(mgr.Register(*p)).To(BeTrue(), "mgr.Register should register a new prober")
@@ -48,10 +49,10 @@ func TestProberRegistrationWithSameKeyShouldNotOverwriteExistingProber(t *testin
 	defer tearDownTest(mgr)
 
 	const namespace = "bingo"
-	p1 := NewProber(context.Background(), namespace, &Config{InternalKubeConfigSecretName: "bingo"}, nil, nil, nil, pmLogger)
+	p1 := NewProber(context.Background(), namespace, &papi.Config{InternalKubeConfigSecretName: "bingo"}, nil, nil, nil, pmLogger)
 	g.Expect(mgr.Register(*p1)).To(BeTrue(), "mgr.Register should register a new prober")
 
-	p2 := NewProber(context.Background(), namespace, &Config{InternalKubeConfigSecretName: "zingo"}, nil, nil, nil, pmLogger)
+	p2 := NewProber(context.Background(), namespace, &papi.Config{InternalKubeConfigSecretName: "zingo"}, nil, nil, nil, pmLogger)
 	g.Expect(mgr.Register(*p2)).To(BeFalse(), "mgr.Register should return false if a prober with the same key is already registered")
 
 	foundProber, ok := mgr.GetProber(namespace)
@@ -68,7 +69,7 @@ func TestUnregisterExistingProberShouldCloseItAndRemoveItFromManager(t *testing.
 	defer tearDownTest(mgr)
 
 	const namespace = "bingo"
-	p := NewProber(context.Background(), namespace, &Config{}, nil, nil, nil, pmLogger)
+	p := NewProber(context.Background(), namespace, &papi.Config{}, nil, nil, nil, pmLogger)
 	g.Expect(mgr.Register(*p)).To(BeTrue(), "mgr.Register should register a new prober")
 
 	mgr.Unregister(namespace)

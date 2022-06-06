@@ -3,6 +3,7 @@ package prober
 import (
 	"context"
 	"fmt"
+	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"reflect"
 	"sync"
 	"testing"
@@ -43,7 +44,7 @@ func beforeAllScalerEnvTests(g *WithT) func(g *WithT) {
 	}
 }
 
-func createDeploymentScaler(g *WithT, probeCfg *Config) DeploymentScaler {
+func createDeploymentScaler(g *WithT, probeCfg *papi.Config) DeploymentScaler {
 	cfg := kindTestEnv.GetRestConfig()
 	scalesGetter, err := util.CreateScalesGetter(cfg)
 	g.Expect(err).To(BeNil())
@@ -316,7 +317,7 @@ func TestSortAndGetUniqueLevelsForEmptyScaleableResourceInfos(t *testing.T) {
 
 func TestCreateScaleUpResourceInfos(t *testing.T) {
 	g := NewWithT(t)
-	var depResInfos []DependentResourceInfo
+	var depResInfos []papi.DependentResourceInfo
 	depResInfos = append(depResInfos, createDependentResourceInfo(mcmRef.Name, 2, 0, 1, 0, nil, true))
 	depResInfos = append(depResInfos, createDependentResourceInfo(caRef.Name, 0, 1, 1, 0, nil, false))
 	depResInfos = append(depResInfos, createDependentResourceInfo(kcmRef.Name, 1, 0, 1, 0, nil, true))
@@ -333,7 +334,7 @@ func TestCreateScaleUpResourceInfos(t *testing.T) {
 
 func TestCreateScaleDownResourceInfos(t *testing.T) {
 	g := NewWithT(t)
-	var depResInfos []DependentResourceInfo
+	var depResInfos []papi.DependentResourceInfo
 	depResInfos = append(depResInfos, createDependentResourceInfo(mcmRef.Name, 1, 0, 1, 0, nil, true))
 	depResInfos = append(depResInfos, createDependentResourceInfo(caRef.Name, 0, 1, 2, 1, nil, false))
 	depResInfos = append(depResInfos, createDependentResourceInfo(kcmRef.Name, 1, 0, 1, 0, nil, true))
@@ -365,20 +366,20 @@ func createScaleableResourceInfos(numResInfosByLevel map[int]int) []scaleableRes
 	return resInfos
 }
 
-func createDependentResourceInfo(name string, scaleUpLevel, scaleDownLevel int, scaleUpReplicas, scaleDownReplicas int32, timeout *time.Duration, shouldExist bool) DependentResourceInfo {
+func createDependentResourceInfo(name string, scaleUpLevel, scaleDownLevel int, scaleUpReplicas, scaleDownReplicas int32, timeout *time.Duration, shouldExist bool) papi.DependentResourceInfo {
 	if timeout == nil {
 		timeout = &defaultTimeout
 	}
-	return DependentResourceInfo{
+	return papi.DependentResourceInfo{
 		Ref:         &autoscalingv1.CrossVersionObjectReference{Name: name, Kind: "Deployment", APIVersion: "apps/v1"},
 		ShouldExist: &shouldExist,
-		ScaleUpInfo: &ScaleInfo{
+		ScaleUpInfo: &papi.ScaleInfo{
 			Level:        scaleUpLevel,
 			InitialDelay: &defaultInitialDelay,
 			Timeout:      timeout,
 			Replicas:     &scaleUpReplicas,
 		},
-		ScaleDownInfo: &ScaleInfo{
+		ScaleDownInfo: &papi.ScaleInfo{
 			Level:        scaleDownLevel,
 			InitialDelay: &defaultInitialDelay,
 			Timeout:      timeout,
@@ -424,13 +425,13 @@ func matchStatusReplicas(g *WithT, namespace string, name string, expectedReplic
 	g.Expect(deploy.Status.Replicas).Should(Equal(expectedReplicas))
 }
 
-func createProbeConfig(timeout *time.Duration) *Config {
+func createProbeConfig(timeout *time.Duration) *papi.Config {
 	dependentResourceInfos := createDepResourceInfoArray(timeout)
-	return &Config{DependentResourceInfos: dependentResourceInfos}
+	return &papi.Config{DependentResourceInfos: dependentResourceInfos}
 }
 
-func createDepResourceInfoArray(timeout *time.Duration) []DependentResourceInfo {
-	var dependentResourceInfos []DependentResourceInfo
+func createDepResourceInfoArray(timeout *time.Duration) []papi.DependentResourceInfo {
+	var dependentResourceInfos []papi.DependentResourceInfo
 	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(mcmRef.Name, 2, 0, 1, 0, timeout, true))
 	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(kcmRef.Name, 1, 0, 1, 0, timeout, true))
 	dependentResourceInfos = append(dependentResourceInfos, createDependentResourceInfo(caRef.Name, 0, 1, 1, 0, timeout, false))

@@ -2,6 +2,7 @@ package prober
 
 import (
 	"context"
+	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"time"
 
 	"github.com/gardener/dependency-watchdog/internal/util"
@@ -21,7 +22,7 @@ const (
 
 type Prober struct {
 	namespace           string
-	config              *Config
+	config              *papi.Config
 	client              client.Client
 	scaler              DeploymentScaler
 	shootclientCreator  ShootClientCreator
@@ -32,7 +33,7 @@ type Prober struct {
 	l                   logr.Logger
 }
 
-func NewProber(parentCtx context.Context, namespace string, config *Config, ctrlClient client.Client, scaler DeploymentScaler, shootClientCreator ShootClientCreator, logger logr.Logger) *Prober {
+func NewProber(parentCtx context.Context, namespace string, config *papi.Config, ctrlClient client.Client, scaler DeploymentScaler, shootClientCreator ShootClientCreator, logger logr.Logger) *Prober {
 	ctx, cancelFn := context.WithCancel(parentCtx)
 	return &Prober{
 		namespace:          namespace,

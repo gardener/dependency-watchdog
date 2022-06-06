@@ -3,6 +3,7 @@ package prober
 import (
 	"context"
 	"fmt"
+	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"sort"
 	"strings"
 	"sync"
@@ -33,7 +34,7 @@ type DeploymentScaler interface {
 	ScaleDown(ctx context.Context) error
 }
 
-func NewDeploymentScaler(namespace string, config *Config, client client.Client, scalerGetter scalev1.ScalesGetter, logger logr.Logger, options ...scalerOption) DeploymentScaler {
+func NewDeploymentScaler(namespace string, config *papi.Config, client client.Client, scalerGetter scalev1.ScalesGetter, logger logr.Logger, options ...scalerOption) DeploymentScaler {
 	opts := buildScalerOptions(options...)
 	ds := deploymentScaler{
 		namespace: namespace,
@@ -354,7 +355,7 @@ func sortAndGetUniqueLevels(resourceInfos []scaleableResourceInfo) []int {
 	return levels
 }
 
-func createScaleUpResourceInfos(dependentResourceInfos []DependentResourceInfo) []scaleableResourceInfo {
+func createScaleUpResourceInfos(dependentResourceInfos []papi.DependentResourceInfo) []scaleableResourceInfo {
 	resourceInfos := make([]scaleableResourceInfo, 0, len(dependentResourceInfos))
 	for _, depResInfo := range dependentResourceInfos {
 		resInfo := scaleableResourceInfo{
@@ -370,7 +371,7 @@ func createScaleUpResourceInfos(dependentResourceInfos []DependentResourceInfo) 
 	return resourceInfos
 }
 
-func createScaleDownResourceInfos(dependentResourceInfos []DependentResourceInfo) []scaleableResourceInfo {
+func createScaleDownResourceInfos(dependentResourceInfos []papi.DependentResourceInfo) []scaleableResourceInfo {
 	resourceInfos := make([]scaleableResourceInfo, 0, len(dependentResourceInfos))
 	for _, depResInfo := range dependentResourceInfos {
 		resInfo := scaleableResourceInfo{

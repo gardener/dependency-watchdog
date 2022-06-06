@@ -3,17 +3,18 @@ package prober
 import (
 	"context"
 	"errors"
+	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"testing"
 	"time"
 
 	mockprober "github.com/gardener/dependency-watchdog/internal/mock/prober"
 	mockinterface "github.com/gardener/dependency-watchdog/internal/mock/prober/k8s/client"
 	mockdiscovery "github.com/gardener/dependency-watchdog/internal/mock/prober/k8s/discovery"
-	gomock "github.com/golang/mock/gomock"
+	"github.com/golang/mock/gomock"
 	. "github.com/onsi/gomega"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	version "k8s.io/apimachinery/pkg/version"
+	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -21,7 +22,7 @@ import (
 )
 
 var (
-	config                              *Config
+	config                              *papi.Config
 	ctrl                                *gomock.Controller
 	mds                                 *mockprober.MockDeploymentScaler
 	msc                                 *mockprober.MockShootClientCreator
@@ -228,8 +229,8 @@ func setupProberTest(t *testing.T) {
 	mdi = mockdiscovery.NewMockDiscoveryInterface(ctrl)
 }
 
-func createConfig(successThreshold int, failureThreshold int, probeInterval time.Duration, initialDelay time.Duration, backoffJitterFactor float64) *Config {
-	return &Config{
+func createConfig(successThreshold int, failureThreshold int, probeInterval time.Duration, initialDelay time.Duration, backoffJitterFactor float64) *papi.Config {
+	return &papi.Config{
 		SuccessThreshold:                    &successThreshold,
 		FailureThreshold:                    &failureThreshold,
 		ProbeInterval:                       &probeInterval,
