@@ -21,7 +21,7 @@ import (
 
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
 
-	apiprober "github.com/gardener/dependency-watchdog/api/prober"
+	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"github.com/gardener/dependency-watchdog/internal/prober"
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	gardencorev1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
@@ -41,7 +41,7 @@ type ClusterReconciler struct {
 	Scheme      *runtime.Scheme
 	ProberMgr   prober.Manager
 	ScaleGetter scale.ScalesGetter
-	ProbeConfig *apiprober.Config
+	ProbeConfig *papi.Config
 }
 
 //+kubebuilder:rbac:groups=gardener.cloud,resources=clusters,verbs=get;list;watch
