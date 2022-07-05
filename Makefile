@@ -29,7 +29,6 @@ build-local:
 
 .PHONY: docker-image
 docker-image: 
-	@if [[ ! -f $(BIN_DIR)/linux-amd64/dependency-watchdog ]]; then echo "No binary found. Please run 'make build'"; false; fi
 	@docker build -t $(IMAGE_REPOSITORY):$(IMAGE_TAG) -f $(BUILD_DIR)/Dockerfile --rm .
 
 .PHONY: docker-push

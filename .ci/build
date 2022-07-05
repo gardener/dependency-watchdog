@@ -55,21 +55,9 @@ VERSION_FILE="$(${READLINK_BIN}  -f "${SOURCE_PATH}/VERSION")"
 VERSION="$(cat "${VERSION_FILE}")"
 GIT_SHA=$(git rev-parse --short HEAD || echo "GitNotFound")
 
-# If no LOCAL_BUILD environment variable is set, we configure the `go build` command
-# to build for linux OS, amd64 architectures and without CGO enablement.
-if [[ -z "$LOCAL_BUILD" ]]; then
-  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build \
-    -a \
-    -mod vendor \
-    -v \
-    -o "${BINARY_PATH}/linux-amd64/dependency-watchdog" \
-    main.go
+CGO_ENABLED=0 GO111MODULE=on go build \
+  -mod vendor \
+  -v \
+  -o "${BINARY_PATH}/dependency-watchdog" \
+  main.go
 
-# If the LOCAL_BUILD environment variable is set, we simply run `go build`.
-else
-  GO111MODULE=on go build \
-    -mod vendor \
-    -v \
-    -o "${BINARY_PATH}/dependency-watchdog" \
-    main.go
-fi
