@@ -9,10 +9,8 @@ COPY . .
 
 RUN make build
 
-FROM alpine:3.15.4
+FROM gcr.io/distroless/static-debian11:nonroot
 
-RUN apk add --update bash curl
-
-COPY --from=builder /go/src/github.com/gardener/dependency-watchdog/bin/dependency-watchdog /usr/local/bin/dependency-watchdog
+COPY --from=builder /go/src/github.com/gardener/dependency-watchdog/bin/dependency-watchdog /dependency-watchdog
 WORKDIR /
-ENTRYPOINT ["/usr/local/bin/dependency-watchdog"]
+ENTRYPOINT ["/dependency-watchdog"]
