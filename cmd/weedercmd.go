@@ -8,8 +8,6 @@ import (
 	"github.com/go-logr/logr"
 )
 
-const defaultWatchDuration = "2m"
-
 var (
 	WeederCmd = &Command{
 		Name:      "weeder",
@@ -37,9 +35,6 @@ Flags:
 		TCP address that the controller should bind to for serving prometheus metrics
 	--health-bind-address
 		TCP address that the controller should bind to for serving health probes
-	--watch-duration
-		Duration for which all dependent pods for a service under surveillance will be watched after the service has recovered. 
-		If the dependent pods have not transitioned to CrashLoopBackOff in this duration then it is assumed that they will not enter that state.
 `,
 		AddFlags: addWeederFlags,
 		Run:      startWeederControllerMgr,
@@ -48,12 +43,10 @@ Flags:
 )
 
 type weederOptions struct {
-	watchDuration string
 	SharedOpts
 }
 
 func addWeederFlags(fs *flag.FlagSet) {
-	fs.StringVar(&weederOpts.watchDuration, "watch-duration", defaultWatchDuration, "max duration to watch for all dependent pods")
 	SetSharedOpts(fs, &weederOpts.SharedOpts)
 }
 
