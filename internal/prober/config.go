@@ -1,6 +1,7 @@
 package prober
 
 import (
+	"github.com/gardener/dependency-watchdog/internal/util"
 	"io/ioutil"
 	"time"
 
@@ -51,19 +52,19 @@ func readAndUnmarshal(file string) (*papi.Config, error) {
 }
 
 func validate(c *papi.Config) error {
-	v := new(validator)
+	v := new(util.Validator)
 	// Check the mandatory config parameters for which a default will not be set
-	v.mustNotBeEmpty("InternalKubeConfigSecretName", c.InternalKubeConfigSecretName)
-	v.mustNotBeEmpty("ExternalKubeConfigSecretName", c.ExternalKubeConfigSecretName)
-	v.mustNotBeEmpty("ScaleResourceInfos", c.DependentResourceInfos)
+	v.MustNotBeEmpty("InternalKubeConfigSecretName", c.InternalKubeConfigSecretName)
+	v.MustNotBeEmpty("ExternalKubeConfigSecretName", c.ExternalKubeConfigSecretName)
+	v.MustNotBeEmpty("ScaleResourceInfos", c.DependentResourceInfos)
 	for _, resInfo := range c.DependentResourceInfos {
-		v.resourceRefMustBeValid(resInfo.Ref)
-		v.mustNotBeNil("shouldExist", resInfo.ShouldExist)
-		v.mustNotBeNil("scaleUp", resInfo.ScaleUpInfo)
-		v.mustNotBeNil("scaleDown", resInfo.ScaleDownInfo)
+		v.ResourceRefMustBeValid(resInfo.Ref)
+		v.MustNotBeNil("shouldExist", resInfo.ShouldExist)
+		v.MustNotBeNil("scaleUp", resInfo.ScaleUpInfo)
+		v.MustNotBeNil("scaleDown", resInfo.ScaleDownInfo)
 	}
-	if v.error != nil {
-		return v.error
+	if v.Error != nil {
+		return v.Error
 	}
 	return nil
 }
