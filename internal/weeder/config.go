@@ -2,6 +2,8 @@ package weeder
 
 import (
 	wapi "github.com/gardener/dependency-watchdog/api/weeder"
+	"github.com/gardener/dependency-watchdog/internal/util"
+	multierr "github.com/hashicorp/go-multierror"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"time"
 )
@@ -34,15 +36,17 @@ func readAndUnmarshall(filename string) (*wapi.Config, error) {
 }
 
 func validate(c *wapi.Config) error {
+	v := new(util.Validator)
+	// Check the mandatory config parameters for which a default will not be set
+	v.MustNotBeEmpty("serviceAndDependantSelectors", c.ServicesAndDependantSelectors)
 	for _, dependants := range c.ServicesAndDependantSelectors {
-		var allErrs []error
+		v.MustNotBeEmpty("podSelector", dependants.PodSelectors)
 		for _, selector := range dependants.PodSelectors {
 			_, err := metav1.LabelSelectorAsSelector(selector)
 			if err != nil {
-				allErrs = append(allErrs, err)
+				v.Error = multierr.Append(v.Error, err)
 				continue
 			}
-			//TODO: move prober/validator.go to /internal/util so that it can be used here as well.
 		}
 	}
 }

@@ -31,7 +31,13 @@ func (v *Validator) MustNotBeEmpty(key string, value interface{}) bool {
 			v.Error = multierr.Append(v.Error, fmt.Errorf("%s must not be empty", key))
 			return false
 		}
+	case reflect.Map:
+		if cv.Len() == 0 {
+			v.Error = multierr.Append(v.Error, fmt.Errorf("%s must not be empty", key))
+			return false
+		}
 	}
+
 	return true
 }
 
