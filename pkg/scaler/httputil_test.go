@@ -1,6 +1,7 @@
-package scaler
+package scaler_test
 
 import (
+	"github.com/gardener/dependency-watchdog/pkg/scaler"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/rest"
@@ -45,13 +46,11 @@ var _ = Describe("Checking KeepAlive setting on rest.config", func() {
 		Expect(transport.DisableKeepAlives).To(BeFalse())
 	})
 	It("can set KeepAlive to disabled", func() {
-		err := DisableKeepAlive(config)
+		err := scaler.DisableKeepAlive(config)
 		Expect(err).To(BeNil())
 		roundTripper, err := rest.TransportFor(config)
 		Expect(err).To(BeNil())
-		tw := roundTripper.(*transportWrapper)
-		Expect(tw).ToNot(BeNil())
-		t := tw.Transport.(*http.Transport)
+		t := roundTripper.(*http.Transport)
 		Expect(t).ToNot(BeNil())
 		Expect(t.DisableKeepAlives).To(BeTrue())
 	})

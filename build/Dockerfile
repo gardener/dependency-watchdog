@@ -11,6 +11,6 @@ RUN make build
 
 FROM gcr.io/distroless/static-debian11:nonroot
 
-COPY --from=builder /go/src/github.com/gardener/dependency-watchdog/bin/dependency-watchdog /dependency-watchdog
+COPY --from=builder /go/src/github.com/gardener/dependency-watchdog/bin/dependency-watchdog /usr/local/bin/dependency-watchdog
 WORKDIR /
-ENTRYPOINT ["/dependency-watchdog"]
+ENTRYPOINT ["/usr/local/bin/dependency-watchdog"]

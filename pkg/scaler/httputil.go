@@ -2,27 +2,18 @@ package scaler
 
 import (
 	"k8s.io/client-go/rest"
-	"k8s.io/klog"
 	"net/http"
 )
 
-type transportWrapper struct {
-	Transport http.RoundTripper
-}
-
-func (rt *transportWrapper) RoundTrip(req *http.Request) (*http.Response, error) {
-	klog.Infof("(transportWrapper)(RoundTrip) request: %v", req.URL.String())
-	return rt.Transport.RoundTrip(req)
-}
-
 // DisableKeepAlive sets `DisableKeepAlive` to true on the transport that is use by the underline rest client
+// Fixes https://github.com/gardener/dependency-watchdog/issues/61
 func DisableKeepAlive(config *rest.Config) error {
 	transport, err := createTransportWithDisableKeepAlive(config)
 	if err != nil {
 		return err
 	}
 	config.Wrap(func(rt http.RoundTripper) http.RoundTripper {
-		return &transportWrapper{Transport: transport}
+		return transport
 	})
 	return nil
 }
