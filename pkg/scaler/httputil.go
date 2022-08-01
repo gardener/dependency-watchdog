@@ -15,6 +15,7 @@ func (rt *transportWrapper) RoundTrip(req *http.Request) (*http.Response, error)
 	return rt.Transport.RoundTrip(req)
 }
 
+// DisableKeepAlive sets `DisableKeepAlive` to true on the transport that is use by the underline rest client
 func DisableKeepAlive(config *rest.Config) error {
 	transport, err := createTransportWithDisableKeepAlive(config)
 	if err != nil {
