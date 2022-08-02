@@ -2,6 +2,7 @@ package util
 
 import (
 	"context"
+	"k8s.io/client-go/tools/clientcmd"
 	"path/filepath"
 	"testing"
 	"time"
@@ -51,6 +52,7 @@ func TestSuite(t *testing.T) {
 		{"Timeout before getting the deployment", testTimeoutBeforeGettingDeployment},
 		{"Create Scales Getter", testCreateScalesGetter},
 		{"Create client from kubeconfig", testCreateClientFromKubeconfigBytes},
+		{"KeepAlive is disabled", testCreateTransportWithDisabledKeepAlive},
 	}
 	beforeAll(t)
 	for _, test := range tests {
@@ -186,6 +188,22 @@ func testCreateClientFromKubeconfigBytes(t *testing.T) {
 	cfg, err := CreateClientFromKubeConfigBytes(kubeconfig, time.Second)
 	g.Expect(err).Should(BeNil())
 	g.Expect(cfg).ShouldNot(BeNil())
+}
+
+func testCreateTransportWithDisabledKeepAlive(t *testing.T) {
+	//Setup
+	g := NewWithT(t)
+	kubeconfigBuffer, err := test.ReadFile(kubeConfigPath)
+	g.Expect(err).Should(BeNil())
+	clientConfig, err := clientcmd.NewClientConfigFromBytes(kubeconfigBuffer.Bytes())
+	g.Expect(err).Should(BeNil())
+	config, err := clientConfig.ClientConfig()
+	g.Expect(err).Should(BeNil())
+
+	//Test
+	transport, err := createTransportWithDisabledKeepAlive(config)
+	g.Expect(err).Should(BeNil())
+	g.Expect(transport.DisableKeepAlives).To(Equal(true))
 }
 
 func setupGetKubeconfigTest(t *testing.T, k8sClient client.Client) (*corev1.Secret, func()) {

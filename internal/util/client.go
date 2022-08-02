@@ -3,6 +3,7 @@ package util
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -25,6 +26,7 @@ const (
 	kubeConfigSecretKey = "kubeconfig"
 )
 
+// GetKubeConfigFromSecret extracts kubeconfig from a k8s secret with name secretName in namespace
 func GetKubeConfigFromSecret(ctx context.Context, namespace, secretName string, client client.Client) ([]byte, error) {
 	secretKey := types.NamespacedName{
 		Namespace: namespace,
@@ -45,6 +47,8 @@ func GetKubeConfigFromSecret(ctx context.Context, namespace, secretName string, 
 	return kubeConfig, nil
 }
 
+// CreateClientFromKubeConfigBytes creates a client to connect to the Kube ApiServer using the kubeConfigBytes passed as a parameter
+// It will also set a connection timeout and will disable KeepAlive.
 func CreateClientFromKubeConfigBytes(kubeConfigBytes []byte, connectionTimeout time.Duration) (kubernetes.Interface, error) {
 	clientConfig, err := clientcmd.NewClientConfigFromBytes(kubeConfigBytes)
 	if err != nil {
@@ -55,9 +59,36 @@ func CreateClientFromKubeConfigBytes(kubeConfigBytes []byte, connectionTimeout t
 		return nil, err
 	}
 	config.Timeout = connectionTimeout
+	transport, err := createTransportWithDisabledKeepAlive(config)
+	if err != nil {
+		return nil, err
+	}
+	config.Wrap(func(rt http.RoundTripper) http.RoundTripper {
+		return transport
+	})
 	return kubernetes.NewForConfig(config)
 }
 
+// Client created for probing the Kube ApiServer needs to have 'KeepAlive` disabled to ensure
+// that the broken TCP connections are not kept alive for longer duration resulting in unwanted
+// scale down of critical control plane components.
+// See https://github.com/gardener/dependency-watchdog/issues/61
+func createTransportWithDisabledKeepAlive(config *rest.Config) (*http.Transport, error) {
+	tlsConfig, err := rest.TLSConfigFor(config)
+	if err != nil {
+		return nil, err
+	}
+	// rest.Config does not have any transport set and therefore leverages
+	// http.DefaultTransport provided by golang. To properly initialize the transport
+	// one needs to clone the http.DefaultTransport and also set the correct TLS config
+	// which can be extracted from the already constructed rest.Config which is passed to this function.
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DisableKeepAlives = true
+	transport.TLSClientConfig = tlsConfig
+	return transport, nil
+}
+
+// CreateScalesGetter Creates a new ScalesGetter given the config
 func CreateScalesGetter(config *rest.Config) (scale.ScalesGetter, error) {
 	clientSet, err := kubernetes.NewForConfig(config)
 	if err != nil {
@@ -69,6 +100,7 @@ func CreateScalesGetter(config *rest.Config) (scale.ScalesGetter, error) {
 	return scale.New(clientSet.RESTClient(), mapper, dynamic.LegacyAPIPathResolverFunc, resolver), nil
 }
 
+// GetDeploymentFor Looks-up a k8s deployment with the give name and namespace
 func GetDeploymentFor(ctx context.Context, namespace string, name string, client client.Client, timeout *time.Duration) (*appsv1.Deployment, error) {
 	childCtx := ctx
 	var cancelFn context.CancelFunc
