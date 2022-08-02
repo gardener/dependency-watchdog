@@ -144,7 +144,7 @@ func (p *prober) getClientFromSecret(secretName string, oldSHA []byte) (kubernet
 		return nil, nil, errors.New("Invalid empty kubeconfig")
 	}
 
-	newSHAArr := (sha256.Sum256(kubeconfig))
+	newSHAArr := sha256.Sum256(kubeconfig)
 	newSHA := newSHAArr[:]
 	if reflect.DeepEqual(oldSHA, newSHA) {
 		return nil, nil, apierrors.NewAlreadyExists(schema.GroupResource{Resource: "secret"}, secretName)
@@ -159,9 +159,11 @@ func (p *prober) getClientFromSecret(secretName string, oldSHA []byte) (kubernet
 	if err != nil {
 		return nil, newSHA, err
 	}
-
+	err = DisableKeepAlive(config)
+	if err != nil {
+		return nil, newSHA, err
+	}
 	config.Timeout = toDuration(p.probeDeps.Probe.ProbeTimeoutSeconds, defaultProbeTimeoutSeconds)
-
 	client, err := kubernetes.NewForConfig(config)
 	return client, newSHA, err
 }
