@@ -26,7 +26,7 @@ type Prober struct {
 	config              *papi.Config
 	client              client.Client
 	scaler              DeploymentScaler
-	shootclientCreator  ShootClientCreator
+	shootClientCreator  ShootClientCreator
 	internalProbeStatus probeStatus
 	externalProbeStatus probeStatus
 	ctx                 context.Context
@@ -42,7 +42,7 @@ func NewProber(parentCtx context.Context, namespace string, config *papi.Config,
 		config:             config,
 		client:             ctrlClient,
 		scaler:             scaler,
-		shootclientCreator: shootClientCreator,
+		shootClientCreator: shootClientCreator,
 		ctx:                ctx,
 		cancelFn:           cancelFn,
 		l:                  logger,
@@ -106,7 +106,7 @@ func (p *Prober) probe(ctx context.Context) {
 }
 
 func (p *Prober) setupProbeClient(ctx context.Context, namespace string, kubeConfigSecretName string) (kubernetes.Interface, error) {
-	shootClient, err := p.shootclientCreator.CreateClient(ctx, namespace, kubeConfigSecretName, *p.config.ProbeTimeout)
+	shootClient, err := p.shootClientCreator.CreateClient(ctx, namespace, kubeConfigSecretName, *p.config.ProbeTimeout)
 	if err != nil {
 		return nil, err
 	}
