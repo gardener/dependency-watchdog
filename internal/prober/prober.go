@@ -144,7 +144,7 @@ func (p *Prober) probeExternal(shootClient kubernetes.Interface) {
 		return
 	}
 	p.externalProbeStatus.recordSuccess(*p.config.SuccessThreshold)
-	p.l.V(4).Info("external probe is successful", "namespace", p.namespace, "successfulAttempts", p.internalProbeStatus.successCount)
+	p.l.V(4).Info("external probe is successful", "namespace", p.namespace, "successfulAttempts", p.externalProbeStatus.successCount)
 }
 
 func backOffIfNeeded(ps *probeStatus) {
