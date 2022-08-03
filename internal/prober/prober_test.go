@@ -43,17 +43,15 @@ type probeStatusEntry struct {
 	expectedInternalProbeErrorCount   int
 	expectedExternalProbeSuccessCount int
 	expectedExternalProbeErrorCount   int
-	isInternalProbeBackoffNil         bool
-	isExternalProbeBackoffNil         bool
 }
 
 func TestInternalProbeErrorCount(t *testing.T) {
 	table := []probeStatusEntry{
-		{"Success Count is less than Threshold", nil, 1, 0, 0, 0, false, true},
-		{"Unignorable error is returned by pingKubeApiServer", notIgnorableErr, 0, 1, 0, 0, false, true},
-		{"Forbidden request error is returned by pingKubeApiServer", apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden")), 0, 0, 0, 0, true, true},
-		{"Unauthorized request error is returned by pingKubeApiServer", apierrors.NewUnauthorized("unauthorized"), 0, 0, 0, 0, true, true},
-		{"Throttling error is returned by pingKubeApiServer", apierrors.NewTooManyRequests("Too many requests", 10), 0, 0, 0, 0, false, true},
+		{"Success Count is less than Threshold", nil, 1, 0, 0, 0},
+		{"Unignorable error is returned by pingKubeApiServer", notIgnorableErr, 0, 1, 0, 0},
+		{"Forbidden request error is returned by pingKubeApiServer", apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden")), 0, 0, 0, 0},
+		{"Unauthorized request error is returned by pingKubeApiServer", apierrors.NewUnauthorized("unauthorized"), 0, 0, 0, 0},
+		{"Throttling error is returned by pingKubeApiServer", apierrors.NewTooManyRequests("Too many requests", 10), 0, 0, 0, 0},
 	}
 
 	for _, probeStatusEntry := range table {
@@ -72,8 +70,8 @@ func TestInternalProbeErrorCount(t *testing.T) {
 
 func TestHealthyProbesShouldRunScaleUp(t *testing.T) {
 	table := []probeStatusEntry{
-		{"Scale Up Succeeds", nil, 1, 0, 1, 0, false, false},
-		{"Scale Up Fails", errors.New("Scale Up failed"), 1, 0, 1, 0, false, false},
+		{"Scale Up Succeeds", nil, 1, 0, 1, 0},
+		{"Scale Up Fails", errors.New("Scale Up failed"), 1, 0, 1, 0},
 	}
 
 	for _, probeStatusEntry := range table {
@@ -93,8 +91,8 @@ func TestHealthyProbesShouldRunScaleUp(t *testing.T) {
 
 func TestExternalProbeFailingShouldRunScaleDown(t *testing.T) {
 	table := []probeStatusEntry{
-		{"Scale Down Succeeds", nil, 1, 0, 0, 2, false, false},
-		{"Scale Down Fails", errors.New("Scale Down failed"), 1, 0, 0, 2, false, false},
+		{"Scale Down Succeeds", nil, 1, 0, 0, 2},
+		{"Scale Down Fails", errors.New("Scale Down failed"), 1, 0, 0, 2},
 	}
 
 	for _, probeStatusEntry := range table {
@@ -121,9 +119,9 @@ func TestExternalProbeFailingShouldRunScaleDown(t *testing.T) {
 
 func TestUnchangedExternalErrorCountForIgnorableErrors(t *testing.T) {
 	table := []probeStatusEntry{
-		{"Forbidden request error is returned by pingKubeApiServer", apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden")), 1, 0, 0, 0, false, true},
-		{"Unauthorized request error is returned by pingKubeApiServer", apierrors.NewUnauthorized("unauthorized"), 1, 0, 0, 0, false, true},
-		{"Throttling error is returned by pingKubeApiServer", apierrors.NewTooManyRequests("Too many requests", 10), 1, 0, 0, 0, false, false},
+		{"Forbidden request error is returned by pingKubeApiServer", apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden")), 1, 0, 0, 0},
+		{"Unauthorized request error is returned by pingKubeApiServer", apierrors.NewUnauthorized("unauthorized"), 1, 0, 0, 0},
+		{"Throttling error is returned by pingKubeApiServer", apierrors.NewTooManyRequests("Too many requests", 10), 1, 0, 0, 0},
 	}
 
 	for _, probeStatusEntry := range table {
@@ -155,10 +153,8 @@ func TestInternalProbeShouldNotRunIfClientNotCreated(t *testing.T) {
 		err:                               err,
 		expectedInternalProbeSuccessCount: 0,
 		expectedInternalProbeErrorCount:   0,
-		isInternalProbeBackoffNil:         true,
 		expectedExternalProbeSuccessCount: 0,
 		expectedExternalProbeErrorCount:   0,
-		isExternalProbeBackoffNil:         true,
 	}
 	config = createConfig(1, 2, 5*time.Millisecond, time.Microsecond, 0.2)
 	msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, err).Times(2)
@@ -174,10 +170,8 @@ func TestExternalProbeShouldNotRunIfClientNotCreated(t *testing.T) {
 		err:                               err,
 		expectedInternalProbeSuccessCount: 1,
 		expectedInternalProbeErrorCount:   0,
-		isInternalProbeBackoffNil:         false,
 		expectedExternalProbeSuccessCount: 0,
 		expectedExternalProbeErrorCount:   0,
-		isExternalProbeBackoffNil:         true,
 	}
 	config = createConfig(1, 2, 5*time.Millisecond, time.Microsecond, 0.2)
 	msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(context.Context, string, string, time.Duration) (kubernetes.Interface, error) {
@@ -201,8 +195,8 @@ func runProberAndCheckStatus(t *testing.T, duration time.Duration, probeStatusEn
 	runProber(p, duration)
 
 	g.Expect(p.IsClosed()).To(BeTrue())
-	checkProbeStatus(t, p.internalProbeStatus, probeStatusEntry.expectedInternalProbeSuccessCount, probeStatusEntry.expectedInternalProbeErrorCount, probeStatusEntry.isInternalProbeBackoffNil)
-	checkProbeStatus(t, p.externalProbeStatus, probeStatusEntry.expectedExternalProbeSuccessCount, probeStatusEntry.expectedExternalProbeErrorCount, probeStatusEntry.isExternalProbeBackoffNil)
+	checkProbeStatus(t, p.internalProbeStatus, probeStatusEntry.expectedInternalProbeSuccessCount, probeStatusEntry.expectedInternalProbeErrorCount)
+	checkProbeStatus(t, p.externalProbeStatus, probeStatusEntry.expectedExternalProbeSuccessCount, probeStatusEntry.expectedExternalProbeErrorCount)
 }
 
 func runProber(p *Prober, d time.Duration) {
@@ -219,11 +213,10 @@ func runProber(p *Prober, d time.Duration) {
 	}
 }
 
-func checkProbeStatus(t *testing.T, ps probeStatus, successCount int, errCount int, isBackoffNil bool) {
+func checkProbeStatus(t *testing.T, ps probeStatus, successCount int, errCount int) {
 	g := NewWithT(t)
 	g.Expect(ps.errorCount).To(Equal(errCount))
 	g.Expect(ps.successCount).To(Equal(successCount))
-	g.Expect(ps.backOff == nil).To(Equal(isBackoffNil))
 }
 
 func setupProberTest(t *testing.T) {
