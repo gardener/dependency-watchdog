@@ -20,6 +20,7 @@ const (
 	backOffDurationForThrottledRequests = 10 * time.Second
 )
 
+// Prober represents a probe to the Kube ApiServer of a shoot
 type Prober struct {
 	namespace           string
 	config              *papi.Config
@@ -33,6 +34,7 @@ type Prober struct {
 	l                   logr.Logger
 }
 
+// NewProber creates a new Prober
 func NewProber(parentCtx context.Context, namespace string, config *papi.Config, ctrlClient client.Client, scaler DeploymentScaler, shootClientCreator ShootClientCreator, logger logr.Logger) *Prober {
 	ctx, cancelFn := context.WithCancel(parentCtx)
 	return &Prober{
@@ -47,6 +49,7 @@ func NewProber(parentCtx context.Context, namespace string, config *papi.Config,
 	}
 }
 
+// Close closes a probe
 func (p *Prober) Close() {
 	p.cancelFn()
 }
@@ -61,8 +64,9 @@ func (p *Prober) IsClosed() bool {
 	}
 }
 
+// Run starts a probe which will run with a configured interval and jitter.
 func (p *Prober) Run() {
-	util.SleepWithContext(p.ctx, *p.config.InitialDelay)
+	_ = util.SleepWithContext(p.ctx, *p.config.InitialDelay)
 	wait.JitterUntilWithContext(p.ctx, p.probe, *p.config.ProbeInterval, *p.config.BackoffJitterFactor, true)
 }
 
@@ -135,7 +139,7 @@ func (p *Prober) probeExternal(shootClient kubernetes.Interface) {
 			p.l.Error(err, "recording external probe failure", "failedAttempts", p.externalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
 			return
 		}
-		p.internalProbeStatus.handleIgnorableError(err)
+		p.externalProbeStatus.handleIgnorableError(err)
 		p.l.Error(err, "external probe was not successful. ignoring this error, will retry probe", "namespace", p.namespace)
 		return
 	}

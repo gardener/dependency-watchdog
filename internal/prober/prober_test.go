@@ -48,10 +48,10 @@ type probeStatusEntry struct {
 func TestInternalProbeErrorCount(t *testing.T) {
 	table := []probeStatusEntry{
 		{"Success Count is less than Threshold", nil, 1, 0, 0, 0},
-		{"Unignorable error is returned by doProbe", notIgnorableErr, 0, 1, 0, 0},
-		{"Forbidden request error is returned by doProbe", apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden")), 0, 0, 0, 0},
-		{"Unauthorized request error is returned by doProbe", apierrors.NewUnauthorized("unauthorized"), 0, 0, 0, 0},
-		{"Throttling error is returned by doProbe", apierrors.NewTooManyRequests("Too many requests", 10), 0, 0, 0, 0},
+		{"Unignorable error is returned by pingKubeApiServer", notIgnorableErr, 0, 1, 0, 0},
+		{"Forbidden request error is returned by pingKubeApiServer", apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden")), 0, 0, 0, 0},
+		{"Unauthorized request error is returned by pingKubeApiServer", apierrors.NewUnauthorized("unauthorized"), 0, 0, 0, 0},
+		{"Throttling error is returned by pingKubeApiServer", apierrors.NewTooManyRequests("Too many requests", 10), 0, 0, 0, 0},
 	}
 
 	for _, probeStatusEntry := range table {
@@ -119,9 +119,9 @@ func TestExternalProbeFailingShouldRunScaleDown(t *testing.T) {
 
 func TestUnchangedExternalErrorCountForIgnorableErrors(t *testing.T) {
 	table := []probeStatusEntry{
-		{"Forbidden request error is returned by doProbe", apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden")), 1, 0, 0, 0},
-		{"Unauthorized request error is returned by doProbe", apierrors.NewUnauthorized("unauthorized"), 1, 0, 0, 0},
-		{"Throttling error is returned by doProbe", apierrors.NewTooManyRequests("Too many requests", 10), 1, 0, 0, 0},
+		{"Forbidden request error is returned by pingKubeApiServer", apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden")), 1, 0, 0, 0},
+		{"Unauthorized request error is returned by pingKubeApiServer", apierrors.NewUnauthorized("unauthorized"), 1, 0, 0, 0},
+		{"Throttling error is returned by pingKubeApiServer", apierrors.NewTooManyRequests("Too many requests", 10), 1, 0, 0, 0},
 	}
 
 	for _, probeStatusEntry := range table {
