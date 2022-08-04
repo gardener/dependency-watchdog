@@ -85,10 +85,13 @@ func startProberControllerMgr(ctx context.Context, args []string, logger logr.Lo
 		Scheme:                     scheme,
 		MetricsBindAddress:         opts.SharedOpts.MetricsBindAddress,
 		HealthProbeBindAddress:     opts.SharedOpts.HealthBindAddress,
-		LeaderElection:             opts.SharedOpts.EnableLeaderElection,
-		LeaderElectionID:           proberLeaderElectionID,
-		LeaderElectionNamespace:    opts.SharedOpts.LeaderElectionNamespace,
+		LeaderElection:             opts.SharedOpts.LeaderElection.LeaderElect,
+		LeaseDuration:              &opts.SharedOpts.LeaderElection.LeaseDuration,
+		RenewDeadline:              &opts.SharedOpts.LeaderElection.RenewDeadline,
+		RetryPeriod:                &opts.SharedOpts.LeaderElection.RetryPeriod,
+		LeaderElectionNamespace:    opts.SharedOpts.LeaderElection.LeaderElectionNamespace,
 		LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
+		LeaderElectionID:           proberLeaderElectionID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to start the prober controller manager %w", err)

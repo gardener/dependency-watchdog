@@ -19,6 +19,8 @@ restore these dependent pods by deleting them so that they are started again by 
 it weeds out the bad pods.
 
 Flags:
+	--kubeconfig
+		Path to the kubeconfig file. If not specified, then it will default to the service account token to connect to the kube-api-server	
 	--config-file
 		Path of the configuration file containing probe configuration and scaling controller-reference information
 	--concurrent-reconciles
