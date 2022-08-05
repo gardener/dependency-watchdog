@@ -8,6 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
+// ReadyEndpoints is a predicate to allow events for only ready endpoints
 func ReadyEndpoints() predicate.Predicate {
 	isEndpointReady := func(obj runtime.Object) bool {
 		ep, ok := obj.(*v1.Endpoints)
@@ -37,6 +38,7 @@ func ReadyEndpoints() predicate.Predicate {
 	}
 }
 
+// RelevantEndpoints is a predicate to allow events for only configured endpoints
 func RelevantEndpoints(epMap map[string]weeder.DependantSelectors) predicate.Predicate {
 	isRelevantEndpoints := func(obj runtime.Object, epMap map[string]weeder.DependantSelectors) bool {
 		ep, ok := obj.(*v1.Endpoints)
