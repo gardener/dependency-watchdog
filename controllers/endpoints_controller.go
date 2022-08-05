@@ -8,15 +8,19 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+// EndpointReconciler reconciles an Endpoints object
 type EndpointReconciler struct {
 	client.Client
-	WeederConfig *wapi.Config
-	WeederMgr    weeder.WeederManager
+	WeederConfig            *wapi.Config
+	WeederMgr               weeder.WeederManager
+	MaxConcurrentReconciles int
 }
 
+// Reconcile listens to create/update events for `Endpoints` resources and manages weeder which shoot the dependent pods of the configured services, if necessary
 func (r *EndpointReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	//Get the endpoint object
@@ -58,4 +62,12 @@ func isReadyEndpointPresentInSubsets(subsets []v1.EndpointSubset) bool {
 		}
 	}
 	return false
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *EndpointReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&v1.Endpoints{}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}).
+		Complete(r)
 }

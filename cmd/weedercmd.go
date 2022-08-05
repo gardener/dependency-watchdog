@@ -3,6 +3,11 @@ package cmd
 import (
 	"context"
 	"flag"
+	"fmt"
+	"github.com/gardener/dependency-watchdog/controllers"
+	"github.com/gardener/dependency-watchdog/internal/weeder"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/go-logr/logr"
@@ -53,5 +58,34 @@ func addWeederFlags(fs *flag.FlagSet) {
 }
 
 func startWeederControllerMgr(ctx context.Context, args []string, logger logr.Logger) (manager.Manager, error) {
+	weederConfig, err := weeder.LoadConfig(opts.ConfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse weeder config file %s : %w", opts.ConfigPath, err)
+	}
+
+	restConf := ctrl.GetConfigOrDie()
+	mgr, err := ctrl.NewManager(restConf, ctrl.Options{
+		Scheme:                     scheme,
+		MetricsBindAddress:         opts.SharedOpts.MetricsBindAddress,
+		HealthProbeBindAddress:     opts.SharedOpts.HealthBindAddress,
+		LeaderElection:             opts.SharedOpts.LeaderElection.LeaderElect,
+		LeaseDuration:              &opts.SharedOpts.LeaderElection.LeaseDuration,
+		RenewDeadline:              &opts.SharedOpts.LeaderElection.RenewDeadline,
+		RetryPeriod:                &opts.SharedOpts.LeaderElection.RetryPeriod,
+		LeaderElectionNamespace:    opts.SharedOpts.LeaderElection.LeaderElectionNamespace,
+		LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
+		LeaderElectionID:           weederLeaderElectionID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to start the weeder controller manager %w", err)
+	}
+
+	if err := (&controllers.EndpointReconciler{
+		Client:       mgr.GetClient(),
+		WeederConfig: weederConfig,
+		WeederMgr:    weeder.NewWeederManager(),
+	}).SetupWithManager(mgr); err != nil {
+		return nil, fmt.Errorf("failed to register endpoint reconciler with weeder controller manager %w", err)
+	}
 	return nil, nil
 }

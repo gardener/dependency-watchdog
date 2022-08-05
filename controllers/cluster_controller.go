@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
 
@@ -38,10 +39,11 @@ import (
 // ClusterReconciler reconciles a Cluster object
 type ClusterReconciler struct {
 	client.Client
-	Scheme      *runtime.Scheme
-	ProberMgr   prober.Manager
-	ScaleGetter scale.ScalesGetter
-	ProbeConfig *papi.Config
+	Scheme                  *runtime.Scheme
+	ProberMgr               prober.Manager
+	ScaleGetter             scale.ScalesGetter
+	ProbeConfig             *papi.Config
+	MaxConcurrentReconciles int
 }
 
 //+kubebuilder:rbac:groups=gardener.cloud,resources=clusters,verbs=get;list;watch
@@ -147,5 +149,6 @@ func (r *ClusterReconciler) startProber(ctx context.Context, key string) {
 func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&gardenerv1alpha1.Cluster{}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}).
 		Complete(r)
 }

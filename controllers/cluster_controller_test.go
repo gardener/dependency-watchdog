@@ -28,7 +28,8 @@ import (
 )
 
 const (
-	testdataPath = "testdata"
+	testdataPath            = "testdata"
+	maxConcurrentReconciles = 1
 )
 
 func buildScheme() *runtime.Scheme {
@@ -72,11 +73,12 @@ func setupEnv(g *WithT, ctx context.Context) (client.Client, *envtest.Environmen
 	g.Expect(err).To(BeNil())
 
 	reconciler := &ClusterReconciler{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		ScaleGetter: scalesGetter,
-		ProberMgr:   proberpackage.NewManager(),
-		ProbeConfig: proberConfig,
+		Client:                  mgr.GetClient(),
+		Scheme:                  mgr.GetScheme(),
+		ScaleGetter:             scalesGetter,
+		ProberMgr:               proberpackage.NewManager(),
+		ProbeConfig:             proberConfig,
+		MaxConcurrentReconciles: maxConcurrentReconciles,
 	}
 	err = reconciler.SetupWithManager(mgr)
 	g.Expect(err).To(BeNil())

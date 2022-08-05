@@ -20,6 +20,7 @@ import (
 
 const (
 	proberLeaderElectionID = "dwd-prober-leader-election"
+	weederLeaderElectionID = "dwd-weeder-leader-election"
 )
 
 var (
@@ -102,11 +103,12 @@ func startProberControllerMgr(ctx context.Context, args []string, logger logr.Lo
 		return nil, fmt.Errorf("failed to create clientSet for scalesGetter %w", err)
 	}
 	if err := (&controllers.ClusterReconciler{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		ScaleGetter: scalesGetter,
-		ProberMgr:   prober.NewManager(),
-		ProbeConfig: proberConfig,
+		Client:                  mgr.GetClient(),
+		Scheme:                  mgr.GetScheme(),
+		ScaleGetter:             scalesGetter,
+		ProberMgr:               prober.NewManager(),
+		ProbeConfig:             proberConfig,
+		MaxConcurrentReconciles: opts.ConcurrentReconciles,
 	}).SetupWithManager(mgr); err != nil {
 		return nil, fmt.Errorf("failed to register cluster reconciler with the prober controller manager %w", err)
 	}
