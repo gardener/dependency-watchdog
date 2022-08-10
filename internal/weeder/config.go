@@ -30,7 +30,7 @@ func validate(c *wapi.Config) error {
 	// Check the mandatory config parameters for which a default will not be set
 	v.MustNotBeEmpty("serviceAndDependantSelectors", c.ServicesAndDependantSelectors)
 	for _, dependants := range c.ServicesAndDependantSelectors {
-		v.MustNotBeEmpty("podSelector", dependants.PodSelectors)
+		v.MustNotBeEmpty("podSelectors", dependants.PodSelectors)
 		for _, selector := range dependants.PodSelectors {
 			_, err := metav1.LabelSelectorAsSelector(selector)
 			if err != nil {

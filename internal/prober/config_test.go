@@ -1,24 +1,24 @@
 package prober
 
 import (
-	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 
 	multierr "github.com/hashicorp/go-multierror"
 	. "github.com/onsi/gomega"
+
+	"github.com/gardener/dependency-watchdog/internal/util"
 )
 
 const testdataPath = "testdata"
 
 func TestCheckIfDefaultValuesAreSetForAllOptionalMissingValues(t *testing.T) {
 	g := NewWithT(t)
-	validateIfFileExists(testdataPath, t)
+	util.ValidateIfFileExists(testdataPath, t)
 
 	configPath := filepath.Join(testdataPath, "config_missing_optional_values.yaml")
-	validateIfFileExists(configPath, t)
+	util.ValidateIfFileExists(configPath, t)
 	config, err := LoadConfig(configPath)
 
 	g.Expect(err).ToNot(HaveOccurred(), "LoadConfig should not give any error for a valid config file")
@@ -51,9 +51,9 @@ func TestMissingConfigValuesShouldReturnErrorAndNilConfig(t *testing.T) {
 
 	for _, entry := range table {
 		g := NewWithT(t)
-		validateIfFileExists(testdataPath, t)
+		util.ValidateIfFileExists(testdataPath, t)
 		configPath := filepath.Join(testdataPath, entry.fileName)
-		validateIfFileExists(configPath, t)
+		util.ValidateIfFileExists(configPath, t)
 		config, err := LoadConfig(configPath)
 
 		g.Expect(err).To(HaveOccurred(), "LoadConfig should return error for a config with missing mandatory values")
@@ -75,10 +75,10 @@ func TestConfigFileNotFound(t *testing.T) {
 
 func TestErrorInUnMarshallingYaml(t *testing.T) {
 	g := NewWithT(t)
-	validateIfFileExists(testdataPath, t)
+	util.ValidateIfFileExists(testdataPath, t)
 
 	configPath := filepath.Join(testdataPath, "invalidsyntax.yaml")
-	validateIfFileExists(configPath, t)
+	util.ValidateIfFileExists(configPath, t)
 	config, err := LoadConfig(configPath)
 	g.Expect(err).To(HaveOccurred(), "LoadConfig should not give error for a valid config")
 	g.Expect(config).To(BeNil(), "LoadConfig should got nil config for a valid file")
@@ -87,23 +87,14 @@ func TestErrorInUnMarshallingYaml(t *testing.T) {
 
 func TestValidConfigShouldPassAllValidations(t *testing.T) {
 	g := NewWithT(t)
-	validateIfFileExists(testdataPath, t)
+	util.ValidateIfFileExists(testdataPath, t)
 
 	configPath := filepath.Join(testdataPath, "valid_config.yaml")
-	validateIfFileExists(configPath, t)
+	util.ValidateIfFileExists(configPath, t)
 	config, err := LoadConfig(configPath)
 	g.Expect(err).ToNot(HaveOccurred(), "LoadConfig should not give error for a valid config")
 	g.Expect(config).ToNot(BeNil(), "LoadConfig should got nil config for a valid file")
 	g.Expect(len(config.DependentResourceInfos)).To(Equal(3), "LoadConfig did not load all the dependent resources")
 
 	t.Log("Valid config is loaded correctly")
-}
-
-func validateIfFileExists(file string, t *testing.T) {
-	g := NewWithT(t)
-	var err error
-	if _, err := os.Stat(file); errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("%s does not exist. This should not have happened. Check testdata directory.\n", file)
-	}
-	g.Expect(err).ToNot(HaveOccurred(), "File at path %v should exist")
 }

@@ -1,0 +1,12 @@
+#missing 'values' field for one label selector
+watchDuration: 1m40s
+servicesAndDependantSelectors:
+  etcd-main-client:
+    podSelectors:
+      - matchExpressions:
+        - key: gardener.cloud/role
+          operator: In
+        - key: role
+          operator: In
+          values:
+          - apiserver
