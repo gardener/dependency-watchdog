@@ -13,7 +13,7 @@ const (
 )
 
 func LoadConfig(filename string) (*wapi.Config, error) {
-	config, err := readAndUnmarshall(filename)
+	config, err := util.ReadAndUnmarshall[wapi.Config](filename)
 	if err != nil {
 		return nil, err
 	}
@@ -23,16 +23,6 @@ func LoadConfig(filename string) (*wapi.Config, error) {
 		return nil, err
 	}
 	return config, nil
-}
-
-func readAndUnmarshall(filename string) (*wapi.Config, error) {
-	//TODO: Implement me. Try and generify it - it might not work as unmarshalling typically happens during runtime
-	/*
-		func readAndUnmarshall[T Any](filename string) (*T, error) {
-			t := new(T)
-			return yaml.Unmarshall(configBytes, t)
-		}
-	*/
 }
 
 func validate(c *wapi.Config) error {
@@ -49,6 +39,8 @@ func validate(c *wapi.Config) error {
 			}
 		}
 	}
+
+	return v.Error
 }
 
 func fillDefaultValues(c *wapi.Config) {

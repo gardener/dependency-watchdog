@@ -2,11 +2,9 @@ package prober
 
 import (
 	"github.com/gardener/dependency-watchdog/internal/util"
-	"io/ioutil"
 	"time"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
-	"github.com/goccy/go-yaml"
 )
 
 const (
@@ -26,7 +24,7 @@ const (
 )
 
 func LoadConfig(file string) (*papi.Config, error) {
-	config, err := readAndUnmarshal(file)
+	config, err := util.ReadAndUnmarshall[papi.Config](file)
 	if err != nil {
 		return nil, err
 	}
@@ -36,19 +34,6 @@ func LoadConfig(file string) (*papi.Config, error) {
 		return nil, err
 	}
 	return config, nil
-}
-
-func readAndUnmarshal(file string) (*papi.Config, error) {
-	configBytes, err := ioutil.ReadFile(file)
-	if err != nil {
-		return nil, err
-	}
-	config := papi.Config{}
-	err = yaml.Unmarshal(configBytes, &config)
-	if err != nil {
-		return nil, err
-	}
-	return &config, nil
 }
 
 func validate(c *papi.Config) error {
