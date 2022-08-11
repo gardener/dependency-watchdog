@@ -11,10 +11,10 @@ COPY go.mod go.sum ./
 COPY *.go ./
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dwdprober -ldflags -a .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dwd -ldflags -a .
 
 FROM alpine:3.15.4
 WORKDIR /
-COPY --from=builder /workspace/dwdprober .
+COPY --from=builder /workspace/dwd .
 
-ENTRYPOINT ["./dwdprober"]
+ENTRYPOINT ["./dwd"]

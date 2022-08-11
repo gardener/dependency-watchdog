@@ -43,7 +43,7 @@ type SharedOpts struct {
 	// ConcurrentReconciles is the maximum number of concurrent reconciles which can be run
 	ConcurrentReconciles int
 	// leaderElection defines the configuration of leader election client.
-	LeaderElection LeaderElectionConfig
+	LeaderElection LeaderElectionOpts
 	// KubeApiBurst is the maximum burst over the QPS
 	KubeApiBurst int
 	// KubeApiQps indicates the maximum QPS to the API server from this client
@@ -54,21 +54,23 @@ type SharedOpts struct {
 	HealthBindAddress string
 }
 
-// LeaderElectionConfig defines the configuration of leader election
+// LeaderElectionOpts defines the configuration of leader election
 // clients for components that can run with leader election enabled.
-type LeaderElectionConfig struct {
-	// LeaderElect enables a leader election client to gain leadership
+type LeaderElectionOpts struct {
+	// Enable enables a leader election client to gain leadership
 	// before executing the main loop. Enable this when running replicated
-	// components for high availability.
-	Enabled bool
+	// components for high availability. By default, it is false
+	Enable bool
+	// Namespace is the namespace in which leader election resource will be created
+	Namespace string
 	// LeaseDuration is the duration that non-leader candidates will wait
 	// after observing a leadership renewal until attempting to acquire
-	// leadership of a led but unrenewed leader slot. This is effectively the
+	// leadership of a leader but un-renewed leader slot. This is effectively the
 	// maximum duration that a leader can be stopped before it is replaced
 	// by another candidate. This is only applicable if leader election is
 	// enabled.
 	LeaseDuration time.Duration
-	// RenewDeadline is the interval between attempts by the acting master to
+	// RenewDeadline is the interval between attempts by the acting leader to
 	// renew a leadership slot before it stops leading. This must be less
 	// than or equal to the lease duration. This is only applicable if leader
 	// election is enabled.
@@ -77,8 +79,6 @@ type LeaderElectionConfig struct {
 	// acquisition and renewal of a leadership. This is only applicable if
 	// leader election is enabled.
 	RetryPeriod time.Duration
-	// Namespace is the namespace in which leader election resource will be created
-	Namespace string
 }
 
 func SetSharedOpts(fs *flag.FlagSet, opts *SharedOpts) {
@@ -92,9 +92,10 @@ func SetSharedOpts(fs *flag.FlagSet, opts *SharedOpts) {
 }
 
 func bindLeaderElectionFlags(fs *flag.FlagSet, opts *SharedOpts) {
-	fs.BoolVar(&opts.LeaderElection.Enabled, "enable-leader-election", false, "Start a leader election client and gain leadership before "+
+	fs.BoolVar(&opts.LeaderElection.Enable, "enable-leader-election", false, "Start a leader election client and gain leadership before "+
 		"executing the main loop. Enable this when running replicated "+
 		"components for high availability.")
+	fs.StringVar(&opts.LeaderElection.Namespace, "leader-election-namespace", "garden", "Namespace in which leader election resource will be created. It should be the same namespace where DWD pods are deployed")
 	fs.DurationVar(&opts.LeaderElection.LeaseDuration, "leader-elect-lease-duration", defaultLeaseDuration, "The duration that non-leader candidates will wait after observing a leadership "+
 		"renewal until attempting to acquire leadership of a led but unrenewed leader "+
 		"slot. This is effectively the maximum duration that a leader can be stopped "+
@@ -105,5 +106,4 @@ func bindLeaderElectionFlags(fs *flag.FlagSet, opts *SharedOpts) {
 		"This is only applicable if leader election is enabled.")
 	fs.DurationVar(&opts.LeaderElection.RetryPeriod, "leader-elect-retry-period", defaultRetryPeriod, "The duration the clients should wait between attempting acquisition and renewal "+
 		"of a leadership. This is only applicable if leader election is enabled.")
-	fs.StringVar(&opts.LeaderElection.Namespace, "leader-election-namespace", "garden", "Namespace in which leader election resource will be created. It should be the same namespace where DWD pods are deployed")
 }

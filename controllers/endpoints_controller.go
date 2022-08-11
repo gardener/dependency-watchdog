@@ -51,7 +51,10 @@ func (r *EndpointReconciler) startWeeder(ctx context.Context, name, namespace st
 func (r *EndpointReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1.Endpoints{}).
-		WithEventFilter(predicate.And(predicate.ResourceVersionChangedPredicate{}, ReadyEndpoints(), MatchingEndpoints(r.WeederConfig.ServicesAndDependantSelectors))).
+		WithEventFilter(predicate.And(
+			predicate.ResourceVersionChangedPredicate{},
+			ReadyEndpoints(),
+			MatchingEndpoints(r.WeederConfig.ServicesAndDependantSelectors))).
 		WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}).
 		Complete(r)
 }

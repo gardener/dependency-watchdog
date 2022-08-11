@@ -86,7 +86,7 @@ func startProberControllerMgr(ctx context.Context, args []string, logger logr.Lo
 		Scheme:                     scheme,
 		MetricsBindAddress:         opts.SharedOpts.MetricsBindAddress,
 		HealthProbeBindAddress:     opts.SharedOpts.HealthBindAddress,
-		LeaderElection:             opts.SharedOpts.LeaderElection.Enabled,
+		LeaderElection:             opts.SharedOpts.LeaderElection.Enable,
 		LeaseDuration:              &opts.SharedOpts.LeaderElection.LeaseDuration,
 		RenewDeadline:              &opts.SharedOpts.LeaderElection.RenewDeadline,
 		RetryPeriod:                &opts.SharedOpts.LeaderElection.RetryPeriod,

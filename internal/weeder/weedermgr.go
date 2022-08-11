@@ -5,9 +5,11 @@ import (
 	"sync"
 )
 
+// Manager provides a single point for registering and unregistering weeders
 type Manager interface {
 	Register(weeder Weeder) bool
 	Unregister(key string) bool
+	UnregisterAll()
 }
 
 type weederManager struct {
@@ -15,11 +17,13 @@ type weederManager struct {
 	weeders map[string]weederRegistration
 }
 
+// weederRegistration captures the handle to manage a weeder
 type weederRegistration struct {
 	ctx      context.Context
 	cancelFn context.CancelFunc
 }
 
+// isClosed checks if the weeder has been closed
 func (wr weederRegistration) isClosed() bool {
 	select {
 	case <-wr.ctx.Done():
@@ -29,11 +33,14 @@ func (wr weederRegistration) isClosed() bool {
 	}
 }
 
+// close cancels the weeder
 func (wr weederRegistration) close() {
 	wr.cancelFn()
 }
 
-//Register registers the new weeder
+//Register registers the new weeder. If the weeder with the same key (see `createKey` function) exists
+// then it will close the registration (if not already closed) which cancels the weeder.
+// It will then create a new weeder registration which will replace the existing weeder registration.
 func (wm *weederManager) Register(weeder Weeder) bool {
 	wm.Lock()
 	defer wm.Unlock()
@@ -50,12 +57,14 @@ func (wm *weederManager) Register(weeder Weeder) bool {
 	return true
 }
 
-func NewWeederManager() *weederManager {
+// NewManager creates a new manager to manager weeder registrations
+func NewManager() *weederManager {
 	return &weederManager{
 		weeders: make(map[string]weederRegistration),
 	}
 }
 
+// Unregister cancels the weeder registration if one exists using the passed key (see `createKey` function)
 func (wm *weederManager) Unregister(key string) bool {
 	wm.Lock()
 	defer wm.Unlock()
@@ -67,6 +76,13 @@ func (wm *weederManager) Unregister(key string) bool {
 	return false
 }
 
+func (wm *weederManager) UnregisterAll() {
+	for key, _ := range wm.weeders {
+		wm.Unregister(key)
+	}
+}
+
+// createKey creates a key to uniquely identify a weeder
 func createKey(w Weeder) string {
 	return w.endpoints.Name + w.namespace
 }

@@ -68,7 +68,7 @@ func startWeederControllerMgr(ctx context.Context, args []string, logger logr.Lo
 		Scheme:                     scheme,
 		MetricsBindAddress:         opts.SharedOpts.MetricsBindAddress,
 		HealthProbeBindAddress:     opts.SharedOpts.HealthBindAddress,
-		LeaderElection:             opts.SharedOpts.LeaderElection.Enabled,
+		LeaderElection:             opts.SharedOpts.LeaderElection.Enable,
 		LeaseDuration:              &opts.SharedOpts.LeaderElection.LeaseDuration,
 		RenewDeadline:              &opts.SharedOpts.LeaderElection.RenewDeadline,
 		RetryPeriod:                &opts.SharedOpts.LeaderElection.RetryPeriod,
@@ -83,7 +83,7 @@ func startWeederControllerMgr(ctx context.Context, args []string, logger logr.Lo
 	if err := (&controllers.EndpointReconciler{
 		Client:       mgr.GetClient(),
 		WeederConfig: weederConfig,
-		WeederMgr:    weeder.NewWeederManager(),
+		WeederMgr:    weeder.NewManager(),
 	}).SetupWithManager(mgr); err != nil {
 		return nil, fmt.Errorf("failed to register endpoint reconciler with weeder controller manager %w", err)
 	}

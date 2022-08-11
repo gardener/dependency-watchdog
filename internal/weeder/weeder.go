@@ -13,45 +13,95 @@ type Weeder struct {
 	namespace string
 	endpoints *v1.Endpoints
 	client.Client
-	logger   logr.Logger
-	config   *wapi.Config
-	ctx      context.Context
-	cancelFn context.CancelFunc
+	logger             logr.Logger
+	dependantSelectors wapi.DependantSelectors
+	ctx                context.Context
+	cancelFn           context.CancelFunc
 }
 
 func NewWeeder(parentCtx context.Context, namespace string, config *wapi.Config, ctrlClient client.Client, ep *v1.Endpoints, logger logr.Logger) *Weeder {
-	ctx, cancel := context.WithCancel(parentCtx)
+	ctx, cancelFn := context.WithTimeout(parentCtx, *config.WatchDuration)
+	dependantSelectors := config.ServicesAndDependantSelectors[ep.Name]
 	return &Weeder{
-		namespace: namespace,
-		endpoints: ep,
-		Client:    ctrlClient,
-		logger:    logger,
-		config:    config,
-		ctx:       ctx,
-		cancelFn:  cancel,
-	}
-}
-
-func (w *Weeder) Close() {
-	w.cancelFn()
-}
-
-func (w *Weeder) isClosed() bool {
-	select {
-	case <-w.ctx.Done():
-		return true
-	default:
-		return false
+		namespace:          namespace,
+		endpoints:          ep,
+		Client:             ctrlClient,
+		logger:             logger,
+		dependantSelectors: dependantSelectors,
+		ctx:                ctx,
+		cancelFn:           cancelFn,
 	}
 }
 
 func (w *Weeder) Run() {
-	for _, ds := range w.config.ServicesAndDependantSelectors {
-		for _, selector := range ds.PodSelectors {
-			go w.watchAndWeed(w.ctx, selector)
-		}
+	for _, ps := range w.dependantSelectors.PodSelectors {
+		go w.watchAndWeed(w.ctx, ps)
 	}
 }
 
-func (w *Weeder) watchAndWeed(ctx context.Context, selector *metav1.LabelSelector) {
+/*
+	NewWatcher(ctx, eventHandler)
+	go watcher.Watch(ctx)
+
+	type Watcher interface {
+		Watch(ctx)
+	}
+
+	func NewWatcher(ctx, func(ctx) error) (Watcher, error){
+		creates selector
+		creates an initial watch using the selector
+		watch is then set in the podWatcher
+	}
+
+	type podWatcher struct {
+		ctx
+		eventHandlerFn func(ctx) error
+		watch
+	}
+
+	func (pw *podWatcher) Watch(ctx) {
+		defer pw.watch.Stop()
+		for {
+			select {
+				case <-ctx.Done:
+					return
+				case event, ok <- w.ResultChan:
+					if !ok {
+						pw.recreateWatch()
+						continue
+					}
+					if !canProcess(event) {
+						continue
+					}
+					w.eventHandlerFn()
+			}
+		}
+	}
+	func canProcess(watch.Event) bool {
+	}
+
+	func (pw *podWatcher) recreateWatch() {
+		pw.watcher.Stop()
+
+	}
+*/
+
+func (w *Weeder) watchAndWeed(ctx context.Context, podSelector *metav1.LabelSelector) {
+	_, err := metav1.LabelSelectorAsSelector(podSelector)
+	if err != nil {
+		w.logger.Error(err, "This is unexpected as all selectors have already been vetted. Cancelling this weeder", "namespace", w.namespace, "endpoint", w.endpoints, "podSelector", podSelector)
+		w.cancelFn()
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			w.logger.V(4).Info("Watch duration completed for weeder, exiting watch", "namespace", w.namespace, "endpoint", w.endpoints)
+			return
+		default:
+
+		}
+	}
+
 }

@@ -9,7 +9,7 @@ import (
 )
 
 // ReadyEndpoints is a predicate to allow events for only ready endpoints. Endpoint is considered ready
-// when there at least a single endpoint subset has at least one IP address assigned.
+// when there at least a single endpoint subset that has at least one IP address assigned.
 func ReadyEndpoints() predicate.Predicate {
 	isEndpointReady := func(obj runtime.Object) bool {
 		ep, ok := obj.(*v1.Endpoints)
