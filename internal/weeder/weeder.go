@@ -46,8 +46,8 @@ func (w *Weeder) isClosed() bool {
 }
 
 func (w *Weeder) Run() {
-	for _, dep := range w.config.ServicesAndDependantSelectors {
-		for _, selector := range dep.PodSelectors {
+	for _, ds := range w.config.ServicesAndDependantSelectors {
+		for _, selector := range ds.PodSelectors {
 			go w.watchAndWeed(w.ctx, selector)
 		}
 	}

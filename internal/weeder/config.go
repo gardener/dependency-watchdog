@@ -5,6 +5,7 @@ import (
 	"github.com/gardener/dependency-watchdog/internal/util"
 	multierr "github.com/hashicorp/go-multierror"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 	"time"
 )
 
@@ -29,9 +30,9 @@ func validate(c *wapi.Config) error {
 	v := new(util.Validator)
 	// Check the mandatory config parameters for which a default will not be set
 	v.MustNotBeEmpty("serviceAndDependantSelectors", c.ServicesAndDependantSelectors)
-	for _, dependants := range c.ServicesAndDependantSelectors {
-		v.MustNotBeEmpty("podSelectors", dependants.PodSelectors)
-		for _, selector := range dependants.PodSelectors {
+	for _, ds := range c.ServicesAndDependantSelectors {
+		v.MustNotBeEmpty("podSelectors", ds.PodSelectors)
+		for _, selector := range ds.PodSelectors {
 			_, err := metav1.LabelSelectorAsSelector(selector)
 			if err != nil {
 				v.Error = multierr.Append(v.Error, err)
@@ -39,13 +40,9 @@ func validate(c *wapi.Config) error {
 			}
 		}
 	}
-
 	return v.Error
 }
 
 func fillDefaultValues(c *wapi.Config) {
-	if c.WatchDuration == nil {
-		c.WatchDuration = new(time.Duration)
-		*c.WatchDuration = DefaultWatchDuration
-	}
+	pointer.DurationDeref(c.WatchDuration, DefaultWatchDuration)
 }

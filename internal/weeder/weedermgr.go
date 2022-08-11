@@ -2,7 +2,7 @@ package weeder
 
 import "sync"
 
-type WeederManager interface {
+type Manager interface {
 	Register(weeder Weeder) bool
 	Unregister(key string) bool
 }
