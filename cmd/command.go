@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"flag"
-	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -44,7 +43,7 @@ type SharedOpts struct {
 	// ConcurrentReconciles is the maximum number of concurrent reconciles which can be run
 	ConcurrentReconciles int
 	// leaderElection defines the configuration of leader election client.
-	LeaderElection LeaderElectionConfiguration
+	LeaderElection LeaderElectionConfig
 	// KubeApiBurst is the maximum burst over the QPS
 	KubeApiBurst int
 	// KubeApiQps indicates the maximum QPS to the API server from this client
@@ -55,13 +54,13 @@ type SharedOpts struct {
 	HealthBindAddress string
 }
 
-// LeaderElectionConfiguration defines the configuration of leader election
+// LeaderElectionConfig defines the configuration of leader election
 // clients for components that can run with leader election enabled.
-type LeaderElectionConfiguration struct {
+type LeaderElectionConfig struct {
 	// LeaderElect enables a leader election client to gain leadership
 	// before executing the main loop. Enable this when running replicated
 	// components for high availability.
-	LeaderElect bool
+	Enabled bool
 	// LeaseDuration is the duration that non-leader candidates will wait
 	// after observing a leadership renewal until attempting to acquire
 	// leadership of a led but unrenewed leader slot. This is effectively the
@@ -78,11 +77,8 @@ type LeaderElectionConfiguration struct {
 	// acquisition and renewal of a leadership. This is only applicable if
 	// leader election is enabled.
 	RetryPeriod time.Duration
-	// ResourceLock indicates the resource object type that will be used to lock
-	// during leader election cycles.
-	ResourceLock string
-	// LeaderElectionNamespace is the namespace in which leader election resource will be created
-	LeaderElectionNamespace string
+	// Namespace is the namespace in which leader election resource will be created
+	Namespace string
 }
 
 func SetSharedOpts(fs *flag.FlagSet, opts *SharedOpts) {
@@ -92,11 +88,11 @@ func SetSharedOpts(fs *flag.FlagSet, opts *SharedOpts) {
 	fs.Float64Var(&opts.KubeApiQps, "kube-api-qps", float64(rest.DefaultQPS), "Maximum QPS (queries per second) allowed from the client to the API server")
 	fs.StringVar(&opts.MetricsBindAddress, "metrics-bind-addr", defaultMetricsBindAddress, "The TCP address that the controller should bind to for serving prometheus metrics")
 	fs.StringVar(&opts.HealthBindAddress, "health-bind-addr", defaultHealthBindAddress, "The TCP address that the controller should bind to for serving health probes")
-	bindFlags(fs, opts)
+	bindLeaderElectionFlags(fs, opts)
 }
 
-func bindFlags(fs *flag.FlagSet, opts *SharedOpts) {
-	fs.BoolVar(&opts.LeaderElection.LeaderElect, "leader-elect", false, "Start a leader election client and gain leadership before "+
+func bindLeaderElectionFlags(fs *flag.FlagSet, opts *SharedOpts) {
+	fs.BoolVar(&opts.LeaderElection.Enabled, "enable-leader-election", false, "Start a leader election client and gain leadership before "+
 		"executing the main loop. Enable this when running replicated "+
 		"components for high availability.")
 	fs.DurationVar(&opts.LeaderElection.LeaseDuration, "leader-elect-lease-duration", defaultLeaseDuration, "The duration that non-leader candidates will wait after observing a leadership "+
@@ -109,8 +105,5 @@ func bindFlags(fs *flag.FlagSet, opts *SharedOpts) {
 		"This is only applicable if leader election is enabled.")
 	fs.DurationVar(&opts.LeaderElection.RetryPeriod, "leader-elect-retry-period", defaultRetryPeriod, "The duration the clients should wait between attempting acquisition and renewal "+
 		"of a leadership. This is only applicable if leader election is enabled.")
-	fs.StringVar(&opts.LeaderElection.ResourceLock, "leader-elect-resource-lock", resourcelock.LeasesResourceLock, "The type of resource object that is used for locking during "+
-		"leader election. Supported options are 'endpoints', 'configmaps', "+
-		"'leases', 'endpointsleases' and 'configmapsleases'.")
-	fs.StringVar(&opts.LeaderElection.LeaderElectionNamespace, "leader-election-namespace", "garden", "Namespace in which leader election resource will be created. It should be the same namespace where DWD pods are deployed")
+	fs.StringVar(&opts.LeaderElection.Namespace, "leader-election-namespace", "garden", "Namespace in which leader election resource will be created. It should be the same namespace where DWD pods are deployed")
 }

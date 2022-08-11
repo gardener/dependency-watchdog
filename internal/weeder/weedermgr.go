@@ -1,44 +1,67 @@
 package weeder
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 type Manager interface {
 	Register(weeder Weeder) bool
 	Unregister(key string) bool
 }
 
-func NewWeederManager() *weederManager {
-	return &weederManager{
-		weeders: make(map[string]Weeder),
+type weederManager struct {
+	sync.Mutex
+	weeders map[string]weederRegistration
+}
+
+type weederRegistration struct {
+	ctx      context.Context
+	cancelFn context.CancelFunc
+}
+
+func (wr weederRegistration) isClosed() bool {
+	select {
+	case <-wr.ctx.Done():
+		return true
+	default:
+		return false
 	}
 }
 
-type weederManager struct {
-	sync.Mutex
-	weeders map[string]Weeder
+func (wr weederRegistration) close() {
+	wr.cancelFn()
 }
 
 //Register registers the new weeder
 func (wm *weederManager) Register(weeder Weeder) bool {
-	//checks if there is an existing registration. If yes then it will get the Weeder and check isClosed and if not then call Close()
 	wm.Lock()
 	defer wm.Unlock()
 	key := createKey(weeder)
-	if w, ok := wm.weeders[key]; ok {
-		if !w.isClosed() {
-			weeder.Close()
+	if wr, exists := wm.weeders[key]; exists {
+		if !wr.isClosed() {
+			wr.close()
 		}
 	}
-	wm.weeders[key] = weeder
+	wm.weeders[key] = weederRegistration{
+		ctx:      weeder.ctx,
+		cancelFn: weeder.cancelFn,
+	}
 	return true
+}
+
+func NewWeederManager() *weederManager {
+	return &weederManager{
+		weeders: make(map[string]weederRegistration),
+	}
 }
 
 func (wm *weederManager) Unregister(key string) bool {
 	wm.Lock()
 	defer wm.Unlock()
-	if w, ok := wm.weeders[key]; ok {
+	if wr, ok := wm.weeders[key]; ok {
 		delete(wm.weeders, key)
-		w.Close()
+		wr.close()
 		return true
 	}
 	return false

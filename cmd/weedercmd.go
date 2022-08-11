@@ -68,11 +68,11 @@ func startWeederControllerMgr(ctx context.Context, args []string, logger logr.Lo
 		Scheme:                     scheme,
 		MetricsBindAddress:         opts.SharedOpts.MetricsBindAddress,
 		HealthProbeBindAddress:     opts.SharedOpts.HealthBindAddress,
-		LeaderElection:             opts.SharedOpts.LeaderElection.LeaderElect,
+		LeaderElection:             opts.SharedOpts.LeaderElection.Enabled,
 		LeaseDuration:              &opts.SharedOpts.LeaderElection.LeaseDuration,
 		RenewDeadline:              &opts.SharedOpts.LeaderElection.RenewDeadline,
 		RetryPeriod:                &opts.SharedOpts.LeaderElection.RetryPeriod,
-		LeaderElectionNamespace:    opts.SharedOpts.LeaderElection.LeaderElectionNamespace,
+		LeaderElectionNamespace:    opts.SharedOpts.LeaderElection.Namespace,
 		LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
 		LeaderElectionID:           weederLeaderElectionID,
 	})
