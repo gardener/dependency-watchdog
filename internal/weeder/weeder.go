@@ -6,6 +6,7 @@ import (
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -13,19 +14,21 @@ type Weeder struct {
 	namespace string
 	endpoints *v1.Endpoints
 	client.Client
+	SeedClient         kubernetes.Interface
 	logger             logr.Logger
 	dependantSelectors wapi.DependantSelectors
 	ctx                context.Context
 	cancelFn           context.CancelFunc
 }
 
-func NewWeeder(parentCtx context.Context, namespace string, config *wapi.Config, ctrlClient client.Client, ep *v1.Endpoints, logger logr.Logger) *Weeder {
+func NewWeeder(parentCtx context.Context, namespace string, config *wapi.Config, ctrlClient client.Client, seedClient kubernetes.Interface, ep *v1.Endpoints, logger logr.Logger) *Weeder {
 	ctx, cancelFn := context.WithTimeout(parentCtx, *config.WatchDuration)
 	dependantSelectors := config.ServicesAndDependantSelectors[ep.Name]
 	return &Weeder{
 		namespace:          namespace,
 		endpoints:          ep,
 		Client:             ctrlClient,
+		SeedClient:         seedClient,
 		logger:             logger,
 		dependantSelectors: dependantSelectors,
 		ctx:                ctx,

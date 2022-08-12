@@ -5,6 +5,7 @@ import (
 	wapi "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/gardener/dependency-watchdog/internal/weeder"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -15,6 +16,7 @@ import (
 // EndpointReconciler reconciles an Endpoints object
 type EndpointReconciler struct {
 	client.Client
+	SeedClient              kubernetes.Interface
 	WeederConfig            *wapi.Config
 	WeederMgr               weeder.Manager
 	MaxConcurrentReconciles int
@@ -41,7 +43,7 @@ func (r *EndpointReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 func (r *EndpointReconciler) startWeeder(ctx context.Context, name, namespace string, ep *v1.Endpoints) {
 	uniqueName := name + "/" + namespace
 	wLogger := log.FromContext(ctx).WithName(uniqueName).WithName("weeder")
-	w := weeder.NewWeeder(ctx, namespace, r.WeederConfig, r.Client, ep, wLogger)
+	w := weeder.NewWeeder(ctx, namespace, r.WeederConfig, r.Client, r.SeedClient, ep, wLogger)
 	// Register the weeder
 	r.WeederMgr.Register(*w)
 	go w.Run()

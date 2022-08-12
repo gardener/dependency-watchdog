@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/gardener/dependency-watchdog/controllers"
 	"github.com/gardener/dependency-watchdog/internal/weeder"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -80,8 +81,15 @@ func startWeederControllerMgr(ctx context.Context, args []string, logger logr.Lo
 		return nil, fmt.Errorf("failed to start the weeder controller manager %w", err)
 	}
 
+	// create clientSet
+	clientSet, err := kubernetes.NewForConfig(restConf)
+	if err != nil {
+		return nil, fmt.Errorf("failed creating clientset for dwd-weeder %w", err)
+	}
+
 	if err := (&controllers.EndpointReconciler{
 		Client:       mgr.GetClient(),
+		SeedClient:   clientSet,
 		WeederConfig: weederConfig,
 		WeederMgr:    weeder.NewManager(),
 	}).SetupWithManager(mgr); err != nil {
