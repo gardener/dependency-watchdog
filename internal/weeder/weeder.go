@@ -2,12 +2,18 @@ package weeder
 
 import (
 	"context"
+	"fmt"
+	"k8s.io/apimachinery/pkg/types"
+	"time"
+
 	wapi "github.com/gardener/dependency-watchdog/api/weeder"
+	internalutils "github.com/gardener/dependency-watchdog/internal/util"
 	"github.com/go-logr/logr"
+
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type Weeder struct {
@@ -36,75 +42,28 @@ func NewWeeder(parentCtx context.Context, namespace string, config *wapi.Config,
 	}
 }
 
-func (w *Weeder) Run() {
+func (w *Weeder) Run(watchDuration *time.Duration) {
 	for _, ps := range w.dependantSelectors.PodSelectors {
-		go w.watchAndWeed(w.ctx, ps)
+		watcher, _ := NewWatcher(w.ctx, shootPodIfNecessary, w, ps)
+		go watcher.Watch(w.ctx)
 	}
+	w.logger.Info("Waiting for pods in Crashloopbackoff for a period of %s", watchDuration.String())
+
+	// weeder should wait till the context expires
+	<-w.ctx.Done()
 }
 
-/*
-	NewWatcher(ctx, eventHandler)
-	go watcher.Watch(ctx)
-
-	type Watcher interface {
-		Watch(ctx)
-	}
-
-	func NewWatcher(ctx, func(ctx) error) (Watcher, error){
-		creates selector
-		creates an initial watch using the selector
-		watch is then set in the podWatcher
-	}
-
-	type podWatcher struct {
-		ctx
-		eventHandlerFn func(ctx) error
-		watch
-	}
-
-	func (pw *podWatcher) Watch(ctx) {
-		defer pw.watch.Stop()
-		for {
-			select {
-				case <-ctx.Done:
-					return
-				case event, ok <- w.ResultChan:
-					if !ok {
-						pw.recreateWatch()
-						continue
-					}
-					if !canProcess(event) {
-						continue
-					}
-					w.eventHandlerFn()
-			}
-		}
-	}
-	func canProcess(watch.Event) bool {
-	}
-
-	func (pw *podWatcher) recreateWatch() {
-		pw.watcher.Stop()
-
-	}
-*/
-
-func (w *Weeder) watchAndWeed(ctx context.Context, podSelector *metav1.LabelSelector) {
-	_, err := metav1.LabelSelectorAsSelector(podSelector)
+func shootPodIfNecessary(ctx context.Context, client client.Client, pod *v1.Pod) error {
+	// Validate pod status again before shoot it out.
+	logger := log.FromContext(ctx)
+	latestPod := new(v1.Pod)
+	err := client.Get(ctx, types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name}, latestPod)
 	if err != nil {
-		w.logger.Error(err, "This is unexpected as all selectors have already been vetted. Cancelling this weeder", "namespace", w.namespace, "endpoint", w.endpoints, "podSelector", podSelector)
-		w.cancelFn()
-		return
+		return fmt.Errorf("error getting pod %s", latestPod.Name)
 	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			w.logger.V(4).Info("Watch duration completed for weeder, exiting watch", "namespace", w.namespace, "endpoint", w.endpoints)
-			return
-		default:
-
-		}
+	if !internalutils.ShouldDeletePod(latestPod) {
+		return nil
 	}
-
+	logger.Info("Deleting pod", "name", latestPod.Name)
+	return client.Delete(ctx, latestPod)
 }

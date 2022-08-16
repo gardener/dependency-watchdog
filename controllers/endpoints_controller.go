@@ -46,7 +46,7 @@ func (r *EndpointReconciler) startWeeder(ctx context.Context, name, namespace st
 	w := weeder.NewWeeder(ctx, namespace, r.WeederConfig, r.Client, r.SeedClient, ep, wLogger)
 	// Register the weeder
 	r.WeederMgr.Register(*w)
-	go w.Run()
+	go w.Run(r.WeederConfig.WatchDuration)
 }
 
 // SetupWithManager sets up the controller with the Manager.
