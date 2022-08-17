@@ -77,12 +77,12 @@ func (wm *weederManager) Unregister(key string) bool {
 }
 
 func (wm *weederManager) UnregisterAll() {
-	for key, _ := range wm.weeders {
+	for key := range wm.weeders {
 		wm.Unregister(key)
 	}
 }
 
 // createKey creates a key to uniquely identify a weeder
 func createKey(w Weeder) string {
-	return w.endpoints.Name + w.namespace
+	return w.namespace + "/" + w.endpoints.Name
 }
