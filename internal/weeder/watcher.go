@@ -17,7 +17,7 @@ const watchCreationRetryInterval = 500 * time.Millisecond
 
 type podEventHandler func(ctx context.Context, client client.Client, podNamespaceName types.NamespacedName) error
 
-// podWatcher watches a pod
+// podWatcher watches a pod for status changes
 type podWatcher struct {
 	selector       *metav1.LabelSelector
 	eventHandlerFn podEventHandler
@@ -37,7 +37,7 @@ func (pw *podWatcher) createK8sWatch(ctx context.Context) {
 	}, watchCreationRetryInterval)
 }
 
-func (pw *podWatcher) Close() {
+func (pw *podWatcher) close() {
 	if pw.k8sWatch != nil {
 		pw.k8sWatch.Stop()
 	}
@@ -54,6 +54,7 @@ func doCreateK8sWatch(ctx context.Context, client kubernetes.Interface, namespac
 }
 
 func (pw *podWatcher) watch() {
+	defer pw.close()
 	pw.createK8sWatch(pw.weeder.ctx)
 	for {
 		select {
