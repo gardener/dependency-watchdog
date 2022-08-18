@@ -57,7 +57,7 @@ func main() {
 		Level:       zapcore.DebugLevel,
 	}
 	opts.BindFlags(flag.CommandLine)
-	cmdArgs, command, err := parseCommand(args)
+	_, command, err := parseCommand(args)
 	if err != nil {
 		os.Exit(2)
 	}
@@ -65,7 +65,7 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 	logger = ctrl.Log.WithName("dwd")
 
-	mgr, err := command.Run(ctx, cmdArgs, logger)
+	mgr, err := command.Run(ctx, logger)
 	if err != nil {
 		logger.Error(err, fmt.Sprintf("failed to run command %s", command.Name))
 		os.Exit(1)

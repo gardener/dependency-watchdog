@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -44,6 +45,7 @@ type ClusterReconciler struct {
 	ScaleGetter             scale.ScalesGetter
 	ProbeConfig             *papi.Config
 	MaxConcurrentReconciles int
+	Logger                  logr.Logger
 }
 
 //+kubebuilder:rbac:groups=gardener.cloud,resources=clusters,verbs=get;list;watch
@@ -52,48 +54,47 @@ type ClusterReconciler struct {
 // Reconcile listens to create/update/delete events for `Cluster` resources and
 // manages probes for the shoot control namespace for these clusters by looking at the cluster state.
 func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
 	cluster, notFound, err := r.getCluster(ctx, req.Namespace, req.Name)
 	if err != nil {
-		logger.Error(err, "Unable to get the cluster resource, requeing for reconciliation", "namespace", req.Namespace, "name", req.Name)
+		r.Logger.Error(err, "Unable to get the cluster resource, requeing for reconciliation", "namespace", req.Namespace, "name", req.Name)
 		return ctrl.Result{}, err
 	}
 	// If the cluster is not found then any existing probes if present will be unregistered
 	if notFound {
-		logger.V(4).Info("Cluster not found, any existing probes will be removed if present", "namespace", req.Namespace, "name", req.Name)
+		r.Logger.V(4).Info("Cluster not found, any existing probes will be removed if present", "namespace", req.Namespace, "name", req.Name)
 		r.ProberMgr.Unregister(req.Name)
 		return ctrl.Result{}, nil
 	}
 
 	shoot, err := extensionscontroller.ShootFromCluster(cluster)
 	if err != nil {
-		logger.Error(err, "Error extracting shoot from cluster.", "namespace", req.Namespace, "name", req.Name)
+		r.Logger.Error(err, "Error extracting shoot from cluster.", "namespace", req.Namespace, "name", req.Name)
 		return ctrl.Result{}, err
 	}
 
 	// If shoot is marked for deletion then any existing probes will be unregistered
 	if shoot.DeletionTimestamp != nil {
-		logger.V(4).Info("Cluster has been marked for deletion, any existing probes will be removed if present", "namespace", req.Namespace, "name", req.Name)
+		r.Logger.V(4).Info("Cluster has been marked for deletion, any existing probes will be removed if present", "namespace", req.Namespace, "name", req.Name)
 		r.ProberMgr.Unregister(req.Name)
 		return ctrl.Result{}, nil
 	}
 
 	// if hibernation is enabled then we will remove any existing prober. Any resource scaling that is required in case of hibernation will now be handled as part of worker reconciliation in extension controllers.
 	if gardencorev1beta1helper.HibernationIsEnabled(shoot) {
-		logger.V(4).Info("Cluster hibernation is enabled, prober will be removed if present", "namespace", req.Namespace, "name", req.Name)
+		r.Logger.V(4).Info("Cluster hibernation is enabled, prober will be removed if present", "namespace", req.Namespace, "name", req.Name)
 		r.ProberMgr.Unregister(req.Name)
 		return ctrl.Result{}, nil
 	}
 
 	// if control plane migration has started for a shoot, then any existing probe should be removed as it is no longer needed.
 	if shoot.Status.LastOperation != nil && shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeMigrate {
-		logger.V(4).Info("Cluster migration is enabled, prober will be removed if present", "namespace", req.Namespace, "name", req.Name)
+		r.Logger.V(4).Info("Cluster migration is enabled, prober will be removed if present", "namespace", req.Namespace, "name", req.Name)
 		r.ProberMgr.Unregister(req.Name)
 		return ctrl.Result{}, nil
 	}
 
 	if canStartProber(shoot) {
-		logger.V(1).Info("Starting a new probe for cluster if not present", "namespace", req.Namespace, "name", req.Name)
+		r.Logger.V(1).Info("Starting a new probe for cluster if not present", "namespace", req.Namespace, "name", req.Name)
 		r.startProber(ctx, req.Name)
 	}
 	return ctrl.Result{}, nil

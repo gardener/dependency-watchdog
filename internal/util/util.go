@@ -3,11 +3,9 @@ package util
 import (
 	"context"
 	"errors"
-	"github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/goccy/go-yaml"
 	"github.com/onsi/gomega"
 	"io/ioutil"
-	v1 "k8s.io/api/core/v1"
 	"os"
 	"testing"
 	"time"
@@ -56,32 +54,4 @@ func ReadAndUnmarshall[T any](filename string) (*T, error) {
 		return nil, err
 	}
 	return t, nil
-}
-
-// IsPodDeleted returns true if a pod is deleted; false otherwise.
-func IsPodDeleted(pod *v1.Pod) bool {
-	return pod.DeletionTimestamp != nil
-}
-
-// ShouldDeletePod checks if the pod is in CrashloopBackoff and decides to delete the pod if its is
-// not already deleted.
-func ShouldDeletePod(pod *v1.Pod) bool {
-	return !IsPodDeleted(pod) && IsPodInCrashloopBackoff(pod.Status)
-}
-
-// IsPodInCrashloopBackoff checks if the pod is in CrashloopBackoff from its status fields.
-func IsPodInCrashloopBackoff(status v1.PodStatus) bool {
-	for _, containerStatus := range status.ContainerStatuses {
-		if isContainerInCrashLoopBackOff(containerStatus.State) {
-			return true
-		}
-	}
-	return false
-}
-
-func isContainerInCrashLoopBackOff(containerState v1.ContainerState) bool {
-	if containerState.Waiting != nil {
-		return containerState.Waiting.Reason == weeder.CrashLoopBackOff
-	}
-	return false
 }

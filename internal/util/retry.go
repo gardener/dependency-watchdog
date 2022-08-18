@@ -58,6 +58,27 @@ func RetryUntilPredicate(ctx context.Context, operation string, predicateFn func
 	}
 }
 
+// RetryOnError retries invoking a function till either the invocation of the function does not return an error or the
+// context has timed-out or has been cancelled. The consumers should ensure that the context passed to it
+// has a proper finite timeout set as there is no other timeout taken as a function argument.
+func RetryOnError(ctx context.Context, operation string, retriableFn func() error, interval time.Duration) {
+	for {
+		select {
+		case <-ctx.Done():
+			logger.V(4).Info("context has either timed-out or has been cancelled", "operation", operation)
+			return
+		default:
+			err := retriableFn()
+			if err != nil {
+				logger.Error(err, "Error encountered during retry. Will re-attempt if possible.", "operation", operation)
+				time.Sleep(interval)
+				continue
+			}
+			return
+		}
+	}
+}
+
 func AlwaysRetry(err error) bool {
 	return true
 }

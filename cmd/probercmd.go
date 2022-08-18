@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"flag"
 	"fmt"
 
@@ -75,7 +74,7 @@ func addProbeFlags(fs *flag.FlagSet) {
 	SetSharedOpts(fs, &opts.SharedOpts)
 }
 
-func startProberControllerMgr(ctx context.Context, args []string, logger logr.Logger) (manager.Manager, error) {
+func startProberControllerMgr(logger logr.Logger) (manager.Manager, error) {
 	proberConfig, err := prober.LoadConfig(opts.ConfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse prober config file %s : %w", opts.ConfigPath, err)
@@ -109,6 +108,7 @@ func startProberControllerMgr(ctx context.Context, args []string, logger logr.Lo
 		ProberMgr:               prober.NewManager(),
 		ProbeConfig:             proberConfig,
 		MaxConcurrentReconciles: opts.ConcurrentReconciles,
+		Logger:                  logger,
 	}).SetupWithManager(mgr); err != nil {
 		return nil, fmt.Errorf("failed to register cluster reconciler with the prober controller manager %w", err)
 	}

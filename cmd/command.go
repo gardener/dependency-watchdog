@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"flag"
 	"time"
 
@@ -33,7 +32,7 @@ type Command struct {
 	ShortDesc string
 	LongDesc  string
 	AddFlags  func(fs *flag.FlagSet)
-	Run       func(ctx context.Context, args []string, logger logr.Logger) (manager.Manager, error)
+	Run       func(logger logr.Logger) (manager.Manager, error)
 }
 
 // SharedOpts are the flags which bother prober and weeder have in common

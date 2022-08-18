@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-const CrashLoopBackOff = "CrashLoopBackOff"
-
 // Config provides typed access weeder configuration
 type Config struct {
 	// WatchDuration Duration for which all dependent pods for a service under surveillance will be watched after the service has recovered.

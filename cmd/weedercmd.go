@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"github.com/gardener/dependency-watchdog/controllers"
@@ -58,7 +57,7 @@ func addWeederFlags(fs *flag.FlagSet) {
 	SetSharedOpts(fs, &weederOpts.SharedOpts)
 }
 
-func startWeederControllerMgr(ctx context.Context, args []string, logger logr.Logger) (manager.Manager, error) {
+func startWeederControllerMgr(logger logr.Logger) (manager.Manager, error) {
 	weederConfig, err := weeder.LoadConfig(opts.ConfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse weeder config file %s : %w", opts.ConfigPath, err)
@@ -92,6 +91,7 @@ func startWeederControllerMgr(ctx context.Context, args []string, logger logr.Lo
 		SeedClient:   clientSet,
 		WeederConfig: weederConfig,
 		WeederMgr:    weeder.NewManager(),
+		Logger:       logger.WithName("endpoint-reconciler"),
 	}).SetupWithManager(mgr); err != nil {
 		return nil, fmt.Errorf("failed to register endpoint reconciler with weeder controller manager %w", err)
 	}

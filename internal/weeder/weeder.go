@@ -3,12 +3,9 @@ package weeder
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/types"
-	"time"
-
 	wapi "github.com/gardener/dependency-watchdog/api/weeder"
-	internalutils "github.com/gardener/dependency-watchdog/internal/util"
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/types"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -16,15 +13,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+const crashLoopBackOff = "CrashLoopBackOff"
+
 type Weeder struct {
-	namespace string
-	endpoints *v1.Endpoints
-	client.Client
-	SeedClient         kubernetes.Interface
-	logger             logr.Logger
+	namespace          string
+	endpoints          *v1.Endpoints
+	ctrlClient         client.Client
+	watchClient        kubernetes.Interface
 	dependantSelectors wapi.DependantSelectors
 	ctx                context.Context
 	cancelFn           context.CancelFunc
+	logger             logr.Logger
 }
 
 func NewWeeder(parentCtx context.Context, namespace string, config *wapi.Config, ctrlClient client.Client, seedClient kubernetes.Interface, ep *v1.Endpoints, logger logr.Logger) *Weeder {
@@ -33,37 +32,61 @@ func NewWeeder(parentCtx context.Context, namespace string, config *wapi.Config,
 	return &Weeder{
 		namespace:          namespace,
 		endpoints:          ep,
-		Client:             ctrlClient,
-		SeedClient:         seedClient,
-		logger:             logger,
+		ctrlClient:         ctrlClient,
+		watchClient:        seedClient,
 		dependantSelectors: dependantSelectors,
 		ctx:                ctx,
 		cancelFn:           cancelFn,
+		logger:             logger,
 	}
 }
 
-func (w *Weeder) Run(watchDuration *time.Duration) {
+func (w *Weeder) Run() {
 	for _, ps := range w.dependantSelectors.PodSelectors {
-		watcher, _ := NewWatcher(w.ctx, shootPodIfNecessary, w, ps)
-		go watcher.Watch(w.ctx)
+		pw := podWatcher{
+			eventHandlerFn: shootPodIfNecessary,
+			selector:       ps,
+			weeder:         w,
+		}
+		go pw.watch()
 	}
-	w.logger.Info("Waiting for pods in Crashloopbackoff for a period of %s", watchDuration.String())
-
 	// weeder should wait till the context expires
 	<-w.ctx.Done()
 }
 
-func shootPodIfNecessary(ctx context.Context, client client.Client, pod *v1.Pod) error {
+func shootPodIfNecessary(ctx context.Context, client client.Client, podNamespaceName types.NamespacedName) error {
 	// Validate pod status again before shoot it out.
 	logger := log.FromContext(ctx)
-	latestPod := new(v1.Pod)
-	err := client.Get(ctx, types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name}, latestPod)
+	var latestPod *v1.Pod
+	err := client.Get(ctx, podNamespaceName, latestPod)
 	if err != nil {
 		return fmt.Errorf("error getting pod %s", latestPod.Name)
 	}
-	if !internalutils.ShouldDeletePod(latestPod) {
+	if !shouldDeletePod(latestPod) {
 		return nil
 	}
 	logger.Info("Deleting pod", "name", latestPod.Name)
 	return client.Delete(ctx, latestPod)
+}
+
+// shouldDeletePod checks if a pod should be deleted for quicker recovery. A pod can be deleted
+// only if it is not marked for deletion and is currently in CrashLoopBackOff state
+func shouldDeletePod(pod *v1.Pod) bool {
+	podNotMarkedForDeletion := pod.DeletionTimestamp == nil
+	return podNotMarkedForDeletion && isPodInCrashloopBackoff(pod.Status)
+}
+
+// isPodInCrashloopBackoff checks if any container in a pod is in CrashLoopBackOff
+func isPodInCrashloopBackoff(status v1.PodStatus) bool {
+	for _, containerStatus := range status.ContainerStatuses {
+		if isContainerInCrashLoopBackOff(containerStatus.State) {
+			return true
+		}
+	}
+	return false
+}
+
+// isContainerInCrashLoopBackOff checks if a container is in CrashLoopBackOff
+func isContainerInCrashLoopBackOff(containerState v1.ContainerState) bool {
+	return containerState.Waiting != nil && containerState.Waiting.Reason == crashLoopBackOff
 }
