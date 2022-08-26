@@ -3,12 +3,12 @@ package util
 import (
 	"context"
 	"errors"
-	"github.com/goccy/go-yaml"
-	"github.com/onsi/gomega"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/goccy/go-yaml"
+	"github.com/onsi/gomega"
 )
 
 func SleepWithContext(ctx context.Context, sleepFor time.Duration) error {
@@ -44,7 +44,7 @@ func ValidateIfFileExists(file string, t *testing.T) {
 
 // ReadAndUnmarshall reads file and Unmarshall the contents in a generic type
 func ReadAndUnmarshall[T any](filename string) (*T, error) {
-	configBytes, err := ioutil.ReadFile(filename)
+	configBytes, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
