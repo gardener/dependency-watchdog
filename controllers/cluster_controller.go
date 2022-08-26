@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
@@ -34,7 +35,7 @@ import (
 	"k8s.io/client-go/scale"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // ClusterReconciler reconciles a Cluster object
@@ -45,7 +46,6 @@ type ClusterReconciler struct {
 	ScaleGetter             scale.ScalesGetter
 	ProbeConfig             *papi.Config
 	MaxConcurrentReconciles int
-	Logger                  logr.Logger
 }
 
 //+kubebuilder:rbac:groups=gardener.cloud,resources=clusters,verbs=get;list;watch
@@ -54,48 +54,47 @@ type ClusterReconciler struct {
 // Reconcile listens to create/update/delete events for `Cluster` resources and
 // manages probes for the shoot control namespace for these clusters by looking at the cluster state.
 func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	log := logf.FromContext(ctx)
 	cluster, notFound, err := r.getCluster(ctx, req.Namespace, req.Name)
 	if err != nil {
-		r.Logger.Error(err, "Unable to get the cluster resource, requeing for reconciliation", "namespace", req.Namespace, "name", req.Name)
-		return ctrl.Result{}, err
+		return ctrl.Result{}, fmt.Errorf("unable to get cluster resource: %w", err)
 	}
 	// If the cluster is not found then any existing probes if present will be unregistered
 	if notFound {
-		r.Logger.V(4).Info("Cluster not found, any existing probes will be removed if present", "namespace", req.Namespace, "name", req.Name)
+		log.V(4).Info("Cluster not found, any existing probes will be removed if present")
 		r.ProberMgr.Unregister(req.Name)
 		return ctrl.Result{}, nil
 	}
 
 	shoot, err := extensionscontroller.ShootFromCluster(cluster)
 	if err != nil {
-		r.Logger.Error(err, "Error extracting shoot from cluster.", "namespace", req.Namespace, "name", req.Name)
-		return ctrl.Result{}, err
+		return ctrl.Result{}, fmt.Errorf("error extracting shoot from cluster: %w", err)
 	}
 
 	// If shoot is marked for deletion then any existing probes will be unregistered
 	if shoot.DeletionTimestamp != nil {
-		r.Logger.V(4).Info("Cluster has been marked for deletion, any existing probes will be removed if present", "namespace", req.Namespace, "name", req.Name)
+		log.V(4).Info("Cluster has been marked for deletion, any existing probes will be removed if present")
 		r.ProberMgr.Unregister(req.Name)
 		return ctrl.Result{}, nil
 	}
 
 	// if hibernation is enabled then we will remove any existing prober. Any resource scaling that is required in case of hibernation will now be handled as part of worker reconciliation in extension controllers.
 	if gardencorev1beta1helper.HibernationIsEnabled(shoot) {
-		r.Logger.V(4).Info("Cluster hibernation is enabled, prober will be removed if present", "namespace", req.Namespace, "name", req.Name)
+		log.V(4).Info("Cluster hibernation is enabled, prober will be removed if present")
 		r.ProberMgr.Unregister(req.Name)
 		return ctrl.Result{}, nil
 	}
 
 	// if control plane migration has started for a shoot, then any existing probe should be removed as it is no longer needed.
 	if shoot.Status.LastOperation != nil && shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeMigrate {
-		r.Logger.V(4).Info("Cluster migration is enabled, prober will be removed if present", "namespace", req.Namespace, "name", req.Name)
+		log.V(4).Info("Cluster migration is enabled, prober will be removed if present")
 		r.ProberMgr.Unregister(req.Name)
 		return ctrl.Result{}, nil
 	}
 
 	if canStartProber(shoot) {
-		r.Logger.V(1).Info("Starting a new probe for cluster if not present", "namespace", req.Namespace, "name", req.Name)
-		r.startProber(ctx, req.Name)
+		log.V(1).Info("Starting a new probe for cluster if not present")
+		r.startProber(ctx, log, req.Name)
 	}
 	return ctrl.Result{}, nil
 }
@@ -134,13 +133,12 @@ func canStartProber(shoot *v1beta1.Shoot) bool {
 
 // startProber sets up a new probe against a given key which uniquely identifies the probe.
 // Typically, the key in case of a shoot cluster is the shoot namespace
-func (r *ClusterReconciler) startProber(ctx context.Context, key string) {
+func (r *ClusterReconciler) startProber(ctx context.Context, logger logr.Logger, key string) {
 	_, ok := r.ProberMgr.GetProber(key)
 	if !ok {
-		pLogger := log.FromContext(ctx).WithName(key).WithName("prober")
-		deploymentScaler := prober.NewDeploymentScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter, pLogger.WithName("scaler"))
+		deploymentScaler := prober.NewDeploymentScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter, logger)
 		shootClientCreator := prober.NewShootClientCreator(r.Client)
-		p := prober.NewProber(ctx, key, r.ProbeConfig, r.Client, deploymentScaler, shootClientCreator, pLogger)
+		p := prober.NewProber(ctx, key, r.ProbeConfig, r.Client, deploymentScaler, shootClientCreator, logger)
 		r.ProberMgr.Register(*p)
 		go p.Run()
 	}

@@ -75,6 +75,7 @@ func addProbeFlags(fs *flag.FlagSet) {
 }
 
 func startProberControllerMgr(logger logr.Logger) (manager.Manager, error) {
+	proberLogger := logger.WithName("cluster-controller")
 	proberConfig, err := prober.LoadConfig(opts.ConfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse prober config file %s : %w", opts.ConfigPath, err)
@@ -92,6 +93,7 @@ func startProberControllerMgr(logger logr.Logger) (manager.Manager, error) {
 		LeaderElectionNamespace:    opts.SharedOpts.LeaderElection.Namespace,
 		LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
 		LeaderElectionID:           proberLeaderElectionID,
+		Logger:                     proberLogger,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to start the prober controller manager %w", err)
@@ -101,6 +103,7 @@ func startProberControllerMgr(logger logr.Logger) (manager.Manager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create clientSet for scalesGetter %w", err)
 	}
+
 	if err := (&controllers.ClusterReconciler{
 		Client:                  mgr.GetClient(),
 		Scheme:                  mgr.GetScheme(),
@@ -108,7 +111,6 @@ func startProberControllerMgr(logger logr.Logger) (manager.Manager, error) {
 		ProberMgr:               prober.NewManager(),
 		ProbeConfig:             proberConfig,
 		MaxConcurrentReconciles: opts.ConcurrentReconciles,
-		Logger:                  logger,
 	}).SetupWithManager(mgr); err != nil {
 		return nil, fmt.Errorf("failed to register cluster reconciler with the prober controller manager %w", err)
 	}

@@ -4,18 +4,18 @@ import (
 	"context"
 	"fmt"
 	"github.com/gardener/dependency-watchdog/internal/util"
+	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"time"
 )
 
 const watchCreationRetryInterval = 500 * time.Millisecond
 
-type podEventHandler func(ctx context.Context, client client.Client, podNamespaceName types.NamespacedName) error
+type podEventHandler func(ctx context.Context, log logr.Logger, apiClient kubernetes.Interface, podNamespaceName types.NamespacedName) error
 
 // podWatcher watches a pod for status changes
 type podWatcher struct {
@@ -23,6 +23,7 @@ type podWatcher struct {
 	eventHandlerFn podEventHandler
 	k8sWatch       watch.Interface
 	weeder         *Weeder
+	log            logr.Logger
 }
 
 func (pw *podWatcher) createK8sWatch(ctx context.Context) {
@@ -43,7 +44,8 @@ func (pw *podWatcher) close() {
 	}
 }
 
-func doCreateK8sWatch(ctx context.Context, client kubernetes.Interface, namespace string, selector *metav1.LabelSelector) (watch.Interface, error) {
+func doCreateK8sWatch(ctx context.Context, client kubernetes.Interface, namespace string, lSelector *metav1.LabelSelector) (watch.Interface, error) {
+	selector, err := metav1.LabelSelectorAsSelector(lSelector)
 	w, err := client.CoreV1().Pods(namespace).Watch(ctx, metav1.ListOptions{
 		LabelSelector: selector.String(),
 	})
@@ -59,11 +61,11 @@ func (pw *podWatcher) watch() {
 	for {
 		select {
 		case <-pw.weeder.ctx.Done():
-			pw.weeder.logger.V(5).Info("Exiting watch as context has timed-out or has been cancelled", "namespace", pw.weeder.namespace, "selector", pw.selector.String())
+			pw.log.V(4).Info("Exiting watch as context has timed-out or has been cancelled", "namespace", pw.weeder.namespace, "selector", pw.selector.String())
 			return
 		case event, ok := <-pw.k8sWatch.ResultChan():
 			if !ok {
-				pw.weeder.logger.V(4).Info("Watch has stopped, recreating kubernetes watch", "namespace", pw.weeder.namespace, "service", pw.weeder.endpoints.Name, "selector", pw.selector, pw.selector.String())
+				pw.log.V(3).Info("Watch has stopped, recreating kubernetes watch", "namespace", pw.weeder.namespace, "service", pw.weeder.endpoints.Name, "selector", pw.selector, pw.selector.String())
 				pw.createK8sWatch(pw.weeder.ctx)
 				continue
 			}
@@ -71,8 +73,8 @@ func (pw *podWatcher) watch() {
 				continue
 			}
 			targetPod := event.Object.(*v1.Pod)
-			if err := pw.eventHandlerFn(pw.weeder.ctx, pw.weeder.ctrlClient, types.NamespacedName{Namespace: targetPod.Namespace, Name: targetPod.Name}); err != nil {
-				pw.weeder.logger.Error(err, "error processing pod ", "podName", event.Object.(*v1.Pod).Name)
+			if err := pw.eventHandlerFn(pw.weeder.ctx, pw.log, pw.weeder.watchClient, types.NamespacedName{Namespace: targetPod.Namespace, Name: targetPod.Name}); err != nil {
+				pw.log.Error(err, "error processing pod ", "podName", targetPod.Name)
 			}
 		}
 	}

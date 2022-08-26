@@ -10,7 +10,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"time"
 )
 
 // EndpointReconciler reconciles an Endpoints object
@@ -20,7 +22,6 @@ type EndpointReconciler struct {
 	WeederConfig            *wapi.Config
 	WeederMgr               weeder.Manager
 	MaxConcurrentReconciles int
-	Logger                  logr.Logger
 }
 
 // +kubebuilder:rbac:groups,resources=endpoints;events,verbs=create;get;update;patch;list;watch
@@ -28,22 +29,21 @@ type EndpointReconciler struct {
 
 // Reconcile listens to create/update events for `Endpoints` resources and manages weeder which shoot the dependent pods of the configured services, if necessary
 func (r *EndpointReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	log := logf.FromContext(ctx)
 	//Get the endpoint object
 	var ep v1.Endpoints
 	err := r.Client.Get(ctx, req.NamespacedName, &ep)
 	if err != nil {
-		return ctrl.Result{RequeueAfter: 10}, err
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, err
 	}
-	r.Logger.Info("Processing endpoint: ", "namespace", req.Namespace, "name", req.Name)
-	r.startWeeder(ctx, req.Name, req.Namespace, &ep)
+	log.Info("Starting a new weeder for endpoint, replacing old weeder, if any exists")
+	r.startWeeder(ctx, log, req.Name, req.Namespace, &ep)
 	return ctrl.Result{}, nil
 }
 
 // startWeeder starts a new weeder for the endpoint
-func (r *EndpointReconciler) startWeeder(ctx context.Context, name, namespace string, ep *v1.Endpoints) {
-	uniqueName := name + "/" + namespace
-	wl := r.Logger.WithName("weeder").WithName(uniqueName)
-	w := weeder.NewWeeder(ctx, namespace, r.WeederConfig, r.Client, r.SeedClient, ep, wl)
+func (r *EndpointReconciler) startWeeder(ctx context.Context, logger logr.Logger, name, namespace string, ep *v1.Endpoints) {
+	w := weeder.NewWeeder(ctx, namespace, r.WeederConfig, r.Client, r.SeedClient, ep, logger)
 	// Register the weeder
 	r.WeederMgr.Register(*w)
 	go w.Run()

@@ -4,8 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/gardener/dependency-watchdog/controllers"
+	internalutils "github.com/gardener/dependency-watchdog/internal/util"
 	"github.com/gardener/dependency-watchdog/internal/weeder"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -58,6 +58,7 @@ func addWeederFlags(fs *flag.FlagSet) {
 }
 
 func startWeederControllerMgr(logger logr.Logger) (manager.Manager, error) {
+	weederLogger := logger.WithName("endpoints-controller")
 	weederConfig, err := weeder.LoadConfig(opts.ConfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse weeder config file %s : %w", opts.ConfigPath, err)
@@ -75,13 +76,14 @@ func startWeederControllerMgr(logger logr.Logger) (manager.Manager, error) {
 		LeaderElectionNamespace:    opts.SharedOpts.LeaderElection.Namespace,
 		LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
 		LeaderElectionID:           weederLeaderElectionID,
+		Logger:                     weederLogger,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to start the weeder controller manager %w", err)
 	}
 
 	// create clientSet
-	clientSet, err := kubernetes.NewForConfig(restConf)
+	clientSet, err := internalutils.CreateClientSetFromRestConfig(restConf)
 	if err != nil {
 		return nil, fmt.Errorf("failed creating clientset for dwd-weeder %w", err)
 	}
@@ -91,7 +93,6 @@ func startWeederControllerMgr(logger logr.Logger) (manager.Manager, error) {
 		SeedClient:   clientSet,
 		WeederConfig: weederConfig,
 		WeederMgr:    weeder.NewManager(),
-		Logger:       logger.WithName("endpoint-reconciler"),
 	}).SetupWithManager(mgr); err != nil {
 		return nil, fmt.Errorf("failed to register endpoint reconciler with weeder controller manager %w", err)
 	}

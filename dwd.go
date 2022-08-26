@@ -61,11 +61,12 @@ func main() {
 	if err != nil {
 		os.Exit(2)
 	}
-	// flag.Parse()
+	// initializing global logger
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	// creating root logger from global logger
 	logger = ctrl.Log.WithName("dwd")
 
-	mgr, err := command.Run(ctx, logger)
+	mgr, err := command.Run(logger)
 	if err != nil {
 		logger.Error(err, fmt.Sprintf("failed to run command %s", command.Name))
 		os.Exit(1)
@@ -86,7 +87,10 @@ func checkArgs(args []string) {
 		os.Exit(0)
 	case args[0] == "help":
 		if len(args) == 1 {
-			fmt.Fprintf(os.Stderr, "Incorrect usage. To get the CLI usage help use `-h | --help`. To get a command help use `dwd help <command-name>")
+			_, err := fmt.Fprintf(os.Stderr, "Incorrect usage. To get the CLI usage help use `-h | --help`. To get a command help use `dwd help <command-name>")
+			if err != nil {
+				return
+			}
 			os.Exit(2)
 		}
 		requestedCommand := args[1]
@@ -100,10 +104,10 @@ func checkArgs(args []string) {
 
 func getCommand(cmdName string) (*cmd.Command, error) {
 	supportedCmdNames := make([]string, len(cmd.Commands))
-	for _, cmd := range cmd.Commands {
-		supportedCmdNames = append(supportedCmdNames, cmd.Name)
-		if cmdName == cmd.Name {
-			return cmd, nil
+	for _, cmnd := range cmd.Commands {
+		supportedCmdNames = append(supportedCmdNames, cmnd.Name)
+		if cmdName == cmnd.Name {
+			return cmnd, nil
 		}
 	}
 	return nil, fmt.Errorf("unknown command %s. Supported commands are: %v", cmdName, supportedCmdNames)
@@ -113,7 +117,10 @@ func parseCommand(args []string) ([]string, *cmd.Command, error) {
 	requestedCmdName := args[0]
 	command, err := getCommand(requestedCmdName)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "unexpected error when fetching matching command %s. This should have been checked earlier. Error: %v", requestedCmdName, err)
+		_, err := fmt.Fprintf(os.Stderr, "unexpected error when fetching matching command %s. This should have been checked earlier. Error: %v", requestedCmdName, err)
+		if err != nil {
+			return nil, nil, err
+		}
 		return nil, nil, err
 	}
 	fs := flag.CommandLine

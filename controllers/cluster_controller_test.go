@@ -28,8 +28,8 @@ import (
 )
 
 const (
-	testdataPath            = "testdata"
-	maxConcurrentReconciles = 1
+	testdataPath                  = "testdata"
+	maxConcurrentReconcilesProber = 1
 )
 
 func buildScheme() *runtime.Scheme {
@@ -42,11 +42,11 @@ func buildScheme() *runtime.Scheme {
 	return scheme
 }
 
-func setupEnv(g *WithT, ctx context.Context) (client.Client, *envtest.Environment, *ClusterReconciler, manager.Manager) {
-	log.Println("setting up the test Env")
+func setupProberEnv(t *testing.T, g *WithT, ctx context.Context) (client.Client, *envtest.Environment, *ClusterReconciler, manager.Manager) {
+	t.Log("setting up the test Env for Prober")
 	scheme := buildScheme()
 	testEnv := &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("testdata", "crd")},
+		CRDDirectoryPaths:     []string{filepath.Join("testdata", "crd", "prober")},
 		ErrorIfCRDPathMissing: false,
 		Scheme:                scheme,
 	}
@@ -67,20 +67,20 @@ func setupEnv(g *WithT, ctx context.Context) (client.Client, *envtest.Environmen
 	scalesGetter, err := util.CreateScalesGetter(cfg)
 	g.Expect(err).To(BeNil())
 
-	probeConfigPath := filepath.Join(testdataPath, "config.yaml")
+	probeConfigPath := filepath.Join(testdataPath, "config", "prober-config.yaml")
 	validateIfFileExists(probeConfigPath, g)
 	proberConfig, err := proberpackage.LoadConfig(probeConfigPath)
 	g.Expect(err).To(BeNil())
 
-	reconciler := &ClusterReconciler{
+	clusterReconciler := &ClusterReconciler{
 		Client:                  mgr.GetClient(),
 		Scheme:                  mgr.GetScheme(),
 		ScaleGetter:             scalesGetter,
 		ProberMgr:               proberpackage.NewManager(),
 		ProbeConfig:             proberConfig,
-		MaxConcurrentReconciles: maxConcurrentReconciles,
+		MaxConcurrentReconciles: maxConcurrentReconcilesProber,
 	}
-	err = reconciler.SetupWithManager(mgr)
+	err = clusterReconciler.SetupWithManager(mgr)
 	g.Expect(err).To(BeNil())
 
 	go func() {
@@ -88,11 +88,11 @@ func setupEnv(g *WithT, ctx context.Context) (client.Client, *envtest.Environmen
 		g.Expect(err).ToNot(HaveOccurred())
 	}()
 
-	return k8sClient, testEnv, reconciler, mgr
+	return k8sClient, testEnv, clusterReconciler, mgr
 }
 
-func teardownEnv(g *WithT, testEnv *envtest.Environment, cancelFn context.CancelFunc) {
-	log.Println("destroying the test Env")
+func teardownEnv(t *testing.T, g *WithT, testEnv *envtest.Environment, cancelFn context.CancelFunc) {
+	t.Log("destroying the test Env")
 	cancelFn()
 	err := testEnv.Stop()
 	g.Expect(err).NotTo(HaveOccurred())
@@ -123,11 +123,11 @@ func testDedicatedEnvTest(t *testing.T) {
 	}
 	for _, test := range tests {
 		ctx, cancelFn := context.WithCancel(context.Background())
-		k8sClient, testEnv, reconciler, mgr := setupEnv(g, ctx)
+		k8sClient, testEnv, reconciler, mgr := setupProberEnv(t, g, ctx)
 		t.Run(test.title, func(t *testing.T) {
 			test.run(t, testEnv, ctx, k8sClient, reconciler, mgr, cancelFn)
 		})
-		teardownEnv(g, testEnv, cancelFn)
+		teardownEnv(t, g, testEnv, cancelFn)
 	}
 }
 
@@ -147,8 +147,8 @@ func testReconciliationAfterAPIServerIsDown(t *testing.T, testEnv *envtest.Envir
 func testCommonEnvTest(t *testing.T) {
 	g := NewWithT(t)
 	ctx, cancelFn := context.WithCancel(context.Background())
-	k8sClient, testEnv, reconciler, _ := setupEnv(g, ctx)
-	defer teardownEnv(g, testEnv, cancelFn)
+	k8sClient, testEnv, reconciler, _ := setupProberEnv(t, g, ctx)
+	defer teardownEnv(t, g, testEnv, cancelFn)
 
 	tests := []struct {
 		title string

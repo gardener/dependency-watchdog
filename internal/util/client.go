@@ -121,3 +121,11 @@ func GetDeploymentFor(ctx context.Context, namespace string, name string, client
 	}
 	return &deployment, nil
 }
+
+func CreateClientSetFromRestConfig(config *rest.Config) (*kubernetes.Clientset, error) {
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	return clientset, nil
+}

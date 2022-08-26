@@ -36,6 +36,7 @@ type Prober struct {
 
 // NewProber creates a new Prober
 func NewProber(parentCtx context.Context, namespace string, config *papi.Config, ctrlClient client.Client, scaler DeploymentScaler, shootClientCreator ShootClientCreator, logger logr.Logger) *Prober {
+	pLogger := logger.WithValues("proberRunning", true, "proberKey", namespace)
 	ctx, cancelFn := context.WithCancel(parentCtx)
 	return &Prober{
 		namespace:          namespace,
@@ -45,7 +46,7 @@ func NewProber(parentCtx context.Context, namespace string, config *papi.Config,
 		shootClientCreator: shootClientCreator,
 		ctx:                ctx,
 		cancelFn:           cancelFn,
-		l:                  logger,
+		l:                  pLogger,
 	}
 }
 

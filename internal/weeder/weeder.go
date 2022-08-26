@@ -5,12 +5,11 @@ import (
 	"fmt"
 	wapi "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/types"
-
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const crashLoopBackOff = "CrashLoopBackOff"
@@ -27,6 +26,7 @@ type Weeder struct {
 }
 
 func NewWeeder(parentCtx context.Context, namespace string, config *wapi.Config, ctrlClient client.Client, seedClient kubernetes.Interface, ep *v1.Endpoints, logger logr.Logger) *Weeder {
+	wLogger := logger.WithValues("weederRunning", true)
 	ctx, cancelFn := context.WithTimeout(parentCtx, *config.WatchDuration)
 	dependantSelectors := config.ServicesAndDependantSelectors[ep.Name]
 	return &Weeder{
@@ -37,7 +37,7 @@ func NewWeeder(parentCtx context.Context, namespace string, config *wapi.Config,
 		dependantSelectors: dependantSelectors,
 		ctx:                ctx,
 		cancelFn:           cancelFn,
-		logger:             logger,
+		logger:             wLogger,
 	}
 }
 
@@ -47,6 +47,7 @@ func (w *Weeder) Run() {
 			eventHandlerFn: shootPodIfNecessary,
 			selector:       ps,
 			weeder:         w,
+			log:            w.logger.WithValues("selector", ps.String()),
 		}
 		go pw.watch()
 	}
@@ -54,19 +55,17 @@ func (w *Weeder) Run() {
 	<-w.ctx.Done()
 }
 
-func shootPodIfNecessary(ctx context.Context, client client.Client, podNamespaceName types.NamespacedName) error {
+func shootPodIfNecessary(ctx context.Context, log logr.Logger, apiClient kubernetes.Interface, podNamespaceName types.NamespacedName) error {
 	// Validate pod status again before shoot it out.
-	logger := log.FromContext(ctx)
-	var latestPod *v1.Pod
-	err := client.Get(ctx, podNamespaceName, latestPod)
+	latestPod, err := apiClient.CoreV1().Pods(podNamespaceName.Namespace).Get(ctx, podNamespaceName.Name, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("error getting pod %s", latestPod.Name)
+		return fmt.Errorf("error getting pod: %w", err)
 	}
 	if !shouldDeletePod(latestPod) {
 		return nil
 	}
-	logger.Info("Deleting pod", "name", latestPod.Name)
-	return client.Delete(ctx, latestPod)
+	log.Info("Deleting pod", "name", latestPod.Name)
+	return apiClient.CoreV1().Pods(podNamespaceName.Namespace).Delete(ctx, podNamespaceName.Name, metav1.DeleteOptions{})
 }
 
 // shouldDeletePod checks if a pod should be deleted for quicker recovery. A pod can be deleted

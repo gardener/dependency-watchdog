@@ -35,6 +35,7 @@ type DeploymentScaler interface {
 }
 
 func NewDeploymentScaler(namespace string, config *papi.Config, client client.Client, scalerGetter scalev1.ScalesGetter, logger logr.Logger, options ...scalerOption) DeploymentScaler {
+	logger = logger.WithName("scaler")
 	opts := buildScalerOptions(options...)
 	ds := deploymentScaler{
 		namespace: namespace,
