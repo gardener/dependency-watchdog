@@ -13,7 +13,7 @@ import (
 func ReadyEndpoints() predicate.Predicate {
 	isEndpointReady := func(obj runtime.Object) bool {
 		ep, ok := obj.(*v1.Endpoints)
-		if !ok {
+		if !ok || ep == nil {
 			return false
 		}
 		for _, subset := range ep.Subsets {
@@ -30,7 +30,16 @@ func ReadyEndpoints() predicate.Predicate {
 		},
 
 		UpdateFunc: func(event event.UpdateEvent) bool {
-			return isEndpointReady(event.ObjectNew)
+			isNewReady := isEndpointReady(event.ObjectNew)
+			isOldReady := isEndpointReady(event.ObjectOld)
+
+			if isNewReady && isOldReady {
+				return false
+			} else if isNewReady {
+				return true
+			}
+
+			return false
 		},
 
 		DeleteFunc: func(event event.DeleteEvent) bool {
