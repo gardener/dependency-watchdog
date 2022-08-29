@@ -36,6 +36,10 @@ func ReadyEndpoints() predicate.Predicate {
 		DeleteFunc: func(event event.DeleteEvent) bool {
 			return false
 		},
+
+		GenericFunc: func(event event.GenericEvent) bool {
+			return isEndpointReady(event.Object)
+		},
 	}
 }
 
@@ -61,6 +65,10 @@ func MatchingEndpoints(epMap map[string]weeder.DependantSelectors) predicate.Pre
 
 		DeleteFunc: func(event event.DeleteEvent) bool {
 			return false
+		},
+
+		GenericFunc: func(event event.GenericEvent) bool {
+			return isMatchingEndpoints(event.Object, epMap)
 		},
 	}
 }
