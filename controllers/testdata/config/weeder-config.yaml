@@ -1,13 +1,13 @@
-watchDuration: 11s
+watchDuration: 5s
 servicesAndDependantSelectors:
-  etcd-main-client:
+  etcd-main:
     podSelectors:
-      - matchExpressions:
-          - key: gardener.cloud/role
-            operator: In
-            values:
-              - controlplane
-          - key: role
-            operator: In
-            values:
-              - NotEtcd
+    - matchExpressions:
+      - key: gardener.cloud/role
+        operator: In
+        values:
+        - controlplane
+      - key: role
+        operator: In
+        values:
+        - NotEtcd
