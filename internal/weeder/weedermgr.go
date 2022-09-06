@@ -9,7 +9,8 @@ import (
 type Manager interface {
 	Register(weeder Weeder) bool
 	Unregister(key string) bool
-	UnregisterAll()
+	UnregisterAll() bool
+	GetWeederRegistration(key string) (weederRegistration, bool)
 }
 
 type weederManager struct {
@@ -76,13 +77,21 @@ func (wm *weederManager) Unregister(key string) bool {
 	return false
 }
 
-func (wm *weederManager) UnregisterAll() {
+func (wm *weederManager) UnregisterAll() bool {
 	for key := range wm.weeders {
-		wm.Unregister(key)
+		if wm.Unregister(key) != true {
+			return false
+		}
 	}
+	return true
 }
 
 // createKey creates a key to uniquely identify a weeder
 func createKey(w Weeder) string {
 	return w.namespace + "/" + w.endpoints.Name
+}
+
+func (wm *weederManager) GetWeederRegistration(key string) (weederRegistration, bool) {
+	wr, ok := wm.weeders[key]
+	return wr, ok
 }
