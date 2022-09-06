@@ -44,5 +44,7 @@ func validate(c *wapi.Config) error {
 }
 
 func fillDefaultValues(c *wapi.Config) {
-	pointer.DurationDeref(c.WatchDuration, DefaultWatchDuration)
+	if c.WatchDuration == nil {
+		c.WatchDuration = pointer.Duration(DefaultWatchDuration)
+	}
 }

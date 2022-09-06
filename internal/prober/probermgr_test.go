@@ -28,7 +28,6 @@ func TestRegisterNewProberAndCheckIfItExistsAndIsNotClosed(t *testing.T) {
 	mgr, tearDownTest := setupMgrTest(t)
 	defer tearDownTest(mgr)
 
-	const namespace = "bingo"
 	p := NewProber(context.Background(), namespace, &papi.Config{}, nil, nil, nil, pmLogger)
 	g.Expect(p).ShouldNot(BeNil(), "NewProber should have returned a non nil Prober")
 	g.Expect(p.namespace).Should(Equal(namespace), "The namespace of the created prober should match")
@@ -48,7 +47,6 @@ func TestProberRegistrationWithSameKeyShouldNotOverwriteExistingProber(t *testin
 	mgr, tearDownTest := setupMgrTest(t)
 	defer tearDownTest(mgr)
 
-	const namespace = "bingo"
 	p1 := NewProber(context.Background(), namespace, &papi.Config{InternalKubeConfigSecretName: "bingo"}, nil, nil, nil, pmLogger)
 	g.Expect(mgr.Register(*p1)).To(BeTrue(), "mgr.Register should register a new prober")
 
@@ -68,7 +66,6 @@ func TestUnregisterExistingProberShouldCloseItAndRemoveItFromManager(t *testing.
 	mgr, tearDownTest := setupMgrTest(t)
 	defer tearDownTest(mgr)
 
-	const namespace = "bingo"
 	p := NewProber(context.Background(), namespace, &papi.Config{}, nil, nil, nil, pmLogger)
 	g.Expect(mgr.Register(*p)).To(BeTrue(), "mgr.Register should register a new prober")
 

@@ -56,7 +56,7 @@ func ReadyEndpoints() predicate.Predicate {
 func MatchingEndpoints(epMap map[string]weeder.DependantSelectors) predicate.Predicate {
 	isMatchingEndpoints := func(obj runtime.Object, epMap map[string]weeder.DependantSelectors) bool {
 		ep, ok := obj.(*v1.Endpoints)
-		if !ok {
+		if !ok || ep == nil {
 			return false
 		}
 		_, exists := epMap[ep.Name]
