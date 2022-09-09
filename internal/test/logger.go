@@ -24,7 +24,7 @@ func (l kindLogger) Warn(message string) {
 }
 
 func (l kindLogger) Warnf(format string, args ...interface{}) {
-	l.logger.Warn(fmt.Sprintf(format, args))
+	l.logger.Warn(fmt.Sprintf(format, args...))
 }
 
 func (l kindLogger) Error(message string) {
@@ -32,7 +32,7 @@ func (l kindLogger) Error(message string) {
 }
 
 func (l kindLogger) Errorf(format string, args ...interface{}) {
-	l.logger.Error(fmt.Sprintf(format, args))
+	l.logger.Error(fmt.Sprintf(format, args...))
 }
 
 func (l kindLogger) V(level kindlog.Level) kindlog.InfoLogger {
@@ -44,7 +44,7 @@ func (l kindLogger) Info(message string) {
 }
 
 func (l kindLogger) Infof(format string, args ...interface{}) {
-	l.logger.Info(fmt.Sprintf(format, args))
+	l.logger.Info(fmt.Sprintf(format, args...))
 }
 
 func (l kindLogger) Enabled() bool {

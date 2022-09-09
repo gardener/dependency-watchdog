@@ -20,7 +20,7 @@ const (
 
 var (
 	testWatchDuration                 = 10 * time.Second
-	testServicesAndDependantSelectors = map[string]weeder.DependantSelectors{epName: {PodSelectors: []*metav1.LabelSelector{{nil, []metav1.LabelSelectorRequirement{{Key: "gardener.cloud/component", Operator: "In", Values: []string{"control-plane"}}}}}}}
+	testServicesAndDependantSelectors = map[string]weeder.DependantSelectors{epName: {PodSelectors: []*metav1.LabelSelector{{MatchLabels: nil, MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "gardener.cloud/component", Operator: "In", Values: []string{"control-plane"}}}}}}}
 	testWeederConfig                  = &weeder.Config{
 		WatchDuration:                 &testWatchDuration,
 		ServicesAndDependantSelectors: testServicesAndDependantSelectors,

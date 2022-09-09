@@ -41,8 +41,8 @@ help: ## Display this help.
 
 .PHONY: revendor
 revendor:
-	@env GO111MODULE=on go mod vendor -v
 	@env GO111MODULE=on go mod tidy -v
+	@env GO111MODULE=on go mod vendor -v
 
 .PHONY: manifests
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
@@ -68,7 +68,7 @@ test: manifests generate fmt vet envtest ## Run tests.
 
 .PHONY: build
 build: generate fmt vet ## Build manager binary.
-	go build -o bin/manager main.go
+	go build -o bin/dependency-watchdog dwd.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
@@ -129,7 +129,7 @@ TMP_DIR=$$(mktemp -d) ;\
 cd $$TMP_DIR ;\
 go mod init tmp ;\
 echo "Downloading $(2)" ;\
-GOBIN=$(PROJECT_DIR)/bin go get $(2) ;\
+GOBIN=$(PROJECT_DIR)/bin go install $(2) ;\
 rm -rf $$TMP_DIR ;\
 }
 endef
