@@ -55,9 +55,9 @@ func setupProberEnv(t *testing.T, g *WithT, ctx context.Context) (client.Client,
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(cfg).NotTo(BeNil())
 
-	k8sClient, err := client.New(cfg, client.Options{Scheme: scheme})
+	crClient, err := client.New(cfg, client.Options{Scheme: scheme})
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(k8sClient).NotTo(BeNil())
+	g.Expect(crClient).NotTo(BeNil())
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme,
@@ -88,7 +88,7 @@ func setupProberEnv(t *testing.T, g *WithT, ctx context.Context) (client.Client,
 		g.Expect(err).ToNot(HaveOccurred())
 	}()
 
-	return k8sClient, testEnv, clusterReconciler, mgr
+	return crClient, testEnv, clusterReconciler, mgr
 }
 
 func teardownEnv(t *testing.T, g *WithT, testEnv *envtest.Environment, cancelFn context.CancelFunc) {
@@ -103,8 +103,8 @@ func TestClusterControllerSuite(t *testing.T) {
 		title string
 		run   func(t *testing.T)
 	}{
-		{"tests with common environment", testCommonEnvTest},
-		{"tests with dedicated environment for each test", testDedicatedEnvTest},
+		{"tests with common environment", testProberCommonEnvTest},
+		{"tests with dedicated environment for each test", testProberDedicatedEnvTest},
 	}
 	for _, test := range tests {
 		t.Run(test.title, func(t *testing.T) {
@@ -113,25 +113,25 @@ func TestClusterControllerSuite(t *testing.T) {
 	}
 }
 
-func testDedicatedEnvTest(t *testing.T) {
+func testProberDedicatedEnvTest(t *testing.T) {
 	g := NewWithT(t)
 	tests := []struct {
 		title string
-		run   func(t *testing.T, envTest *envtest.Environment, ctx context.Context, k8sClient client.Client, reconciler *ClusterReconciler, mgr manager.Manager, cancelFn context.CancelFunc)
+		run   func(t *testing.T, envTest *envtest.Environment, ctx context.Context, crClient client.Client, reconciler *ClusterReconciler, mgr manager.Manager, cancelFn context.CancelFunc)
 	}{
 		{"calling reconciler after shutting down API server", testReconciliationAfterAPIServerIsDown},
 	}
 	for _, test := range tests {
 		ctx, cancelFn := context.WithCancel(context.Background())
-		k8sClient, testEnv, reconciler, mgr := setupProberEnv(t, g, ctx)
+		crClient, testEnv, reconciler, mgr := setupProberEnv(t, g, ctx)
 		t.Run(test.title, func(t *testing.T) {
-			test.run(t, testEnv, ctx, k8sClient, reconciler, mgr, cancelFn)
+			test.run(t, testEnv, ctx, crClient, reconciler, mgr, cancelFn)
 		})
 		teardownEnv(t, g, testEnv, cancelFn)
 	}
 }
 
-func testReconciliationAfterAPIServerIsDown(t *testing.T, testEnv *envtest.Environment, ctx context.Context, k8sClient client.Client, reconciler *ClusterReconciler, mgr manager.Manager, cancelFn context.CancelFunc) {
+func testReconciliationAfterAPIServerIsDown(t *testing.T, testEnv *envtest.Environment, ctx context.Context, _ client.Client, reconciler *ClusterReconciler, _ manager.Manager, cancelFn context.CancelFunc) {
 	g := NewWithT(t)
 	cluster, _ := createClusterResource()
 	cancelFn()
@@ -144,15 +144,15 @@ func testReconciliationAfterAPIServerIsDown(t *testing.T, testEnv *envtest.Envir
 	g.Expect(err).To(BeNil())
 }
 
-func testCommonEnvTest(t *testing.T) {
+func testProberCommonEnvTest(t *testing.T) {
 	g := NewWithT(t)
 	ctx, cancelFn := context.WithCancel(context.Background())
-	k8sClient, testEnv, reconciler, _ := setupProberEnv(t, g, ctx)
+	crClient, testEnv, reconciler, _ := setupProberEnv(t, g, ctx)
 	defer teardownEnv(t, g, testEnv, cancelFn)
 
 	tests := []struct {
 		title string
-		run   func(t *testing.T, k8sClient client.Client, reconciler *ClusterReconciler)
+		run   func(t *testing.T, crClient client.Client, reconciler *ClusterReconciler)
 	}{
 		{"changing hibernation spec", testChangingHibernationSpec},
 		{"changing hibernation status", testChangingHibernationStatus},
@@ -166,20 +166,20 @@ func testCommonEnvTest(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.title, func(t *testing.T) {
-			test.run(t, k8sClient, reconciler)
+			test.run(t, crClient, reconciler)
 		})
-		deleteAllClusters(g, k8sClient)
+		deleteAllClusters(g, crClient)
 	}
 }
 
-func deleteAllClusters(g *WithT, k8sClient client.Client) {
-	err := k8sClient.DeleteAllOf(context.Background(), &gardenerv1alpha1.Cluster{})
+func deleteAllClusters(g *WithT, crClient client.Client) {
+	err := crClient.DeleteAllOf(context.Background(), &gardenerv1alpha1.Cluster{})
 	g.Expect(err).To(BeNil())
 }
 
-func createClusterAndCheckProber(g *WithT, k8sClient client.Client, reconciler *ClusterReconciler,
+func createClusterAndCheckProber(g *WithT, crClient client.Client, reconciler *ClusterReconciler,
 	cluster *gardenerv1alpha1.Cluster, checkProber func(g *WithT, reconciler *ClusterReconciler, cluster *gardenerv1alpha1.Cluster)) {
-	err := k8sClient.Create(context.Background(), cluster)
+	err := crClient.Create(context.Background(), cluster)
 	g.Expect(err).To(BeNil())
 	time.Sleep(2 * time.Second)
 	if checkProber != nil {
@@ -187,70 +187,70 @@ func createClusterAndCheckProber(g *WithT, k8sClient client.Client, reconciler *
 	}
 }
 
-func updateClusterAndCheckProber(g *WithT, k8sClient client.Client, reconciler *ClusterReconciler,
+func updateClusterAndCheckProber(g *WithT, crClient client.Client, reconciler *ClusterReconciler,
 	cluster *gardenerv1alpha1.Cluster, checkProber func(g *WithT, reconciler *ClusterReconciler, cluster *gardenerv1alpha1.Cluster)) {
-	err := k8sClient.Update(context.Background(), cluster)
+	err := crClient.Update(context.Background(), cluster)
 	g.Expect(err).To(BeNil())
 	if checkProber != nil {
 		checkProber(g, reconciler, cluster)
 	}
 }
 
-func deleteClusterAndCheckIfProberRemoved(g *WithT, k8sClient client.Client, reconciler *ClusterReconciler, cluster *gardenerv1alpha1.Cluster) {
-	err := k8sClient.Delete(context.Background(), cluster)
+func deleteClusterAndCheckIfProberRemoved(g *WithT, crClient client.Client, reconciler *ClusterReconciler, cluster *gardenerv1alpha1.Cluster) {
+	err := crClient.Delete(context.Background(), cluster)
 	g.Expect(err).To(BeNil())
 	proberShouldNotBePresent(g, reconciler, cluster)
 }
 
-func updateShootHibernationSpecAndCheckProber(g *WithT, k8sClient client.Client, cluster *gardenerv1alpha1.Cluster, shoot *gardencorev1beta1.Shoot, isHibernationEnabled *bool,
+func updateShootHibernationSpecAndCheckProber(g *WithT, crClient client.Client, cluster *gardenerv1alpha1.Cluster, shoot *gardencorev1beta1.Shoot, isHibernationEnabled *bool,
 	reconciler *ClusterReconciler, checkProber func(g *WithT, reconciler *ClusterReconciler, cluster *gardenerv1alpha1.Cluster)) {
 	shoot.Spec.Hibernation.Enabled = isHibernationEnabled
 	cluster.Spec.Shoot = runtime.RawExtension{
 		Object: shoot,
 	}
-	updateClusterAndCheckProber(g, k8sClient, reconciler, cluster, checkProber)
+	updateClusterAndCheckProber(g, crClient, reconciler, cluster, checkProber)
 }
 
-func testChangingHibernationSpec(t *testing.T, k8sClient client.Client, reconciler *ClusterReconciler) {
+func testChangingHibernationSpec(t *testing.T, crClient client.Client, reconciler *ClusterReconciler) {
 	g := NewWithT(t)
 	enableHibernation := true
 	cluster, shoot := createClusterResource()
-	createClusterAndCheckProber(g, k8sClient, reconciler, cluster, proberShouldBePresent)
-	updateShootHibernationSpecAndCheckProber(g, k8sClient, cluster, shoot, &enableHibernation, reconciler, proberShouldNotBePresent)
+	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
+	updateShootHibernationSpecAndCheckProber(g, crClient, cluster, shoot, &enableHibernation, reconciler, proberShouldNotBePresent)
 
 	disableHibernation := false
-	updateShootHibernationSpecAndCheckProber(g, k8sClient, cluster, shoot, &disableHibernation, reconciler, proberShouldBePresent)
-	deleteClusterAndCheckIfProberRemoved(g, k8sClient, reconciler, cluster)
+	updateShootHibernationSpecAndCheckProber(g, crClient, cluster, shoot, &disableHibernation, reconciler, proberShouldBePresent)
+	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
-func updateShootHibernationStatus(g *WithT, k8sClient client.Client, reconciler *ClusterReconciler, cluster *gardenerv1alpha1.Cluster,
+func updateShootHibernationStatus(g *WithT, crClient client.Client, reconciler *ClusterReconciler, cluster *gardenerv1alpha1.Cluster,
 	shoot *gardencorev1beta1.Shoot, IsHibernated bool, checkProber func(g *WithT, reconciler *ClusterReconciler, cluster *gardenerv1alpha1.Cluster)) {
 	shoot.Status.IsHibernated = IsHibernated
 	cluster.Spec.Shoot = runtime.RawExtension{
 		Object: shoot,
 	}
-	updateClusterAndCheckProber(g, k8sClient, reconciler, cluster, checkProber)
+	updateClusterAndCheckProber(g, crClient, reconciler, cluster, checkProber)
 }
 
-func testChangingHibernationStatus(t *testing.T, k8sClient client.Client, reconciler *ClusterReconciler) {
+func testChangingHibernationStatus(t *testing.T, crClient client.Client, reconciler *ClusterReconciler) {
 	g := NewWithT(t)
 	cluster, shoot := createClusterResource()
-	createClusterAndCheckProber(g, k8sClient, reconciler, cluster, proberShouldBePresent)
-	updateShootHibernationStatus(g, k8sClient, reconciler, cluster, shoot, true, nil)
-	updateShootHibernationStatus(g, k8sClient, reconciler, cluster, shoot, false, proberShouldBePresent)
-	deleteClusterAndCheckIfProberRemoved(g, k8sClient, reconciler, cluster)
+	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
+	updateShootHibernationStatus(g, crClient, reconciler, cluster, shoot, true, nil)
+	updateShootHibernationStatus(g, crClient, reconciler, cluster, shoot, false, proberShouldBePresent)
+	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
-func testInvalidShootInClusterSpec(t *testing.T, k8sClient client.Client, reconciler *ClusterReconciler) {
+func testInvalidShootInClusterSpec(t *testing.T, crClient client.Client, reconciler *ClusterReconciler) {
 	g := NewWithT(t)
 	cluster, _ := createClusterResource()
 	cluster.Spec.Shoot.Object = nil
 	cluster.Spec.Shoot.Raw = []byte(`{"apiVersion": 8}`)
-	createClusterAndCheckProber(g, k8sClient, reconciler, cluster, proberShouldNotBePresent)
-	deleteClusterAndCheckIfProberRemoved(g, k8sClient, reconciler, cluster)
+	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
+	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
-func updateShootDeletionTimeStamp(g *WithT, k8sClient client.Client, cluster *gardenerv1alpha1.Cluster, shoot *gardencorev1beta1.Shoot) {
+func updateShootDeletionTimeStamp(g *WithT, crClient client.Client, cluster *gardenerv1alpha1.Cluster, shoot *gardencorev1beta1.Shoot) {
 	deletionTimeStamp, _ := time.Parse(time.RFC3339, "2022-05-05T08:34:05Z")
 	shoot.DeletionTimestamp = &metav1.Time{
 		Time: deletionTimeStamp,
@@ -258,17 +258,17 @@ func updateShootDeletionTimeStamp(g *WithT, k8sClient client.Client, cluster *ga
 	cluster.Spec.Shoot = runtime.RawExtension{
 		Object: shoot,
 	}
-	err := k8sClient.Update(context.Background(), cluster)
+	err := crClient.Update(context.Background(), cluster)
 	g.Expect(err).To(BeNil())
 }
 
-func testProberShouldBeRemovedIfDeletionTimeStampIsSet(t *testing.T, k8sClient client.Client, reconciler *ClusterReconciler) {
+func testProberShouldBeRemovedIfDeletionTimeStampIsSet(t *testing.T, crClient client.Client, reconciler *ClusterReconciler) {
 	g := NewWithT(t)
 	cluster, shoot := createClusterResource()
-	createClusterAndCheckProber(g, k8sClient, reconciler, cluster, proberShouldBePresent)
-	updateShootDeletionTimeStamp(g, k8sClient, cluster, shoot)
+	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
+	updateShootDeletionTimeStamp(g, crClient, cluster, shoot)
 	proberShouldNotBePresent(g, reconciler, cluster)
-	deleteClusterAndCheckIfProberRemoved(g, k8sClient, reconciler, cluster)
+	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
 func setShootLastOperationStatus(cluster *gardenerv1alpha1.Cluster, shoot *gardencorev1beta1.Shoot, opType gardencorev1beta1.LastOperationType, opState gardencorev1beta1.LastOperationState) {
@@ -281,47 +281,47 @@ func setShootLastOperationStatus(cluster *gardenerv1alpha1.Cluster, shoot *garde
 	}
 }
 
-func testShootCreationNotComplete(t *testing.T, k8sClient client.Client, reconciler *ClusterReconciler) {
+func testShootCreationNotComplete(t *testing.T, crClient client.Client, reconciler *ClusterReconciler) {
 	g := NewWithT(t)
 	cluster, shoot := createClusterResource()
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeCreate, gardencorev1beta1.LastOperationStateProcessing)
-	createClusterAndCheckProber(g, k8sClient, reconciler, cluster, proberShouldNotBePresent)
+	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeCreate, gardencorev1beta1.LastOperationStatePending)
-	updateClusterAndCheckProber(g, k8sClient, reconciler, cluster, proberShouldNotBePresent)
+	updateClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeCreate, gardencorev1beta1.LastOperationStateFailed)
-	updateClusterAndCheckProber(g, k8sClient, reconciler, cluster, proberShouldNotBePresent)
+	updateClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeCreate, gardencorev1beta1.LastOperationStateError)
-	updateClusterAndCheckProber(g, k8sClient, reconciler, cluster, proberShouldNotBePresent)
+	updateClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeCreate, gardencorev1beta1.LastOperationStateAborted)
-	updateClusterAndCheckProber(g, k8sClient, reconciler, cluster, proberShouldNotBePresent)
+	updateClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeCreate, gardencorev1beta1.LastOperationStateSucceeded)
-	updateClusterAndCheckProber(g, k8sClient, reconciler, cluster, proberShouldBePresent)
-	deleteClusterAndCheckIfProberRemoved(g, k8sClient, reconciler, cluster)
+	updateClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
+	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
-func testShootIsMigrating(t *testing.T, k8sClient client.Client, reconciler *ClusterReconciler) {
+func testShootIsMigrating(t *testing.T, crClient client.Client, reconciler *ClusterReconciler) {
 	g := NewWithT(t)
 	cluster, shoot := createClusterResource()
-	createClusterAndCheckProber(g, k8sClient, reconciler, cluster, proberShouldBePresent)
+	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeMigrate, "")
-	updateClusterAndCheckProber(g, k8sClient, reconciler, cluster, proberShouldNotBePresent)
-	deleteClusterAndCheckIfProberRemoved(g, k8sClient, reconciler, cluster)
+	updateClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
+	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
-func testLastOperationIsRestore(t *testing.T, k8sClient client.Client, reconciler *ClusterReconciler) {
+func testLastOperationIsRestore(t *testing.T, crClient client.Client, reconciler *ClusterReconciler) {
 	g := NewWithT(t)
 	cluster, shoot := createClusterResource()
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeRestore, "")
-	createClusterAndCheckProber(g, k8sClient, reconciler, cluster, proberShouldBePresent)
-	deleteClusterAndCheckIfProberRemoved(g, k8sClient, reconciler, cluster)
+	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
+	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
-func testLastOperationIsShootReconciliation(t *testing.T, k8sClient client.Client, reconciler *ClusterReconciler) {
+func testLastOperationIsShootReconciliation(t *testing.T, crClient client.Client, reconciler *ClusterReconciler) {
 	g := NewWithT(t)
 	cluster, shoot := createClusterResource()
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeReconcile, "")
-	createClusterAndCheckProber(g, k8sClient, reconciler, cluster, proberShouldBePresent)
-	deleteClusterAndCheckIfProberRemoved(g, k8sClient, reconciler, cluster)
+	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
+	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
 func proberShouldBePresent(g *WithT, reconciler *ClusterReconciler, cluster *gardenerv1alpha1.Cluster) {

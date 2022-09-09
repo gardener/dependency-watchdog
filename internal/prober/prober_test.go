@@ -30,7 +30,7 @@ var (
 	fakeClient                          client.WithWatch
 	mki                                 *mockinterface.MockInterface
 	mdi                                 *mockdiscovery.MockDiscoveryInterface
-	notIgnorableErr                     = errors.New("Not Ignorable error")
+	notIgnorableErr                     = errors.New("not Ignorable error")
 	internalProbeFailureBackoffDuration = time.Millisecond
 	pLogger                             = log.FromContext(context.Background()).WithName("proberLogger")
 	defaultProbeTimeout                 = 40 * time.Second

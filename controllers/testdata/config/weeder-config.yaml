@@ -1,4 +1,4 @@
-watchDuration: 5s
+watchDuration: 15s
 servicesAndDependantSelectors:
   etcd-main:
     podSelectors:
