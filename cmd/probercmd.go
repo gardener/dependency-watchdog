@@ -42,6 +42,10 @@ Flags:
 		Namespace in which leader election namespace will be created. This is typically the same namespace where DWD controllers are deployed.
 	--enable-leader-election
 		Determines if the leader election needs to be enabled.
+	--leader-elect-renew-deadline
+		Interval between attempts by the acting master to renew a leadership slot
+	--leader-elect-retry-period
+		The duration the clients should wait between attempting acquisition and renewal
 	--kube-api-qps
 		Maximum QPS to the API server from this client.
 	--kube-api-burst
