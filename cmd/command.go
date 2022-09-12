@@ -12,8 +12,8 @@ import (
 
 const (
 	defaultConcurrentReconciles = 1
-	defaultMetricsBindAddress   = ":8080"
-	defaultHealthBindAddress    = ":8081"
+	defaultMetricsBindAddress   = ":9643"
+	defaultHealthBindAddress    = ":9644"
 	defaultLeaseDuration        = 15 * time.Second
 	defaultRenewDeadline        = 10 * time.Second
 	defaultRetryPeriod          = 2 * time.Second
