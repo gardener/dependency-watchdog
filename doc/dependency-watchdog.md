@@ -76,7 +76,7 @@ Several changes are proposed in the design of the prober.
 #### Configuration
 
 To allow both sequential (ordered) and concurrent scaling up/down of resources we propose to change to the prober
-configuration. Following will be the new configuration:
+configuration. Following will be the new configuration( not real config, just for example purposes):
 
 ```yaml
 # values are only representational and do not represent default values
@@ -103,7 +103,7 @@ dependentResourceInfos:
       apiVersion: "apps/v1"
     scaleUp: # provides scale-up configuration
       level: 1 # explained below
-      initialDelay: 10s # optional, initial delay before the scaleUp begins
+      initialDelay: 0s # optional, initial delay before the scaleUp begins
       timeout: 60s # optional, total timeout to wait for the scale operation to update the scale sub-resource
       replicas: 1 # number of replicas to scale-up to
     scaleDown: # provides scale-down configuration
