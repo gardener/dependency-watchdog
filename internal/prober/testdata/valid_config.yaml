@@ -1,6 +1,6 @@
 internalKubeConfigSecretName: "dws-interal-probe-secret"
 externalKubeConfigSecretName: "dwd-external-probe-secret"
-probeInterval: 20s
+probeInterval: 30s
 initialDelay: 5s
 successThreshold: 1
 failureThreshold: 3
@@ -14,14 +14,9 @@ dependentResourceInfos:
     shouldExist: true
     scaleUp:
       level: 0
-      initialDelay: 10s
-      timeout: 60s
       replicas: 1
     scaleDown:
       level: 1
-      initialDelay: 15s
-      timeout: 45s
-      replicas: 0
   - ref:
       kind: "Deployment"
       name: "machine-controller-manager"
@@ -29,26 +24,17 @@ dependentResourceInfos:
     shouldExist: true
     scaleUp:
       level: 1
-      initialDelay: 10s
-      timeout: 60s
+      initialDelay: 30s
       replicas: 1
     scaleDown:
       level: 0
-      initialDelay: 15s
-      timeout: 45s
-      replicas: 0
   - ref:
       kind: "Deployment"
       name: "cluster-autoscaler"
       apiVersion: "apps/v1"
     shouldExist: false
     scaleUp:
-      level: 0
-      initialDelay: 10s
-      timeout: 60s
+      level: 2
       replicas: 1
     scaleDown:
-      level: 1
-      initialDelay: 15s
-      timeout: 45s
-      replicas: 0
+      level: 0
