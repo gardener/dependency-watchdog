@@ -1,11 +1,11 @@
 /*
-
 Package test contains test utilities. Following is the guide on how to use it:
 
 Utilities in kind.go: Tests that require a KIND cluster should use utilities inside this file.
 
 To create a KIND cluster use:
 ```
+
 	// to create a KIND test cluster
 	kindCluster, err := test.CreateKindCluster(test.KindConfig{Name: "<name-of-kind-cluster>"})
 	if err != nil {
@@ -27,10 +27,12 @@ To create a KIND cluster use:
 
 	// to delete the KIND test cluster
 	err = kindCluster.Delete()
+
 ```
 
 Utilities in testenv.go: Tests that require a controller-runtime envtest should use utilities inside this file
 ```
+
 	// to create a controller-runtime test environment
 	ctrlTestEnv, err := test.CreateControllerTestEnv()
 
@@ -39,6 +41,7 @@ Utilities in testenv.go: Tests that require a controller-runtime envtest should 
 
 	// to get client.Client for the test environment
 	k8sClient := ctrlTestEnv.GetClient()
+
 ```
 */
 package test

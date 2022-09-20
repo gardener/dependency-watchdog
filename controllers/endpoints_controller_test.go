@@ -133,12 +133,12 @@ func testWeederCommonEnvTest(t *testing.T) {
 		title string
 		run   func(t *testing.T, g *WithT, ctx context.Context, cancelFn context.CancelFunc, reconciler *EndpointReconciler, scheme *runtime.Scheme, config *rest.Config)
 	}{
-		{"single Crashlooping pod , single healthy pod with matching labels expect only Crashlooping pod to be deleted", testOnlyCLBFpodDeletion},
-		{"single healthy pod, turned to CrashLoopBackoff , should be deleted", testPodTurningCLBFDeletion},
-		{"single CrashLooping pod with non-matching labels present, shouldn't be deleted", testCLBFPodWithWrongLabelsDeletion},
-		{"single healthy pod with matching labels turning to CrashLoopBackoff after watchDuration, shouldn't be deleted", testPodTurningCLBFAfterWatchDuration},
-		{"single CrashLooping pod with matching label shouldn't be deleted when endpoint is not Ready", testNoCLBFPodDeletionWhenEndpointNotReady},
-		{"no pod termination happens when main context is cancelled", testNoCLBFPodDeletionOnContextCancellation},
+		{"Single Crashlooping pod , single healthy pod with matching labels expect only Crashlooping pod to be deleted", testOnlyCLBFpodDeletion},
+		{"Single healthy pod, turned to CrashLoopBackoff , should be deleted", testPodTurningCLBFDeletion},
+		{"Single CrashLooping pod with non-matching labels present, shouldn't be deleted", testCLBFPodWithWrongLabelsDeletion},
+		{"Single healthy pod with matching labels turning to CrashLoopBackoff after watchDuration, shouldn't be deleted", testPodTurningCLBFAfterWatchDuration},
+		{"Single CrashLooping pod with matching label shouldn't be deleted when endpoint is not Ready", testNoCLBFPodDeletionWhenEndpointNotReady},
+		{"No pod termination happens when main context is cancelled", testNoCLBFPodDeletionOnContextCancellation},
 	}
 
 	createEp(t, g, ctxCommonTests, reconciler)
@@ -365,9 +365,14 @@ func testPodWatchEndsAbruptlyBeforeSpecifiedWatchDuration(t *testing.T, g *WithT
 
 func deleteAllPods(ctx context.Context, g *WithT, crClient client.Client) {
 	pl := &v1.PodList{}
-	g.Expect(crClient.List(ctx, pl)).To(Succeed())
-	for _, po := range pl.Items {
-		g.Expect(crClient.Delete(ctx, &po)).To(Succeed())
+	select {
+	case <-ctx.Done():
+		return
+	default:
+		g.Expect(crClient.List(ctx, pl)).To(Succeed())
+		for _, po := range pl.Items {
+			g.Expect(crClient.Delete(ctx, &po)).To(Succeed())
+		}
 	}
 }
 

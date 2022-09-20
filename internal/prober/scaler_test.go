@@ -350,7 +350,7 @@ func TestCreateScaleDownResourceInfos(t *testing.T) {
 }
 
 // utility methods to be used by tests
-//------------------------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------------------------
 // createScaleableResourceInfos creates a slice of scaleableResourceInfo's taking in a map whose key is level
 // and value is the number of scaleableResourceInfo's to be created at that level
 func createScaleableResourceInfos(numResInfosByLevel map[int]int) []scaleableResourceInfo {

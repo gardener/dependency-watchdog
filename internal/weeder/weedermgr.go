@@ -39,7 +39,7 @@ func (wr weederRegistration) close() {
 	wr.cancelFn()
 }
 
-//Register registers the new weeder. If the weeder with the same key (see `createKey` function) exists
+// Register registers the new weeder. If the weeder with the same key (see `createKey` function) exists
 // then it will close the registration (if not already closed) which cancels the weeder.
 // It will then create a new weeder registration which will replace the existing weeder registration.
 func (wm *weederManager) Register(weeder Weeder) bool {
