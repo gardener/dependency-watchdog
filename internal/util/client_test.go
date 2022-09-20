@@ -55,6 +55,8 @@ func TestSuite(t *testing.T) {
 		{"KeepAlive is disabled", testCreateTransportWithDisabledKeepAlive},
 	}
 	beforeAll(t)
+	// NOTE: when the tests(second and later) are run individually using goland tool,
+	// then they fail as goland cannot pinpoint the exact test when using a for loop to run the tests
 	for _, test := range tests {
 		t.Run(test.title, func(t *testing.T) {
 			test.run(t)
@@ -167,7 +169,7 @@ func testTimeoutBeforeGettingDeployment(t *testing.T) {
 	timeout := time.Nanosecond
 	actual, err := GetDeploymentFor(ctx, deployment.ObjectMeta.Namespace, deployment.ObjectMeta.Name, k8sClient, &timeout)
 	g.Expect(err).ShouldNot(BeNil())
-	g.Expect(err).To(Equal(context.DeadlineExceeded))
+	g.Expect(err.Error()).Should(ContainSubstring(context.DeadlineExceeded.Error()))
 	g.Expect(actual).Should(BeNil())
 }
 
