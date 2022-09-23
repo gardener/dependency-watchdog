@@ -32,7 +32,7 @@ If the API server continues to be un-reachable beyond a threshold then it scales
 server is again reachable then it will restore by scaling up the dependent controllers.
 
 Flags:
-	--config-path
+	--config-file
 		Path of the configuration file containing probe configuration and scaling controller-reference information
 	--kubeconfig
 		Path to the kubeconfig file. If not specified, then it will default to the service account token to connect to the kube-api-server
@@ -58,8 +58,8 @@ Flags:
 		AddFlags: addProbeFlags,
 		Run:      startProberControllerMgr,
 	}
-	opts   = proberOptions{}
-	scheme = runtime.NewScheme()
+	proberOpts = proberOptions{}
+	scheme     = runtime.NewScheme()
 )
 
 type proberOptions struct {
@@ -75,26 +75,26 @@ func init() {
 }
 
 func addProbeFlags(fs *flag.FlagSet) {
-	SetSharedOpts(fs, &opts.SharedOpts)
+	SetSharedOpts(fs, &proberOpts.SharedOpts)
 }
 
 func startProberControllerMgr(logger logr.Logger) (manager.Manager, error) {
 	proberLogger := logger.WithName("cluster-controller")
-	proberConfig, err := prober.LoadConfig(opts.ConfigPath)
+	proberConfig, err := prober.LoadConfig(proberOpts.ConfigFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse prober config file %s : %w", opts.ConfigPath, err)
+		return nil, fmt.Errorf("failed to parse prober config file %s : %w", proberOpts.ConfigFile, err)
 	}
 
 	restConf := ctrl.GetConfigOrDie()
 	mgr, err := ctrl.NewManager(restConf, ctrl.Options{
 		Scheme:                     scheme,
-		MetricsBindAddress:         opts.SharedOpts.MetricsBindAddress,
-		HealthProbeBindAddress:     opts.SharedOpts.HealthBindAddress,
-		LeaderElection:             opts.SharedOpts.LeaderElection.Enable,
-		LeaseDuration:              &opts.SharedOpts.LeaderElection.LeaseDuration,
-		RenewDeadline:              &opts.SharedOpts.LeaderElection.RenewDeadline,
-		RetryPeriod:                &opts.SharedOpts.LeaderElection.RetryPeriod,
-		LeaderElectionNamespace:    opts.SharedOpts.LeaderElection.Namespace,
+		MetricsBindAddress:         proberOpts.SharedOpts.MetricsBindAddress,
+		HealthProbeBindAddress:     proberOpts.SharedOpts.HealthBindAddress,
+		LeaderElection:             proberOpts.SharedOpts.LeaderElection.Enable,
+		LeaseDuration:              &proberOpts.SharedOpts.LeaderElection.LeaseDuration,
+		RenewDeadline:              &proberOpts.SharedOpts.LeaderElection.RenewDeadline,
+		RetryPeriod:                &proberOpts.SharedOpts.LeaderElection.RetryPeriod,
+		LeaderElectionNamespace:    proberOpts.SharedOpts.LeaderElection.Namespace,
 		LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
 		LeaderElectionID:           proberLeaderElectionID,
 		Logger:                     proberLogger,
@@ -114,7 +114,7 @@ func startProberControllerMgr(logger logr.Logger) (manager.Manager, error) {
 		ScaleGetter:             scalesGetter,
 		ProberMgr:               prober.NewManager(),
 		ProbeConfig:             proberConfig,
-		MaxConcurrentReconciles: opts.ConcurrentReconciles,
+		MaxConcurrentReconciles: proberOpts.ConcurrentReconciles,
 	}).SetupWithManager(mgr); err != nil {
 		return nil, fmt.Errorf("failed to register cluster reconciler with the prober controller manager %w", err)
 	}

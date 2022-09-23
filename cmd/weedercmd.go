@@ -17,7 +17,7 @@ var (
 	WeederCmd = &Command{
 		Name:      "weeder",
 		UsageLine: "",
-		ShortDesc: "",
+		ShortDesc: "Restarts CrashLooping pods which are dependant on a service , for quick availability",
 		LongDesc: `Watches for Kubernetes endpoints for a service. If the endpoints transition from being
 unavailable to now being available, it checks all dependent pods for CrashLoopBackOff condition. It attempts to
 restore these dependent pods by deleting them so that they are started again by respective controller. In essence
@@ -63,21 +63,21 @@ func addWeederFlags(fs *flag.FlagSet) {
 
 func startWeederControllerMgr(logger logr.Logger) (manager.Manager, error) {
 	weederLogger := logger.WithName("endpoints-controller")
-	weederConfig, err := weeder.LoadConfig(opts.ConfigPath)
+	weederConfig, err := weeder.LoadConfig(weederOpts.ConfigFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse weeder config file %s : %w", opts.ConfigPath, err)
+		return nil, fmt.Errorf("failed to parse weeder config file %s : %w", weederOpts.ConfigFile, err)
 	}
 
 	restConf := ctrl.GetConfigOrDie()
 	mgr, err := ctrl.NewManager(restConf, ctrl.Options{
 		Scheme:                     scheme,
-		MetricsBindAddress:         opts.SharedOpts.MetricsBindAddress,
-		HealthProbeBindAddress:     opts.SharedOpts.HealthBindAddress,
-		LeaderElection:             opts.SharedOpts.LeaderElection.Enable,
-		LeaseDuration:              &opts.SharedOpts.LeaderElection.LeaseDuration,
-		RenewDeadline:              &opts.SharedOpts.LeaderElection.RenewDeadline,
-		RetryPeriod:                &opts.SharedOpts.LeaderElection.RetryPeriod,
-		LeaderElectionNamespace:    opts.SharedOpts.LeaderElection.Namespace,
+		MetricsBindAddress:         weederOpts.SharedOpts.MetricsBindAddress,
+		HealthProbeBindAddress:     weederOpts.SharedOpts.HealthBindAddress,
+		LeaderElection:             weederOpts.SharedOpts.LeaderElection.Enable,
+		LeaseDuration:              &weederOpts.SharedOpts.LeaderElection.LeaseDuration,
+		RenewDeadline:              &weederOpts.SharedOpts.LeaderElection.RenewDeadline,
+		RetryPeriod:                &weederOpts.SharedOpts.LeaderElection.RetryPeriod,
+		LeaderElectionNamespace:    weederOpts.SharedOpts.LeaderElection.Namespace,
 		LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
 		LeaderElectionID:           weederLeaderElectionID,
 		Logger:                     weederLogger,

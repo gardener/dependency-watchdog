@@ -1,8 +1,6 @@
 # End to End tests
 
 ## Table Of Contents
-- [End to End tests](#end-to-end-tests)
-  - [Table Of Contents](#table-of-contents)
   - [DWD prober](#dwd-prober)
     - [Setup](#setup)
       - [Shooted-Seed](#shooted-seed)
@@ -26,7 +24,7 @@ To run these tests against a DEV cluster the following setup is required.
 # This is required to ensure that `Dependency watchdog prober pods` are not scaled up during reconciliation of the shooted seed.
 kubectl -n garden annotate managedresource dependency-watchdog-probe resources.gardener.cloud/ignore=true --overwrite
 ```
-* Scale down the DWD prober deployment in the garden namespace (in the shooted-seed) and start a local DWD process by providing the prober config and the kubeconfig of the shooted seed as command line flags - ```bash go run ./dwd.go prober --config-path=<path to prober config yaml> --kubeconfig=<path to shooted-seed kubeconfig yaml>```. To change the log level one can additionally pass `--zap-log-level=<loglevel>` command line flag which will be picked up zap logger at the time of initialization of DWD prober.
+* Scale down the DWD prober deployment in the garden namespace (in the shooted-seed) and start a local DWD process by providing the prober config and the kubeconfig of the shooted seed as command line flags - ```bash go run ./dwd.go prober --config-file=<path to prober config yaml> --kubeconfig=<path to shooted-seed kubeconfig yaml>```. To change the log level one can additionally pass `--zap-log-level=<loglevel>` command line flag which will be picked up zap logger at the time of initialization of DWD prober.
 
 #### Secret changes
 Each DWD probe leverages an `internal-probe-endpoint` and an `external-probe-endpoint` to connect to the shoot Kube API server. Internal probe DNS record points to an `in-cluster` endpoint which is only reachable from within the cluster. For tests that are run locally by starting a DWD prober process, the internal probe endpoint will have to be changed. There are two ways to do this:
