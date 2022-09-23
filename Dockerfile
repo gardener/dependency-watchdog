@@ -1,20 +1,13 @@
-# Build the manager binary
-FROM golang:1.18 as builder
+FROM golang:1.18.3 as builder
 
-WORKDIR /workspace
-# Copy the go source
-COPY internal ./internal
-COPY vendor ./vendor
-COPY cmd ./cmd
-COPY controllers ./controllers
-COPY go.mod go.sum ./
-COPY *.go ./
+WORKDIR /go/src/github.com/gardener/dependency-watchdog
+COPY . .
 
-# Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dwd -ldflags -a .
+#build
+RUN make build
 
-FROM alpine:3.15.4
+FROM gcr.io/distroless/static-debian11:nonroot
+
+COPY --from=builder /go/src/github.com/gardener/dependency-watchdog/bin/linux-amd64/dependency-watchdog /dependency-watchdog
 WORKDIR /
-COPY --from=builder /workspace/dwd .
-
-ENTRYPOINT ["./dwd"]
+ENTRYPOINT ["/dependency-watchdog"]
