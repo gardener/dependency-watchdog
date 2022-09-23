@@ -63,7 +63,7 @@ if [[ -z "$LOCAL_BUILD" ]]; then
     -mod vendor \
     -v \
     -o "${BINARY_PATH}/linux-amd64/dependency-watchdog" \
-    main.go
+    dwd.go
 
 # If the LOCAL_BUILD environment variable is set, we simply run `go build`.
 else
@@ -71,5 +71,5 @@ else
     -mod vendor \
     -v \
     -o "${BINARY_PATH}/dependency-watchdog" \
-    main.go
+    dwd.go
 fi
