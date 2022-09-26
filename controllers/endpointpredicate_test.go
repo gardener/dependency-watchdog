@@ -2,11 +2,13 @@ package controllers
 
 import (
 	"github.com/gardener/dependency-watchdog/api/weeder"
+	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"testing"
 )
 
@@ -27,7 +29,7 @@ func turnReady(ep *v1.Endpoints) {
 
 func TestReadyEndpoints(t *testing.T) {
 	g := NewWithT(t)
-	predicate := ReadyEndpoints()
+	predicate := ReadyEndpoints(logr.New(log.NullLogSink{}))
 
 	readyEp := &v1.Endpoints{}
 	turnReady(readyEp)

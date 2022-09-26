@@ -100,5 +100,5 @@ func startWeederControllerMgr(logger logr.Logger) (manager.Manager, error) {
 	}).SetupWithManager(mgr); err != nil {
 		return nil, fmt.Errorf("failed to register endpoint reconciler with weeder controller manager %w", err)
 	}
-	return nil, nil
+	return mgr, nil
 }

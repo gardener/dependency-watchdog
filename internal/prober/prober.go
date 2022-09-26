@@ -120,10 +120,10 @@ func (p *Prober) probeInternal(shootClient kubernetes.Interface) {
 	if err != nil {
 		if !p.internalProbeStatus.canIgnoreProbeError(err) {
 			p.internalProbeStatus.recordFailure(err, *p.config.FailureThreshold, *p.config.InternalProbeFailureBackoffDuration)
-			p.l.Error(err, "recording internal probe failure", "failedAttempts", p.internalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
+			p.l.Info("recording internal probe failure", "err", err.Error(), "failedAttempts", p.internalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
 		} else {
 			p.internalProbeStatus.handleIgnorableError(err)
-			p.l.Error(err, "internal probe was not successful. ignoring this error, will retry probe", "namespace", p.namespace)
+			p.l.Info("internal probe was not successful. ignoring this error, will retry probe", "err", err.Error(), "namespace", p.namespace)
 		}
 		return
 	}
@@ -137,11 +137,11 @@ func (p *Prober) probeExternal(shootClient kubernetes.Interface) {
 	if err != nil {
 		if !p.externalProbeStatus.canIgnoreProbeError(err) {
 			p.externalProbeStatus.recordFailure(err, *p.config.FailureThreshold, 0)
-			p.l.Error(err, "recording external probe failure", "failedAttempts", p.externalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
+			p.l.Info("recording external probe failure", "err", err.Error(), "failedAttempts", p.externalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
 			return
 		}
 		p.externalProbeStatus.handleIgnorableError(err)
-		p.l.Error(err, "external probe was not successful. ignoring this error, will retry probe", "namespace", p.namespace)
+		p.l.Info("external probe was not successful. ignoring this error, will retry probe", "err", err.Error(), "namespace", p.namespace)
 		return
 	}
 	p.externalProbeStatus.recordSuccess(*p.config.SuccessThreshold)

@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"github.com/gardener/dependency-watchdog/api/weeder"
+	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -10,7 +11,8 @@ import (
 
 // ReadyEndpoints is a predicate to allow events for only ready endpoints. Endpoint is considered ready
 // when there at least a single endpoint subset that has at least one IP address assigned.
-func ReadyEndpoints() predicate.Predicate {
+func ReadyEndpoints(logger logr.Logger) predicate.Predicate {
+	log := logger.WithValues("predicate", "ReadyEndpointsPredicate")
 	isEndpointReady := func(obj runtime.Object) bool {
 		ep, ok := obj.(*v1.Endpoints)
 		if !ok || ep == nil {
@@ -21,6 +23,7 @@ func ReadyEndpoints() predicate.Predicate {
 				return true
 			}
 		}
+		log.Info("Endpoint does not have any endpoint subset. Skipping pod terminations.", "namespace", ep.Namespace, "endpoint", ep.Name)
 		return false
 	}
 

@@ -37,12 +37,12 @@ func (r *EndpointReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, err
 	}
 	log.Info("Starting a new weeder for endpoint, replacing old weeder, if any exists")
-	r.startWeeder(ctx, log, req.Name, req.Namespace, &ep)
+	r.startWeeder(ctx, log, req.Namespace, &ep)
 	return ctrl.Result{}, nil
 }
 
 // startWeeder starts a new weeder for the endpoint
-func (r *EndpointReconciler) startWeeder(ctx context.Context, logger logr.Logger, name, namespace string, ep *v1.Endpoints) {
+func (r *EndpointReconciler) startWeeder(ctx context.Context, logger logr.Logger, namespace string, ep *v1.Endpoints) {
 	w := weeder.NewWeeder(ctx, namespace, r.WeederConfig, r.Client, r.SeedClient, ep, logger)
 	// Register the weeder
 	r.WeederMgr.Register(*w)
@@ -55,8 +55,7 @@ func (r *EndpointReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&v1.Endpoints{}).
 		WithEventFilter(predicate.And(
 			predicate.ResourceVersionChangedPredicate{},
-			ReadyEndpoints(),
-			MatchingEndpoints(r.WeederConfig.ServicesAndDependantSelectors))).
+			MatchingEndpoints(r.WeederConfig.ServicesAndDependantSelectors), ReadyEndpoints(mgr.GetLogger()))).
 		WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}).
 		Complete(r)
 }
