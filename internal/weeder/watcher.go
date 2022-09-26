@@ -7,15 +7,15 @@ import (
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"time"
 )
 
 const watchCreationRetryInterval = 500 * time.Millisecond
 
-type podEventHandler func(ctx context.Context, log logr.Logger, apiClient kubernetes.Interface, podNamespaceName types.NamespacedName) error
+type podEventHandler func(ctx context.Context, log logr.Logger, crClient client.Client, targetPod *v1.Pod) error
 
 // podWatcher watches a pod for status changes
 type podWatcher struct {
@@ -58,6 +58,7 @@ func doCreateK8sWatch(ctx context.Context, client kubernetes.Interface, namespac
 func (pw *podWatcher) watch() {
 	defer pw.close()
 	pw.createK8sWatch(pw.weeder.ctx)
+	pw.log.Info("Watching for pods in CrashLoopBackoff")
 	for {
 		select {
 		case <-pw.weeder.ctx.Done():
@@ -73,7 +74,7 @@ func (pw *podWatcher) watch() {
 				continue
 			}
 			targetPod := event.Object.(*v1.Pod)
-			if err := pw.eventHandlerFn(pw.weeder.ctx, pw.log, pw.weeder.watchClient, types.NamespacedName{Namespace: targetPod.Namespace, Name: targetPod.Name}); err != nil {
+			if err := pw.eventHandlerFn(pw.weeder.ctx, pw.log, pw.weeder.ctrlClient, targetPod); err != nil {
 				pw.log.Error(err, "error processing pod ", "podName", targetPod.Name)
 			}
 		}
