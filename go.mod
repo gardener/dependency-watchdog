@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/gardener/gardener v1.52.2
+	github.com/ghodss/yaml v1.0.0
 	github.com/go-logr/logr v1.2.3
 	github.com/goccy/go-yaml v1.9.5
 	github.com/golang/mock v1.6.0
@@ -47,7 +48,6 @@ require (
 	github.com/gardener/etcd-druid v0.9.0 // indirect
 	github.com/gardener/external-dns-management v0.7.18 // indirect
 	github.com/gardener/hvpa-controller/api v0.5.0 // indirect
-	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-logr/zapr v1.2.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/jsonreference v0.19.5 // indirect
