@@ -86,6 +86,9 @@ func startProberControllerMgr(logger logr.Logger) (manager.Manager, error) {
 	}
 
 	restConf := ctrl.GetConfigOrDie()
+	restConf.QPS = float32(proberOpts.KubeApiQps)
+	restConf.Burst = proberOpts.KubeApiBurst
+
 	mgr, err := ctrl.NewManager(restConf, ctrl.Options{
 		Scheme:                     scheme,
 		MetricsBindAddress:         proberOpts.SharedOpts.MetricsBindAddress,
