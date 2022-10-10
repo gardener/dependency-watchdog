@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	"github.com/gardener/dependency-watchdog/api/weeder"
+	v12 "github.com/gardener/dependency-watchdog/api/weeder/v1"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -56,8 +56,8 @@ func ReadyEndpoints(logger logr.Logger) predicate.Predicate {
 }
 
 // MatchingEndpoints is a predicate to allow events for only configured endpoints
-func MatchingEndpoints(epMap map[string]weeder.DependantSelectors) predicate.Predicate {
-	isMatchingEndpoints := func(obj runtime.Object, epMap map[string]weeder.DependantSelectors) bool {
+func MatchingEndpoints(epMap map[string]v12.DependantSelectors) predicate.Predicate {
+	isMatchingEndpoints := func(obj runtime.Object, epMap map[string]v12.DependantSelectors) bool {
 		ep, ok := obj.(*v1.Endpoints)
 		if !ok || ep == nil {
 			return false

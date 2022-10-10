@@ -1,10 +1,9 @@
 package prober
 
 import (
+	papi "github.com/gardener/dependency-watchdog/api/prober/v1"
 	"github.com/gardener/dependency-watchdog/internal/util"
 	"time"
-
-	papi "github.com/gardener/dependency-watchdog/api/prober"
 )
 
 const (

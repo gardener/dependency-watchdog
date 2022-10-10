@@ -1,7 +1,7 @@
 package weeder
 
 import (
-	wapi "github.com/gardener/dependency-watchdog/api/weeder"
+	wapi "github.com/gardener/dependency-watchdog/api/weeder/v1"
 	"github.com/gardener/dependency-watchdog/internal/util"
 	multierr "github.com/hashicorp/go-multierror"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

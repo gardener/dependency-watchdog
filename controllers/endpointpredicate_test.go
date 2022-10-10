@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	"github.com/gardener/dependency-watchdog/api/weeder"
+	v12 "github.com/gardener/dependency-watchdog/api/weeder/v1"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
@@ -124,7 +124,7 @@ func TestReadyEndpoints(t *testing.T) {
 func TestMatchingEndpointsPredicate(t *testing.T) {
 	g := NewWithT(t)
 
-	epMap := map[string]weeder.DependantSelectors{
+	epMap := map[string]v12.DependantSelectors{
 		"ep-relevant": {},
 	}
 

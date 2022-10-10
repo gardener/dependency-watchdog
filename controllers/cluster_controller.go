@@ -19,12 +19,12 @@ package controllers
 import (
 	"context"
 	"fmt"
+	papi "github.com/gardener/dependency-watchdog/api/prober/v1"
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
 
-	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"github.com/gardener/dependency-watchdog/internal/prober"
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	gardencorev1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
@@ -124,7 +124,7 @@ func canStartProber(shoot *v1beta1.Shoot) bool {
 		return false
 	}
 	if shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeReconcile ||
-		shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeRestore ||
+		(shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeRestore && shoot.Status.LastOperation.State == v1beta1.LastOperationStateSucceeded) ||
 		(shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeCreate && shoot.Status.LastOperation.State == v1beta1.LastOperationStateSucceeded) {
 		return true
 	}

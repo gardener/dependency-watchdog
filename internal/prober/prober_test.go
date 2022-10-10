@@ -3,7 +3,7 @@ package prober
 import (
 	"context"
 	"errors"
-	papi "github.com/gardener/dependency-watchdog/api/prober"
+	papi "github.com/gardener/dependency-watchdog/api/prober/v1"
 	"testing"
 	"time"
 

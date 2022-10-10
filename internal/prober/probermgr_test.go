@@ -2,7 +2,7 @@ package prober
 
 import (
 	"context"
-	papi "github.com/gardener/dependency-watchdog/api/prober"
+	papi "github.com/gardener/dependency-watchdog/api/prober/v1"
 	"testing"
 
 	. "github.com/onsi/gomega"

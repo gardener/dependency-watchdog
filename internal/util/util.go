@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goccy/go-yaml"
 	"github.com/onsi/gomega"
+	"gopkg.in/yaml.v3"
 )
 
 func SleepWithContext(ctx context.Context, sleepFor time.Duration) error {

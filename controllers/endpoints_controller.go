@@ -2,7 +2,7 @@ package controllers
 
 import (
 	"context"
-	wapi "github.com/gardener/dependency-watchdog/api/weeder"
+	wapi "github.com/gardener/dependency-watchdog/api/weeder/v1"
 	"github.com/gardener/dependency-watchdog/internal/weeder"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
