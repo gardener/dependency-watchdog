@@ -1,121 +1,70 @@
-# dependency-watchdog
-When etcd becomes unavailable, the control-plane components go into `CrashloopBackoff`. The control-plane components can remain unavailable for some time even after etcd becomes ready and available. dependency-watchdog helps to alleviate the delay where control plane components remain unavailable by finding the respective pods in CrashloopBackoff and restarting them once etcd becomes ready and available.
+# Dependency Watchdog
 
-## Table of Contents
+<img src="logo/gardener-dwd.png" style="width:200px">
 
-- [Prerequisites](#prerequisites)
-- [Build](#build)
-- [Dependency management](#dependency-management)
-  - [Updating dependencies](#updating-dependencies)
-- [Usage](#usage)
+[![CI Build status](https://concourse.ci.gardener.cloud/api/v1/teams/gardener/pipelines/dependency-watchdog-master/jobs/master-head-update-job/badge)](https://concourse.ci.gardener.cloud/api/v1/teams/gardener/pipelines/dependency-watchdog-master/jobs/master-head-update-job/)
+[![Go Report Card](https://goreportcard.com/badge/github.com/gardener/dependency-watchdog)](https://goreportcard.com/report/github.com/gardener/dependency-watchdog)
+[![GoDoc](https://godoc.org/github.com/gardener/dependency-watchdog?status.svg)](https://pkg.go.dev/github.com/gardener/dependency-watchdog)
 
-### Prerequisites
 
-Although the following installation instructions are for Mac OS X, similar alternate commands could be found for any Linux distribution
+## Overview
+A watchdog which actively looks out for disruption and recovery of critical services. If there is a disruption then it will prevent cascading failure by conservatively scaling down dependent configured services and if a critical service has just recovered then it will expedite the recovery of dependent services/pods.
 
-#### Installing [Golang](https://golang.org/) environment
+Avoiding cascading failure is handled by `Prober` component and expediting recovery of dependent services/pods is handled by `Weeder` component. These are separately deployed as individual pods.
 
-Install the latest version of Golang (at least `v1.9.4` is required). For Mac OS, you could use [Homebrew](https://brew.sh/):
+## Dependency Watchdog Prober
 
-```sh
-brew install golang
-```
 
-For other OS, please check [Go installation documentation](https://golang.org/doc/install).
 
-Make sure to set your `$GOPATH` environment variable properly (conventionally, it points to `$HOME/go`).
 
-For your convenience, you can add the `bin` directory of the `$GOPATH` to your `$PATH`: `PATH=$PATH:$GOPATH/bin`, but it is not necessarily required.
+## How to contribute?
 
-We use [Dep](https://github.com/golang/dep) for managing golang package dependencies. Please install it
-on Mac OS via
+Contributions are always welcome!
 
-```sh
-brew install dep
-```
+In order to contribute ensure that you have the development environment setup and you familiarize yourself with required steps to build, verify-quality and test.
 
-On other operating systems, please check the [Dep installation documentation](https://golang.github.io/dep/docs/installation.html) and the [Dep releases page](https://github.com/golang/dep/releases). After downloading the appropriate release in your `$GOPATH/bin` folder, you need to make it executable via `chmod +x <dep-release>` and rename it to dep via `mv dep-<release> dep`.
+### Setting up development environment
 
-#### [Golint](https://github.com/golang/lint)
+**Installing Golang**
 
-In order to perform linting on the Go source code, please install [Golint](https://github.com/golang/lint):
+Minimum Golang version required: `1.18`.
 
+If you do not have golang setup then follow the [installation instructions](https://go.dev/doc/install).
+
+**Installing Git**
+
+Git is used as version control for dependency-watchdog. If you do not have git installed already then please follow the [installation instructions](https://git-scm.com/downloads).
+
+### Raising a Pull Request
+
+To raise a pull request do the following:
+1. Create a fork of [dependency-watchdog](https://github.com/gardener/dependency-watchdog)
+2. Add [dependency-watchdog](https://github.com/gardener/dependency-watchdog) as upstream remote via 
+ ```bash 
+    git remote add upstream https://github.com/gardener/dependency-watchdog
+ ```
+3. It is recommended that you create a git branch and push all your changes for the pull-request.
+4. Ensure that while you work on your pull-request, you continue to rebase the changes from upstream to your branch. To do that execute the following command:
 ```bash
-go get -u github.com/golang/lint/golint
+   git pull --rebase upstream master
+```
+5. We prefer clean commits. If you have multiple commits in the pull-request, then squash the commits to a single commit. You can do this via `interactive git rebase` command. For example if your PR branch is ahead of remote origin HEAD by 5 commits then you can execute the following command and pick the first commit and squash the remaining commits.
+```bash
+   git rebase -i HEAD~5 #actual number from the head will depend upon how many commits your branch is ahead of remote origin master
 ```
 
-#### Installing `git`
+### Testing Dependency-Watchdog on Local Gardener
 
-We use `git` as VCS which you would need to install.
+**Local Gardener Setup**
 
-On Mac OS run
+Dependency watchdog pods are already baked into the local gardener setup using KIND and local docker daemon. To install local gardener follow the [setup guide](https://github.com/gardener/gardener/blob/master/docs/deployment/getting_started_locally.md). This will provision two pods `dependency-watchdog-probe-*` and `dependency-watchdog-weed-*` in the `garden` namespace of the local seed cluster.
 
-```sh
-brew install git
-```
+**Testing local changes to Dependency Watchdog components**
 
-#### Installing `Docker` (Optional)
+< TODO >
 
-In case you want to build Docker images, you have to install Docker itself. We recommend using [Docker for Mac OS X](https://docs.docker.com/docker-for-mac/) which can be downloaded from [here](https://download.docker.com/mac/stable/Docker.dmg).
+## Feedback and Support
 
-### Build
+We always look forward to active community engagement.
 
-First, you need to create a target folder structure before cloning and building `dependency-watchdog`.
-
-```sh
-
-mkdir -p ~/go/src/github.com/gardener
-cd ~/go/src/github.com/gardener
-git clone https://github.com/gardener/dependency-watchdog.git
-cd dependency-watchdog
-```
-
-To build the binary in your local machine environment, use `make` target `build-local`.
-
-```sh
-make build-local
-```
-
-This will build the binary `dependency-watchdog` under the `bin` directory.
-
-Next you can make it available to use as shell command by moving the executable to `/usr/local/bin`.
-
-### Dependency management
-
-We use [Dep](https://github.com/golang/dep) to manage golang dependencies.. In order to add a new package dependency to the project, you can perform `dep ensure -add <PACKAGE>` or edit the `Gopkg.toml` file and append the package along with the version you want to use as a new `[[constraint]]`.
-
-#### Updating dependencies
-
-The `Makefile` contains a rule called `revendor` which performs a `dep ensure -update` and a `dep prune` command. This updates all the dependencies to its latest versions (respecting the constraints specified in the `Gopkg.toml` file). The command also installs the packages which do not already exist in the `vendor` folder but are specified in the `Gopkg.toml` (in case you have added new ones).
-
-```sh
-make revendor
-```
-
-The dependencies are installed into the `vendor` folder which **should be added** to the VCS.
-
-:warning: Make sure you test the code after you have updated the dependencies!
-
-### Usage
-
-Use the `help` option of the `dependency-watchdog` command to show usage details.
-
-```sh
-dependency-watchdog --help
-Usage of ./bin/dependency-watchdog:
-      --alsologtostderr                  log to standard error as well as files
-      --config-file string               path to the config file that has the service depenancies (default "config.yaml")
-      --kubeconfig string                path to the kube config file (default "kubeconfig.yaml")
-      --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
-      --log_dir string                   If non-empty, write log files in this directory
-      --log_file string                  If non-empty, use this log file
-      --log_file_max_size uint           Defines the maximum size a log file can grow to. Unit is megabytes. If the value is 0, the maximum file size is unlimited. (default 1800)
-      --logtostderr                      log to standard error instead of files (default true)
-      --master string                    The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.
-      --skip_headers                     If true, avoid header prefixes in the log messages
-      --skip_log_headers                 If true, avoid headers when openning log files
-      --stderrthreshold severity         logs at or above this threshold go to stderr (default 2)
-  -v, --v Level                          number for the log level verbosity
-      --vmodule moduleSpec               comma-separated list of pattern=N settings for file-filtered logging
-      --watch-duration string            The duration to watch dependencies after the service is ready. (default "2m")
-```
+Please report bugs or suggestions on how we can enhance `dependency-watchdog` to address additional recovery scenarios on [GitHub issues](https://github.com/gardener/dependency-watchdog/issues)
