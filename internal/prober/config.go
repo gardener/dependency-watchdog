@@ -1,8 +1,9 @@
 package prober
 
 import (
-	papi "github.com/gardener/dependency-watchdog/api/prober/v1"
+	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"github.com/gardener/dependency-watchdog/internal/util"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"time"
 )
 
@@ -55,20 +56,24 @@ func validate(c *papi.Config) error {
 
 func fillDefaultValues(c *papi.Config) {
 	if c.ProbeInterval == nil {
-		c.ProbeInterval = new(time.Duration)
-		*c.ProbeInterval = DefaultProbeInterval
+		c.ProbeInterval = &metav1.Duration{
+			Duration: DefaultProbeInterval,
+		}
 	}
 	if c.InitialDelay == nil {
-		c.InitialDelay = new(time.Duration)
-		*c.InitialDelay = DefaultProbeInitialDelay
+		c.InitialDelay = &metav1.Duration{
+			Duration: DefaultProbeInitialDelay,
+		}
 	}
 	if c.ProbeTimeout == nil {
-		c.ProbeTimeout = new(time.Duration)
-		*c.ProbeTimeout = DefaultProbeTimeout
+		c.ProbeTimeout = &metav1.Duration{
+			Duration: DefaultProbeTimeout,
+		}
 	}
 	if c.InternalProbeFailureBackoffDuration == nil {
-		c.InternalProbeFailureBackoffDuration = new(time.Duration)
-		*c.InternalProbeFailureBackoffDuration = DefaultInternalProbeFailureBackoffDuration
+		c.InternalProbeFailureBackoffDuration = &metav1.Duration{
+			Duration: DefaultInternalProbeFailureBackoffDuration,
+		}
 	}
 	if c.SuccessThreshold == nil {
 		c.SuccessThreshold = new(int)
@@ -99,12 +104,14 @@ func fillDefaultValuesForScaleInfo(scaleType int, scaleInfo *papi.ScaleInfo) {
 			*scaleInfo.Replicas = getDefaultScaleTargetReplicas(scaleType)
 		}
 		if scaleInfo.Timeout == nil {
-			scaleInfo.Timeout = new(time.Duration)
-			*scaleInfo.Timeout = DefaultScaleUpdateTimeout
+			scaleInfo.Timeout = &metav1.Duration{
+				Duration: DefaultScaleUpdateTimeout,
+			}
 		}
 		if scaleInfo.InitialDelay == nil {
-			scaleInfo.InitialDelay = new(time.Duration)
-			*scaleInfo.InitialDelay = DefaultScaleInitialDelay
+			scaleInfo.InitialDelay = &metav1.Duration{
+				Duration: DefaultScaleInitialDelay,
+			}
 		}
 	}
 }

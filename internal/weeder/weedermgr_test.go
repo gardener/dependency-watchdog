@@ -2,7 +2,7 @@ package weeder
 
 import (
 	"context"
-	v12 "github.com/gardener/dependency-watchdog/api/weeder/v1"
+	v12 "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,7 +22,7 @@ var (
 	testWatchDuration                 = 10 * time.Second
 	testServicesAndDependantSelectors = map[string]v12.DependantSelectors{epName: {PodSelectors: []*metav1.LabelSelector{{MatchLabels: nil, MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "gardener.cloud/component", Operator: "In", Values: []string{"control-plane"}}}}}}}
 	testWeederConfig                  = &v12.Config{
-		WatchDuration:                 &testWatchDuration,
+		WatchDuration:                 &metav1.Duration{Duration: testWatchDuration},
 		ServicesAndDependantSelectors: testServicesAndDependantSelectors,
 	}
 	testEp = &v1.Endpoints{

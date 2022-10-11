@@ -3,7 +3,8 @@ package prober
 import (
 	"context"
 	"errors"
-	papi "github.com/gardener/dependency-watchdog/api/prober/v1"
+	papi "github.com/gardener/dependency-watchdog/api/prober"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"testing"
 	"time"
 
@@ -31,9 +32,9 @@ var (
 	mki                                 *mockinterface.MockInterface
 	mdi                                 *mockdiscovery.MockDiscoveryInterface
 	notIgnorableErr                     = errors.New("not Ignorable error")
-	internalProbeFailureBackoffDuration = time.Millisecond
+	internalProbeFailureBackoffDuration = metav1.Duration{Duration: time.Millisecond}
 	pLogger                             = log.FromContext(context.Background()).WithName("proberLogger")
-	defaultProbeTimeout                 = 40 * time.Second
+	defaultProbeTimeout                 = metav1.Duration{Duration: 40 * time.Second}
 )
 
 type probeStatusEntry struct {
@@ -57,7 +58,7 @@ func TestInternalProbeErrorCount(t *testing.T) {
 	for _, probeStatusEntry := range table {
 		t.Run(probeStatusEntry.name, func(t *testing.T) {
 			setupProberTest(t)
-			config = createConfig(2, 1, 2*time.Millisecond, time.Microsecond, 0.2)
+			config = createConfig(2, 1, metav1.Duration{Duration: 2 * time.Millisecond}, metav1.Duration{Duration: time.Microsecond}, 0.2)
 
 			msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).Times(1)
 			mki.EXPECT().Discovery().Return(mdi).Times(1)
@@ -71,13 +72,13 @@ func TestInternalProbeErrorCount(t *testing.T) {
 func TestHealthyProbesShouldRunScaleUp(t *testing.T) {
 	table := []probeStatusEntry{
 		{"Scale Up Succeeds", nil, 1, 0, 1, 0},
-		{"Scale Up Fails", errors.New("Scale Up failed"), 1, 0, 1, 0},
+		{"Scale Up Fails", errors.New("scale Up failed"), 1, 0, 1, 0},
 	}
 
 	for _, probeStatusEntry := range table {
 		t.Run(probeStatusEntry.name, func(t *testing.T) {
 			setupProberTest(t)
-			config = createConfig(1, 1, 2*time.Millisecond, time.Microsecond, 0.2)
+			config = createConfig(1, 1, metav1.Duration{Duration: 2 * time.Millisecond}, metav1.Duration{Duration: time.Microsecond}, 0.2)
 
 			msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).Times(2)
 			mki.EXPECT().Discovery().Return(mdi).AnyTimes().Times(2)
@@ -92,13 +93,13 @@ func TestHealthyProbesShouldRunScaleUp(t *testing.T) {
 func TestExternalProbeFailingShouldRunScaleDown(t *testing.T) {
 	table := []probeStatusEntry{
 		{"Scale Down Succeeds", nil, 1, 0, 0, 2},
-		{"Scale Down Fails", errors.New("Scale Down failed"), 1, 0, 0, 2},
+		{"Scale Down Fails", errors.New("scale Down failed"), 1, 0, 0, 2},
 	}
 
 	for _, probeStatusEntry := range table {
 		t.Run(probeStatusEntry.name, func(t *testing.T) {
 			setupProberTest(t)
-			config = createConfig(1, 2, 5*time.Millisecond, time.Microsecond, 0.2)
+			config = createConfig(1, 2, metav1.Duration{Duration: 5 * time.Millisecond}, metav1.Duration{Duration: time.Microsecond}, 0.2)
 			runCounter := 0
 
 			msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).Times(4)
@@ -127,7 +128,7 @@ func TestUnchangedExternalErrorCountForIgnorableErrors(t *testing.T) {
 	for _, probeStatusEntry := range table {
 		t.Run(probeStatusEntry.name, func(t *testing.T) {
 			setupProberTest(t)
-			config = createConfig(1, 2, 5*time.Millisecond, time.Microsecond, 0.2)
+			config = createConfig(1, 2, metav1.Duration{Duration: 5 * time.Millisecond}, metav1.Duration{Duration: time.Microsecond}, 0.2)
 			runCounter := 0
 
 			msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).MinTimes(2).MaxTimes(4)
@@ -156,7 +157,7 @@ func TestInternalProbeShouldNotRunIfClientNotCreated(t *testing.T) {
 		expectedExternalProbeSuccessCount: 0,
 		expectedExternalProbeErrorCount:   0,
 	}
-	config = createConfig(1, 2, 5*time.Millisecond, time.Microsecond, 0.2)
+	config = createConfig(1, 2, metav1.Duration{Duration: 5 * time.Millisecond}, metav1.Duration{time.Microsecond}, 0.2)
 	msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, err).Times(2)
 	runProberAndCheckStatus(t, 8*time.Millisecond, entry)
 }
@@ -173,7 +174,7 @@ func TestExternalProbeShouldNotRunIfClientNotCreated(t *testing.T) {
 		expectedExternalProbeSuccessCount: 0,
 		expectedExternalProbeErrorCount:   0,
 	}
-	config = createConfig(1, 2, 5*time.Millisecond, time.Microsecond, 0.2)
+	config = createConfig(1, 2, metav1.Duration{5 * time.Millisecond}, metav1.Duration{time.Microsecond}, 0.2)
 	msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(context.Context, string, string, time.Duration) (kubernetes.Interface, error) {
 		counter++
 		if counter%2 == 1 {
@@ -229,7 +230,7 @@ func setupProberTest(t *testing.T) {
 	mdi = mockdiscovery.NewMockDiscoveryInterface(ctrl)
 }
 
-func createConfig(successThreshold int, failureThreshold int, probeInterval time.Duration, initialDelay time.Duration, backoffJitterFactor float64) *papi.Config {
+func createConfig(successThreshold int, failureThreshold int, probeInterval metav1.Duration, initialDelay metav1.Duration, backoffJitterFactor float64) *papi.Config {
 	return &papi.Config{
 		SuccessThreshold:                    &successThreshold,
 		FailureThreshold:                    &failureThreshold,

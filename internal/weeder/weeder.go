@@ -2,7 +2,7 @@ package weeder
 
 import (
 	"context"
-	wapi "github.com/gardener/dependency-watchdog/api/weeder/v1"
+	wapi "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -24,7 +24,7 @@ type Weeder struct {
 
 func NewWeeder(parentCtx context.Context, namespace string, config *wapi.Config, ctrlClient client.Client, seedClient kubernetes.Interface, ep *v1.Endpoints, logger logr.Logger) *Weeder {
 	wLogger := logger.WithValues("weederRunning", true, "watchDuration", (*config.WatchDuration).String())
-	ctx, cancelFn := context.WithTimeout(parentCtx, *config.WatchDuration)
+	ctx, cancelFn := context.WithTimeout(parentCtx, config.WatchDuration.Duration)
 	dependantSelectors := config.ServicesAndDependantSelectors[ep.Name]
 	return &Weeder{
 		namespace:          namespace,

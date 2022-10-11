@@ -3,7 +3,7 @@ package prober
 import (
 	"context"
 	"fmt"
-	papi "github.com/gardener/dependency-watchdog/api/prober/v1"
+	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"sort"
 	"strings"
 	"sync"
@@ -363,8 +363,8 @@ func createScaleUpResourceInfos(dependentResourceInfos []papi.DependentResourceI
 			ref:          depResInfo.Ref,
 			shouldExist:  *depResInfo.ShouldExist,
 			level:        depResInfo.ScaleUpInfo.Level,
-			initialDelay: *depResInfo.ScaleUpInfo.InitialDelay,
-			timeout:      *depResInfo.ScaleUpInfo.Timeout,
+			initialDelay: depResInfo.ScaleUpInfo.InitialDelay.Duration,
+			timeout:      depResInfo.ScaleUpInfo.Timeout.Duration,
 			replicas:     *depResInfo.ScaleUpInfo.Replicas,
 		}
 		resourceInfos = append(resourceInfos, resInfo)
@@ -379,8 +379,8 @@ func createScaleDownResourceInfos(dependentResourceInfos []papi.DependentResourc
 			ref:          depResInfo.Ref,
 			shouldExist:  *depResInfo.ShouldExist,
 			level:        depResInfo.ScaleDownInfo.Level,
-			initialDelay: *depResInfo.ScaleDownInfo.InitialDelay,
-			timeout:      *depResInfo.ScaleDownInfo.Timeout,
+			initialDelay: depResInfo.ScaleDownInfo.InitialDelay.Duration,
+			timeout:      depResInfo.ScaleDownInfo.Timeout.Duration,
 			replicas:     *depResInfo.ScaleDownInfo.Replicas,
 		}
 		resourceInfos = append(resourceInfos, resInfo)

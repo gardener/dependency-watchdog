@@ -2,7 +2,7 @@ package prober
 
 import (
 	"context"
-	papi "github.com/gardener/dependency-watchdog/api/prober/v1"
+	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"time"
 
 	"github.com/gardener/dependency-watchdog/internal/util"
@@ -67,8 +67,8 @@ func (p *Prober) IsClosed() bool {
 
 // Run starts a probe which will run with a configured interval and jitter.
 func (p *Prober) Run() {
-	_ = util.SleepWithContext(p.ctx, *p.config.InitialDelay)
-	wait.JitterUntilWithContext(p.ctx, p.probe, *p.config.ProbeInterval, *p.config.BackoffJitterFactor, true)
+	_ = util.SleepWithContext(p.ctx, p.config.InitialDelay.Duration)
+	wait.JitterUntilWithContext(p.ctx, p.probe, p.config.ProbeInterval.Duration, *p.config.BackoffJitterFactor, true)
 }
 
 func (p *Prober) probe(ctx context.Context) {
@@ -107,7 +107,7 @@ func (p *Prober) probe(ctx context.Context) {
 }
 
 func (p *Prober) setupProbeClient(ctx context.Context, namespace string, kubeConfigSecretName string) (kubernetes.Interface, error) {
-	shootClient, err := p.shootClientCreator.CreateClient(ctx, namespace, kubeConfigSecretName, *p.config.ProbeTimeout)
+	shootClient, err := p.shootClientCreator.CreateClient(ctx, namespace, kubeConfigSecretName, p.config.ProbeTimeout.Duration)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func (p *Prober) probeInternal(shootClient kubernetes.Interface) {
 	err := p.doProbe(shootClient)
 	if err != nil {
 		if !p.internalProbeStatus.canIgnoreProbeError(err) {
-			p.internalProbeStatus.recordFailure(err, *p.config.FailureThreshold, *p.config.InternalProbeFailureBackoffDuration)
+			p.internalProbeStatus.recordFailure(err, *p.config.FailureThreshold, p.config.InternalProbeFailureBackoffDuration.Duration)
 			p.l.Info("recording internal probe failure", "err", err.Error(), "failedAttempts", p.internalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
 		} else {
 			p.internalProbeStatus.handleIgnorableError(err)

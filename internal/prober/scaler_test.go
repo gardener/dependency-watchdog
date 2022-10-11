@@ -3,7 +3,8 @@ package prober
 import (
 	"context"
 	"fmt"
-	papi "github.com/gardener/dependency-watchdog/api/prober/v1"
+	papi "github.com/gardener/dependency-watchdog/api/prober"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"sync"
 	"testing"
@@ -375,14 +376,14 @@ func createDependentResourceInfo(name string, scaleUpLevel, scaleDownLevel int, 
 		ShouldExist: &shouldExist,
 		ScaleUpInfo: &papi.ScaleInfo{
 			Level:        scaleUpLevel,
-			InitialDelay: &defaultInitialDelay,
-			Timeout:      timeout,
+			InitialDelay: &metav1.Duration{Duration: defaultInitialDelay},
+			Timeout:      &metav1.Duration{Duration: *timeout},
 			Replicas:     &scaleUpReplicas,
 		},
 		ScaleDownInfo: &papi.ScaleInfo{
 			Level:        scaleDownLevel,
-			InitialDelay: &defaultInitialDelay,
-			Timeout:      timeout,
+			InitialDelay: &metav1.Duration{Duration: defaultInitialDelay},
+			Timeout:      &metav1.Duration{Duration: *timeout},
 			Replicas:     &scaleDownReplicas,
 		},
 	}

@@ -277,7 +277,7 @@ func testPodTurningCLBFAfterWatchDuration(t *testing.T, g *WithT, ctx context.Co
 	defer stopMgr(t, cancelFn)
 
 	// introducing wait
-	time.Sleep(*reconciler.WeederConfig.WatchDuration + 2*time.Second)
+	time.Sleep(reconciler.WeederConfig.WatchDuration.Duration + 2*time.Second)
 
 	turnPodToCrashLoop(g, ctx, reconciler.Client, pT)
 

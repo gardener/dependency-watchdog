@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	v12 "github.com/gardener/dependency-watchdog/api/weeder/v1"
+	v12 "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"

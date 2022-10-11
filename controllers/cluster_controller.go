@@ -19,7 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
-	papi "github.com/gardener/dependency-watchdog/api/prober/v1"
+	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 

@@ -1,16 +1,15 @@
 package weeder
 
 import (
-	wapi "github.com/gardener/dependency-watchdog/api/weeder/v1"
+	wapi "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/gardener/dependency-watchdog/internal/util"
 	multierr "github.com/hashicorp/go-multierror"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 	"time"
 )
 
 const (
-	DefaultWatchDuration = 2 * time.Minute
+	DefaultWatchDuration = 5 * time.Minute
 )
 
 func LoadConfig(filename string) (*wapi.Config, error) {
@@ -45,6 +44,8 @@ func validate(c *wapi.Config) error {
 
 func fillDefaultValues(c *wapi.Config) {
 	if c.WatchDuration == nil {
-		c.WatchDuration = pointer.Duration(DefaultWatchDuration)
+		c.WatchDuration = &metav1.Duration{
+			Duration: DefaultWatchDuration,
+		}
 	}
 }
