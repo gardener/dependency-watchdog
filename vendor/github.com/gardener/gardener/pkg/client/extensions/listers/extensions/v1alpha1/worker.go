@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
+Copyright (c) 2021 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,8 +26,10 @@ import (
 )
 
 // WorkerLister helps list Workers.
+// All objects returned here must be treated as read-only.
 type WorkerLister interface {
 	// List lists all Workers in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.Worker, err error)
 	// Workers returns an object that can list and get Workers.
 	Workers(namespace string) WorkerNamespaceLister
@@ -58,10 +60,13 @@ func (s *workerLister) Workers(namespace string) WorkerNamespaceLister {
 }
 
 // WorkerNamespaceLister helps list and get Workers.
+// All objects returned here must be treated as read-only.
 type WorkerNamespaceLister interface {
 	// List lists all Workers in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.Worker, err error)
 	// Get retrieves the Worker from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.Worker, error)
 	WorkerNamespaceListerExpansion
 }

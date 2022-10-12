@@ -21,6 +21,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -176,11 +177,7 @@ func (p *prober) shootNotReady() (bool, error) {
 		klog.Errorf("Error getting cluster: %s, Err: %s", clusterName, err.Error())
 		return true, err
 	}
-	decoder, err := extensionscontroller.NewGardenDecoder()
-	if err != nil {
-		klog.Errorf("Error getting gardener decoder. Cluster: %s, Err: %s", clusterName, err.Error())
-		return true, err
-	}
+	decoder := extensionscontroller.NewGardenDecoder()
 
 	shoot, err := extensionscontroller.ShootFromCluster(decoder, cluster)
 	if err != nil {
@@ -406,7 +403,7 @@ func (p *prober) doProbe(msg string, client kubernetes.Interface, pr *probeResul
 // handleError processing the err message for a given probe and decides -
 // . 1. If the secrets are rotated it update the clients used by the probes
 // . 2. If the requests are throttled it doesn't mean the API Server is down so it just logs and relies on the next sync.
-//   3. If it is any other error then it logs the error and increments the result run if still under failure threshold configured.
+//  3. If it is any other error then it logs the error and increments the result run if still under failure threshold configured.
 func (p *prober) handleError(pr *probeResult, err error, msg string) {
 	if p.checkSecretsRotated(err, &p.internalResult) {
 		p.updateClientsSecrets(&p.internalResult, msg)
@@ -555,8 +552,8 @@ func (p *prober) scaleTo(parentContext context.Context, msg string, replicas int
 		)
 		for _, m := range ms {
 			gr = m.Resource.GroupResource()
-			_, cancelFn := context.WithTimeout(parentContext, timeout)
-			s, err = p.scaleInterface.Get(gr, ds.Name)
+			ctx, cancelFn := context.WithTimeout(parentContext, timeout)
+			s, err = p.scaleInterface.Get(ctx, gr, ds.Name, v1.GetOptions{})
 			cancelFn()
 
 			dwdScaleRequestsTotal.With(prometheus.Labels{labelVerb: verbGet}).Inc()
@@ -622,12 +619,12 @@ func (p *prober) getScalingFn(parentContext context.Context, gr schema.GroupReso
 		s.Spec.Replicas = replicas
 
 		timeout := toDuration(p.probeDeps.Probe.TimeoutSeconds, defaultScaleTimeoutSeconds)
-		_, cancelFn := context.WithTimeout(parentContext, timeout)
+		ctx, cancelFn := context.WithTimeout(parentContext, timeout)
 		defer cancelFn()
 
 		dwdScaleRequestsTotal.With(prometheus.Labels{labelVerb: verbUpdate}).Inc()
 
-		_, err := p.scaleInterface.Update(gr, s)
+		_, err := p.scaleInterface.Update(ctx, gr, s, v1.UpdateOptions{})
 
 		if err != nil && isRateLimited(err) {
 			dwdThrottledScaleRequestsTotal.With(prometheus.Labels{labelVerb: verbGet}).Inc()

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
+Copyright (c) 2021 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -57,12 +57,16 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Extensions().V1alpha1().BackupBuckets().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("backupentries"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Extensions().V1alpha1().BackupEntries().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("bastions"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Extensions().V1alpha1().Bastions().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("clusters"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Extensions().V1alpha1().Clusters().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("containerruntimes"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Extensions().V1alpha1().ContainerRuntimes().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("controlplanes"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Extensions().V1alpha1().ControlPlanes().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("dnsrecords"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Extensions().V1alpha1().DNSRecords().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("extensions"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Extensions().V1alpha1().Extensions().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("infrastructures"):

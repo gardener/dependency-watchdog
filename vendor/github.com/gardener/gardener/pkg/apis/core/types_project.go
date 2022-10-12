@@ -63,7 +63,7 @@ type ProjectSpec struct {
 	// Namespace is the name of the namespace that has been created for the Project object.
 	// A nil value means that Gardener will determine the name of the namespace.
 	Namespace *string
-	// Tolerations contains the default tolerations and a whitelist for taints on seed clusters.
+	// Tolerations contains the default tolerations and a list for allowed taints on seed clusters.
 	Tolerations *ProjectTolerations
 }
 
@@ -73,6 +73,13 @@ type ProjectStatus struct {
 	ObservedGeneration int64
 	// Phase is the current phase of the project.
 	Phase ProjectPhase
+	// StaleSinceTimestamp contains the timestamp when the project was first discovered to be stale/unused.
+	StaleSinceTimestamp *metav1.Time
+	// StaleAutoDeleteTimestamp contains the timestamp when the project will be garbage-collected/automatically deleted
+	// because it's stale/unused.
+	StaleAutoDeleteTimestamp *metav1.Time
+	// LastActivityTimestamp contains the timestamp from the last activity performed in this project.
+	LastActivityTimestamp *metav1.Time
 }
 
 // ProjectMember is a member of a project.
@@ -108,7 +115,8 @@ const (
 	ProjectMemberOwner = "owner"
 	// ProjectMemberViewer is a const for a role that provides limited permissions to only view some resources.
 	ProjectMemberViewer = "viewer"
-
+	// ProjectMemberUserAccessManager is a const for a role that provides permissions to manage human user(s, (groups)).
+	ProjectMemberUserAccessManager = "uam"
 	// ProjectMemberExtensionPrefix is a prefix for custom roles that are not known by Gardener.
 	ProjectMemberExtensionPrefix = "extension:"
 )
@@ -130,6 +138,8 @@ const (
 	ProjectEventNamespaceReconcileFailed = "NamespaceReconcileFailed"
 	// ProjectEventNamespaceReconcileSuccessful indicates that the namespace reconciliation has succeeded.
 	ProjectEventNamespaceReconcileSuccessful = "NamespaceReconcileSuccessful"
+	// ProjectEventNamespaceNotEmpty indicates that the namespace cannot be released because it is not empty.
+	ProjectEventNamespaceNotEmpty = "NamespaceNotEmpty"
 	// ProjectEventNamespaceDeletionFailed indicates that the namespace deletion failed.
 	ProjectEventNamespaceDeletionFailed = "NamespaceDeletionFailed"
 	// ProjectEventNamespaceMarkedForDeletion indicates that the namespace has been successfully marked for deletion.

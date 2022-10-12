@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
@@ -45,7 +44,7 @@ func NewPodExecutor(config *rest.Config) PodExecutor {
 
 // PodExecutor is the pod executor interface
 type PodExecutor interface {
-	Execute(ctx context.Context, namespace, name, containerName, command, commandArg string) (io.Reader, error)
+	Execute(namespace, name, containerName, command, commandArg string) (io.Reader, error)
 }
 
 type podExecutor struct {
@@ -53,7 +52,7 @@ type podExecutor struct {
 }
 
 // Execute executes a command on a pod
-func (p *podExecutor) Execute(ctx context.Context, namespace, name, containerName, command, commandArg string) (io.Reader, error) {
+func (p *podExecutor) Execute(namespace, name, containerName, command, commandArg string) (io.Reader, error) {
 	client, err := corev1client.NewForConfig(p.config)
 	if err != nil {
 		return nil, err
@@ -71,12 +70,11 @@ func (p *podExecutor) Execute(ctx context.Context, namespace, name, containerNam
 		Param("stdin", "true").
 		Param("stdout", "true").
 		Param("stderr", "true").
-		Param("tty", "false").
-		Context(ctx)
+		Param("tty", "false")
 
 	executor, err := remotecommand.NewSPDYExecutor(p.config, http.MethodPost, request.URL())
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialized the command exector: %v", err)
+		return nil, fmt.Errorf("failed to initialized the command exector: %w", err)
 	}
 
 	err = executor.Stream(remotecommand.StreamOptions{
@@ -93,22 +91,22 @@ func (p *podExecutor) Execute(ctx context.Context, namespace, name, containerNam
 }
 
 // GetPodLogs retrieves the pod logs of the pod of the given name with the given options.
-func GetPodLogs(podInterface corev1client.PodInterface, name string, options *corev1.PodLogOptions) ([]byte, error) {
+func GetPodLogs(ctx context.Context, podInterface corev1client.PodInterface, name string, options *corev1.PodLogOptions) ([]byte, error) {
 	request := podInterface.GetLogs(name, options)
 
-	stream, err := request.Stream()
+	stream, err := request.Stream(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { utilruntime.HandleError(stream.Close()) }()
 
-	return ioutil.ReadAll(stream)
+	return io.ReadAll(stream)
 }
 
 // ForwardPodPort tries to forward the <remote> port of the pod with name <name> in namespace <namespace> to
 // the <local> port. If <local> equals zero, a free port will be chosen randomly.
 // It returns the stop channel which must be closed when the port forward connection should be terminated.
-func (c *Clientset) ForwardPodPort(namespace, name string, local, remote int) (chan struct{}, error) {
+func (c *clientSet) ForwardPodPort(namespace, name string, local, remote int) (chan struct{}, error) {
 	fw, stopChan, err := c.setupForwardPodPort(namespace, name, local, remote)
 	if err != nil {
 		return nil, err
@@ -119,10 +117,10 @@ func (c *Clientset) ForwardPodPort(namespace, name string, local, remote int) (c
 // CheckForwardPodPort tries to forward the <remote> port of the pod with name <name> in namespace <namespace> to
 // the <local> port. If <local> equals zero, a free port will be chosen randomly.
 // It returns true if the port forward connection has been established successfully or false otherwise.
-func (c *Clientset) CheckForwardPodPort(namespace, name string, local, remote int) error {
+func (c *clientSet) CheckForwardPodPort(namespace, name string, local, remote int) error {
 	fw, stopChan, err := c.setupForwardPodPort(namespace, name, local, remote)
 	if err != nil {
-		return fmt.Errorf("could not setup pod port forwarding: %v", err)
+		return fmt.Errorf("could not setup pod port forwarding: %w", err)
 	}
 
 	errChan := make(chan error)
@@ -133,7 +131,7 @@ func (c *Clientset) CheckForwardPodPort(namespace, name string, local, remote in
 
 	select {
 	case err = <-errChan:
-		return fmt.Errorf("error forwarding ports: %v", err)
+		return fmt.Errorf("error forwarding ports: %w", err)
 	case <-fw.Ready:
 		return nil
 	case <-time.After(time.Second * 5):
@@ -141,11 +139,11 @@ func (c *Clientset) CheckForwardPodPort(namespace, name string, local, remote in
 	}
 }
 
-func (c *Clientset) setupForwardPodPort(namespace, name string, local, remote int) (*portforward.PortForwarder, chan struct{}, error) {
+func (c *clientSet) setupForwardPodPort(namespace, name string, local, remote int) (*portforward.PortForwarder, chan struct{}, error) {
 	var (
 		stopChan  = make(chan struct{}, 1)
 		readyChan = make(chan struct{}, 1)
-		out       = ioutil.Discard
+		out       = io.Discard
 		localPort int
 	)
 

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
+Copyright (c) 2021 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,12 +28,16 @@ type Interface interface {
 	BackupBuckets() BackupBucketInformer
 	// BackupEntries returns a BackupEntryInformer.
 	BackupEntries() BackupEntryInformer
+	// Bastions returns a BastionInformer.
+	Bastions() BastionInformer
 	// Clusters returns a ClusterInformer.
 	Clusters() ClusterInformer
 	// ContainerRuntimes returns a ContainerRuntimeInformer.
 	ContainerRuntimes() ContainerRuntimeInformer
 	// ControlPlanes returns a ControlPlaneInformer.
 	ControlPlanes() ControlPlaneInformer
+	// DNSRecords returns a DNSRecordInformer.
+	DNSRecords() DNSRecordInformer
 	// Extensions returns a ExtensionInformer.
 	Extensions() ExtensionInformer
 	// Infrastructures returns a InfrastructureInformer.
@@ -67,6 +71,11 @@ func (v *version) BackupEntries() BackupEntryInformer {
 	return &backupEntryInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
+// Bastions returns a BastionInformer.
+func (v *version) Bastions() BastionInformer {
+	return &bastionInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
 // Clusters returns a ClusterInformer.
 func (v *version) Clusters() ClusterInformer {
 	return &clusterInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
@@ -80,6 +89,11 @@ func (v *version) ContainerRuntimes() ContainerRuntimeInformer {
 // ControlPlanes returns a ControlPlaneInformer.
 func (v *version) ControlPlanes() ControlPlaneInformer {
 	return &controlPlaneInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// DNSRecords returns a DNSRecordInformer.
+func (v *version) DNSRecords() DNSRecordInformer {
+	return &dNSRecordInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // Extensions returns a ExtensionInformer.

@@ -89,6 +89,16 @@ type ProjectStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,1,opt,name=observedGeneration"`
 	// Phase is the current phase of the project.
 	Phase ProjectPhase `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=ProjectPhase"`
+	// StaleSinceTimestamp contains the timestamp when the project was first discovered to be stale/unused.
+	// +optional
+	StaleSinceTimestamp *metav1.Time `json:"staleSinceTimestamp,omitempty" protobuf:"bytes,3,opt,name=staleSinceTimestamp"`
+	// StaleAutoDeleteTimestamp contains the timestamp when the project will be garbage-collected/automatically deleted
+	// because it's stale/unused.
+	// +optional
+	StaleAutoDeleteTimestamp *metav1.Time `json:"staleAutoDeleteTimestamp,omitempty" protobuf:"bytes,4,opt,name=staleAutoDeleteTimestamp"`
+	// LastActivityTimestamp contains the timestamp from the last activity performed in this project.
+	// +optional
+	LastActivityTimestamp *metav1.Time `json:"lastActivityTimestamp,omitempty" protobuf:"bytes,5,opt,name=lastActivityTimestamp"`
 }
 
 // ProjectMember is a member of a project.
@@ -99,7 +109,7 @@ type ProjectMember struct {
 	// Role represents the role of this member.
 	// IMPORTANT: Be aware that this field will be removed in the `v1` version of this API in favor of the `roles`
 	// list.
-	// TODO: Remove this field in favor of the `owner` role in `v1`.
+	// TODO: Remove this field in favor of the `roles` list in `v1`.
 	Role string `json:"role" protobuf:"bytes,2,opt,name=role"`
 	// Roles represents the list of roles of this member.
 	// +optional
@@ -137,7 +147,8 @@ const (
 	ProjectMemberOwner = "owner"
 	// ProjectMemberViewer is a const for a role that provides limited permissions to only view some resources.
 	ProjectMemberViewer = "viewer"
-
+	// ProjectMemberUserAccessManager is a const for a role that provides permissions to manage human user(s, (groups)).
+	ProjectMemberUserAccessManager = "uam"
 	// ProjectMemberExtensionPrefix is a prefix for custom roles that are not known by Gardener.
 	ProjectMemberExtensionPrefix = "extension:"
 )
@@ -159,6 +170,8 @@ const (
 	ProjectEventNamespaceReconcileFailed = "NamespaceReconcileFailed"
 	// ProjectEventNamespaceReconcileSuccessful indicates that the namespace reconciliation has succeeded.
 	ProjectEventNamespaceReconcileSuccessful = "NamespaceReconcileSuccessful"
+	// ProjectEventNamespaceNotEmpty indicates that the namespace cannot be released because it is not empty.
+	ProjectEventNamespaceNotEmpty = "NamespaceNotEmpty"
 	// ProjectEventNamespaceDeletionFailed indicates that the namespace deletion failed.
 	ProjectEventNamespaceDeletionFailed = "NamespaceDeletionFailed"
 	// ProjectEventNamespaceMarkedForDeletion indicates that the namespace has been successfully marked for deletion.
