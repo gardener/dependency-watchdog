@@ -220,7 +220,7 @@ func (kc *kindCluster) Delete() error {
 		return err
 	}
 	// cleanup the kubeconfig file
-	err = os.Remove(kc.kubeConfigPath)
+	err = os.RemoveAll(kc.kubeConfigPath)
 	if err != nil {
 		log.Printf("Failed to remove test kubeconfig file at %s. This should ideally not happen! : %v", kc.kubeConfigPath, err)
 	}
