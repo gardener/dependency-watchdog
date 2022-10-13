@@ -35,11 +35,7 @@ func isRateLimited(err error) bool {
 }
 
 func shootHibernationStateChanged(old, new *gardenerv1alpha1.Cluster) bool {
-	decoder, err := extensionscontroller.NewGardenDecoder()
-	if err != nil {
-		klog.V(4).Infof("Error getting gardener decoder for cluster %v. Err: %v", new.Name, err)
-		return false
-	}
+	decoder := extensionscontroller.NewGardenDecoder()
 
 	oldShoot, err := extensionscontroller.ShootFromCluster(decoder, old)
 	if err != nil {

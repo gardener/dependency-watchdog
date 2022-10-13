@@ -186,7 +186,7 @@ func (c *Controller) processEndpoint(ctx context.Context, key string) error {
 		return nil
 	}
 
-	ep, err := c.clientset.CoreV1().Endpoints(namespace).Get(name, metav1.GetOptions{})
+	ep, err := c.clientset.CoreV1().Endpoints(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		// The endpoint resource may no longer exist, in which case we stop
 		// processing.
@@ -261,7 +261,7 @@ func (c *Controller) shootDependentPodsIfNecessary(ctx context.Context, namespac
 
 	for {
 		retry, err := func() (bool, error) {
-			w, err := c.clientset.CoreV1().Pods(namespace).Watch(metav1.ListOptions{
+			w, err := c.clientset.CoreV1().Pods(namespace).Watch(ctx, metav1.ListOptions{
 				LabelSelector: selector.String(),
 			})
 			if err != nil {
@@ -307,7 +307,7 @@ func (c *Controller) shootDependentPodsIfNecessary(ctx context.Context, namespac
 
 func (c *Controller) processPod(ctx context.Context, pod *v1.Pod) error {
 	// Validate pod status again before shoot it out.
-	po, err := c.clientset.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
+	po, err := c.clientset.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("error getting pod %s", pod.Name)
 	}
@@ -315,5 +315,5 @@ func (c *Controller) processPod(ctx context.Context, pod *v1.Pod) error {
 		return nil
 	}
 	klog.Infof("Deleting pod: %v", po.Name)
-	return c.clientset.CoreV1().Pods(po.Namespace).Delete(po.Name, &metav1.DeleteOptions{})
+	return c.clientset.CoreV1().Pods(po.Namespace).Delete(ctx, po.Name, metav1.DeleteOptions{})
 }

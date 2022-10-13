@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
+Copyright (c) 2021 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,9 +28,11 @@ type ExtensionsV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	BackupBucketsGetter
 	BackupEntriesGetter
+	BastionsGetter
 	ClustersGetter
 	ContainerRuntimesGetter
 	ControlPlanesGetter
+	DNSRecordsGetter
 	ExtensionsGetter
 	InfrastructuresGetter
 	NetworksGetter
@@ -51,6 +53,10 @@ func (c *ExtensionsV1alpha1Client) BackupEntries() BackupEntryInterface {
 	return newBackupEntries(c)
 }
 
+func (c *ExtensionsV1alpha1Client) Bastions(namespace string) BastionInterface {
+	return newBastions(c, namespace)
+}
+
 func (c *ExtensionsV1alpha1Client) Clusters() ClusterInterface {
 	return newClusters(c)
 }
@@ -61,6 +67,10 @@ func (c *ExtensionsV1alpha1Client) ContainerRuntimes(namespace string) Container
 
 func (c *ExtensionsV1alpha1Client) ControlPlanes(namespace string) ControlPlaneInterface {
 	return newControlPlanes(c, namespace)
+}
+
+func (c *ExtensionsV1alpha1Client) DNSRecords(namespace string) DNSRecordInterface {
+	return newDNSRecords(c, namespace)
 }
 
 func (c *ExtensionsV1alpha1Client) Extensions(namespace string) ExtensionInterface {

@@ -5,6 +5,7 @@
 package restarter
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -225,7 +226,7 @@ func TestDeleteOnlyCrashloopBackoffPods(t *testing.T) {
 	watcher.Add(pC)
 	watcher.Add(pH)
 
-	pl, err := f.client.CoreV1().Pods(metav1.NamespaceDefault).List(metav1.ListOptions{})
+	pl, err := f.client.CoreV1().Pods(metav1.NamespaceDefault).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("error fetching pods: %v", err)
 	}
@@ -241,7 +242,7 @@ func TestDeleteOnlyCrashloopBackoffPods(t *testing.T) {
 	// Wait for the dependency watchdog to take action.
 	time.Sleep(2 * time.Second)
 
-	pl, err = f.client.CoreV1().Pods(metav1.NamespaceDefault).List(metav1.ListOptions{})
+	pl, err = f.client.CoreV1().Pods(metav1.NamespaceDefault).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("error fetching pods: %v", err)
 	}
@@ -297,12 +298,12 @@ func TestDeletePodTransitioningToCrashloopBackoff(t *testing.T) {
 		t.Fatalf("error creating Deployment controller: %v", err)
 	}
 
-	pl, err := f.client.CoreV1().Pods(metav1.NamespaceDefault).List(metav1.ListOptions{})
+	pl, err := f.client.CoreV1().Pods(metav1.NamespaceDefault).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("error fetching pods: %v", err)
 	}
 	watcher.Add(pH)
-	pl, err = f.client.CoreV1().Pods(metav1.NamespaceDefault).List(metav1.ListOptions{})
+	pl, err = f.client.CoreV1().Pods(metav1.NamespaceDefault).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("error fetching pods: %v", err)
 	}
@@ -317,14 +318,14 @@ func TestDeletePodTransitioningToCrashloopBackoff(t *testing.T) {
 	}()
 
 	t.Logf("Making pod go into CrashloopBackoff and wait for 2 seconds.")
-	pU, err := f.client.CoreV1().Pods(metav1.NamespaceDefault).Update(makePodUnhealthy(pH))
+	pU, err := f.client.CoreV1().Pods(metav1.NamespaceDefault).Update(context.TODO(), makePodUnhealthy(pH), metav1.UpdateOptions{})
 	if err != nil {
 		t.Fatalf("error updating pods: %v", err)
 	}
 	watcher.Modify(pU)
 	time.Sleep(2 * time.Second)
 
-	pl, err = f.client.CoreV1().Pods(metav1.NamespaceDefault).List(metav1.ListOptions{})
+	pl, err = f.client.CoreV1().Pods(metav1.NamespaceDefault).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("error fetching pods: %v", err)
 	}

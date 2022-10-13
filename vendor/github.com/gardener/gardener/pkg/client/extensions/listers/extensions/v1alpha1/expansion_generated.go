@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
+Copyright (c) 2021 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,6 +26,14 @@ type BackupBucketListerExpansion interface{}
 // BackupEntryLister.
 type BackupEntryListerExpansion interface{}
 
+// BastionListerExpansion allows custom methods to be added to
+// BastionLister.
+type BastionListerExpansion interface{}
+
+// BastionNamespaceListerExpansion allows custom methods to be added to
+// BastionNamespaceLister.
+type BastionNamespaceListerExpansion interface{}
+
 // ClusterListerExpansion allows custom methods to be added to
 // ClusterLister.
 type ClusterListerExpansion interface{}
@@ -45,6 +53,14 @@ type ControlPlaneListerExpansion interface{}
 // ControlPlaneNamespaceListerExpansion allows custom methods to be added to
 // ControlPlaneNamespaceLister.
 type ControlPlaneNamespaceListerExpansion interface{}
+
+// DNSRecordListerExpansion allows custom methods to be added to
+// DNSRecordLister.
+type DNSRecordListerExpansion interface{}
+
+// DNSRecordNamespaceListerExpansion allows custom methods to be added to
+// DNSRecordNamespaceLister.
+type DNSRecordNamespaceListerExpansion interface{}
 
 // ExtensionListerExpansion allows custom methods to be added to
 // ExtensionLister.
