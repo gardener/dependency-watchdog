@@ -66,4 +66,4 @@ test:
 	@.ci/test
 
 .PHONY: verify
-verify: check test
+verify: check format test
