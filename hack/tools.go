@@ -1,3 +1,4 @@
+//go:build tools
 // +build tools
 
 // SPDX-FileCopyrightText: 2019 SAP SE or an SAP affiliate company and Gardener contributors
@@ -8,5 +9,7 @@
 package tools
 
 import (
+	_ "github.com/gardener/gardener/hack"
 	_ "github.com/onsi/ginkgo/ginkgo"
+	_ "golang.org/x/tools/cmd/goimports"
 )
