@@ -160,7 +160,7 @@ func runRoot(cmd *cobra.Command, args []string) {
 		go func() {
 			err := serveMetrics()
 			if err != nil {
-				klog.Fatalf("Can't serve metrics: %s", err)
+				klog.Errorf("Can't serve metrics: %s", err)
 			}
 		}()
 		klog.Info("Starting endpoint controller.")

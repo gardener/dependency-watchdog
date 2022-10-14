@@ -6,7 +6,6 @@ VERSION             := $(shell cat VERSION)
 REGISTRY            := eu.gcr.io/gardener-project/gardener
 IMAGE_REPOSITORY    := $(REGISTRY)/dependency-watchdog
 IMAGE_TAG           := $(VERSION)
-BUILD_DIR           := build
 BIN_DIR             := bin
 
 # Tools
@@ -37,7 +36,7 @@ build-local:
 
 .PHONY: docker-image
 docker-image: 
-	@docker build -t $(IMAGE_REPOSITORY):$(IMAGE_TAG) -f $(BUILD_DIR)/Dockerfile --rm .
+	@docker build -t $(IMAGE_REPOSITORY):$(IMAGE_TAG) -f Dockerfile --rm .
 
 .PHONY: docker-push
 docker-push:
@@ -47,6 +46,7 @@ docker-push:
 .PHONY: clean
 clean:
 	@rm -rf $(BIN_DIR)/
+	@rm -rf $(TOOLS_BIN_DIR)
 
 .PHONY: check
 check: $(GOIMPORTS) $(GOLANGCI_LINT)
@@ -57,7 +57,7 @@ format:
 	@./hack/format.sh ./cmd ./pkg
 
 .PHONY: test
-test:
+test: $(GINKGO)
 	@.ci/test
 
 .PHONY: verify
