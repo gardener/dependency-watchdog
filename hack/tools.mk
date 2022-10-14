@@ -25,6 +25,9 @@ GOLANGCI_LINT_VERSION ?= v1.48.0
 GO_VULN_CHECK_VERSION ?= latest
 GOIMPORTS_VERSION ?= latest
 
+# add ./hack/tools/bin to the PATH
+export TOOLS_BIN_DIR := $(TOOLS_BIN_DIR)
+export PATH := $(abspath $(TOOLS_BIN_DIR)):$(PATH)
 
 $(GO_VULN_CHECK):
 	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install golang.org/x/vuln/cmd/govulncheck@$(GO_VULN_CHECK_VERSION)
