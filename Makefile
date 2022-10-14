@@ -2,9 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-TOOLS_DIR := hack/tools
-TOOLS_BIN_DIR              := $(TOOLS_DIR)/bin
-GO_VULN_CHECK              := $(TOOLS_BIN_DIR)/govulncheck
 VERSION             := $(shell cat VERSION)
 REGISTRY            := eu.gcr.io/gardener-project/gardener
 IMAGE_REPOSITORY    := $(REGISTRY)/dependency-watchdog
@@ -12,11 +9,9 @@ IMAGE_TAG           := $(VERSION)
 BUILD_DIR           := build
 BIN_DIR             := bin
 
-# default tool versions
-GO_VULN_CHECK_VERSION ?= latest
-
-$(GO_VULN_CHECK):
-	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install golang.org/x/vuln/cmd/govulncheck@$(GO_VULN_CHECK_VERSION)
+# Tools
+TOOLS_DIR := hack/tools
+include hack/tools.mk
 
 .PHONY: revendor
 revendor:
@@ -54,12 +49,12 @@ clean:
 	@rm -rf $(BIN_DIR)/
 
 .PHONY: check
-check:
-	@.ci/check
+check: $(GOIMPORTS) $(GOLANGCI_LINT)
+	@./hack/check.sh --golangci-lint-config=./.golangci.yaml ./cmd/... ./pkg/...
 
 .PHONY: format
 format:
-	@./vendor/github.com/gardener/gardener/hack/format.sh ./cmd ./pkg
+	@./hack/format.sh ./cmd ./pkg
 
 .PHONY: test
 test:
