@@ -100,7 +100,7 @@ func init() {
 	rootCmd.Flags().StringVar(&strWatchDuration, "watch-duration", defaultWatchDuration, "The duration to watch dependencies after the service is ready.")
 
 	klog.InitFlags(nil)
-	flag.Set("logtostderr", "true")
+	_ = flag.Set("logtostderr", "true")
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 }
 
@@ -157,7 +157,12 @@ func runRoot(cmd *cobra.Command, args []string) {
 	leaderElectionClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, "dependency-watchdog-election"))
 	recorder := createRecorder(leaderElectionClient)
 	run := func(ctx context.Context) {
-		go serveMetrics()
+		go func() {
+			err := serveMetrics()
+			if err != nil {
+				klog.Fatalf("Can't serve metrics: %s", err)
+			}
+		}()
 		klog.Info("Starting endpoint controller.")
 		if err = controller.Run(concurrentSyncs); err != nil {
 			klog.Fatalf("Error running controller: %s", err.Error())

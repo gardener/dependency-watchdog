@@ -84,7 +84,6 @@ func NewController(clientset kubernetes.Interface,
 			} else {
 				klog.V(5).Infof("Ignore update event on cluster: %v", newCluster.Name)
 			}
-			return
 		},
 	})
 	c.secretsInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
