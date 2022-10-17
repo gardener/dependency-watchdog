@@ -84,7 +84,7 @@ func TestErrorInUnMarshallingYaml(t *testing.T) {
 	config, err := LoadConfig(configPath)
 	g.Expect(err).To(HaveOccurred(), "LoadConfig should not give error for a valid config")
 	g.Expect(config).To(BeNil(), "LoadConfig should got nil config for a valid file")
-	g.Expect(err.Error()).To(ContainSubstring("string was used where mapping is expected"), "Wrong error recieved")
+	g.Expect(err.Error()).To(ContainSubstring("cannot unmarshal string into Go struct field DependentResourceInfo.dependentResourceInfos.scaleUp"), "Wrong error recieved")
 }
 
 func TestValidConfigShouldPassAllValidations(t *testing.T) {

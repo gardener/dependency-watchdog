@@ -160,7 +160,8 @@ func testProberCommonEnvTest(t *testing.T) {
 		{"deletion time stamp check", testProberShouldBeRemovedIfDeletionTimeStampIsSet},
 		{"no prober if shoot creation is not successful", testShootCreationNotComplete},
 		{"no prober if shoot control plane is migrating", testShootIsMigrating},
-		{"start prober if last operation is restore", testLastOperationIsRestore},
+		{"no prober if shoot control plane is restoring after migrate", testShootRestoringIsNotComplete},
+		{"start prober if last operation is restore and successfully", testLastOperationIsRestoreAndSuccessful},
 		{"start prober if last operation is reconciliation of shoot", testLastOperationIsShootReconciliation},
 	}
 
@@ -308,10 +309,23 @@ func testShootIsMigrating(t *testing.T, crClient client.Client, reconciler *Clus
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
-func testLastOperationIsRestore(t *testing.T, crClient client.Client, reconciler *ClusterReconciler) {
+func testShootRestoringIsNotComplete(t *testing.T, crClient client.Client, reconciler *ClusterReconciler) {
 	g := NewWithT(t)
 	cluster, shoot := createClusterResource()
-	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeRestore, "")
+	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
+	// cluster migration starts
+	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeMigrate, "")
+	updateClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
+	// cluster migrate done, restore in progress
+	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeRestore, gardencorev1beta1.LastOperationStateProcessing)
+	updateClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
+	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
+}
+
+func testLastOperationIsRestoreAndSuccessful(t *testing.T, crClient client.Client, reconciler *ClusterReconciler) {
+	g := NewWithT(t)
+	cluster, shoot := createClusterResource()
+	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeRestore, gardencorev1beta1.LastOperationStateSucceeded)
 	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }

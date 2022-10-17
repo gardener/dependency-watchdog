@@ -3,6 +3,7 @@ package weeder
 import (
 	"fmt"
 	multierr "github.com/hashicorp/go-multierror"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"path/filepath"
 	"testing"
 
@@ -23,7 +24,7 @@ func TestCheckIfDefaultValuesAreSetForAllOptionalMissingValues(t *testing.T) {
 
 	g.Expect(err).ToNot(HaveOccurred(), "LoadConfig should not give any error for a valid config file")
 	g.Expect(config).ToNot(BeNil(), "LoadConfig should not return nil for a valid config file")
-	g.Expect(*config.WatchDuration).To(Equal(DefaultWatchDuration), "LoadConfig should set watchDuration to DefaultWatchDuration if not set in the config file")
+	g.Expect(*config.WatchDuration).To(Equal(metav1.Duration{Duration: DefaultWatchDuration}), "LoadConfig should set watchDuration to DefaultWatchDuration if not set in the config file")
 	t.Log("All default values are set")
 }
 

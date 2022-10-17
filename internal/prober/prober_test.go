@@ -157,7 +157,7 @@ func TestInternalProbeShouldNotRunIfClientNotCreated(t *testing.T) {
 		expectedExternalProbeSuccessCount: 0,
 		expectedExternalProbeErrorCount:   0,
 	}
-	config = createConfig(1, 2, metav1.Duration{Duration: 5 * time.Millisecond}, metav1.Duration{time.Microsecond}, 0.2)
+	config = createConfig(1, 2, metav1.Duration{Duration: 5 * time.Millisecond}, metav1.Duration{Duration: time.Microsecond}, 0.2)
 	msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, err).Times(2)
 	runProberAndCheckStatus(t, 8*time.Millisecond, entry)
 }
@@ -174,7 +174,7 @@ func TestExternalProbeShouldNotRunIfClientNotCreated(t *testing.T) {
 		expectedExternalProbeSuccessCount: 0,
 		expectedExternalProbeErrorCount:   0,
 	}
-	config = createConfig(1, 2, metav1.Duration{5 * time.Millisecond}, metav1.Duration{time.Microsecond}, 0.2)
+	config = createConfig(1, 2, metav1.Duration{Duration: 5 * time.Millisecond}, metav1.Duration{Duration: time.Microsecond}, 0.2)
 	msc.EXPECT().CreateClient(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(context.Context, string, string, time.Duration) (kubernetes.Interface, error) {
 		counter++
 		if counter%2 == 1 {
