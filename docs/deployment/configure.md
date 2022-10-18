@@ -27,7 +27,7 @@ Prober can be configured via the following flags:
 
 A probe configuration is mounted as `ConfigMap` to the prober container. The path to the config file is configured via `config-file` command line argument as mentioned above. Prober will start one probe per Shoot control plane hosted within the Seed cluster. Each such probe will run asynchronously and will periodically connect to the Kube ApiServer of the Shoot. Configuration below will influence each such probe.
 
-You can view the example YAML configuration provided as `data` in a `ConfigMap` [here](../../example/03-dwd-prober-configmap.yaml).
+You can view the example YAML configuration provided as `data` in a `ConfigMap` [here](../../example/04-dwd-prober-configmap.yaml).
 
 | Name | Type |  Required | Default Value | Description |
 | --- | --- | --- | --- | --- |
