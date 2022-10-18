@@ -4,10 +4,6 @@
 * [Prober](concepts/prober.md)
 * [Weeder](concepts/weeder.md)
 
-## Usage
-
 ## Development
-
-* [Setting up a development environment]()
-* [Contributions]()
-* [Testing]()
+* [Contributions](development/contribution.md)
+* [Testing](development/testing.md)
