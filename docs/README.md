@@ -2,6 +2,7 @@
 
 ## Concepts
 * [Prober](concepts/prober.md)
+* [Probe State transitions](concepts/probestatus.md)
 * [Weeder](concepts/weeder.md)
 
 ## Development
