@@ -12,10 +12,3 @@ For any new contributions **tests are a strict requirement**. `Boy Scouts Rule` 
 
 
 
-
-## Setting up Local Garden cluster
-
-A convenient way to test local dependency-watchdog changes is to use a local garden cluster.
-To setup a local garden cluster you can follow the [setup-guide](https://github.com/gardener/gardener/blob/master/docs/deployment/getting_started_locally.md).
-
-As part of the local garden installation, a `local` seed will be available. Following resources will be created for dependency watchdog components:
