@@ -1,8 +1,9 @@
 package scaler
 
 import (
-	"k8s.io/client-go/rest"
 	"net/http"
+
+	"k8s.io/client-go/rest"
 )
 
 // DisableKeepAlive sets `DisableKeepAlive` to true on the transport that is use by the underline rest client

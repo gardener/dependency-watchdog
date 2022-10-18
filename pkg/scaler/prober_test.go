@@ -86,7 +86,7 @@ var _ = Describe("prober", func() {
 		}
 
 		if kubeconfig != "" {
-			indexer.Add(&corev1.Secret{
+			indexingError := indexer.Add(&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      secretName,
 					Namespace: ns,
@@ -95,6 +95,9 @@ var _ = Describe("prober", func() {
 					"kubeconfig": []byte(kubeconfig),
 				},
 			})
+			if indexingError != nil {
+				return
+			}
 
 			var snl = p.secretLister.Secrets(ns)
 			Expect(snl).ToNot(BeNil())

@@ -6,18 +6,25 @@ VERSION             := $(shell cat VERSION)
 REGISTRY            := eu.gcr.io/gardener-project/gardener
 IMAGE_REPOSITORY    := $(REGISTRY)/dependency-watchdog
 IMAGE_TAG           := $(VERSION)
-BUILD_DIR           := build
 BIN_DIR             := bin
+
+# Tools
+TOOLS_DIR := hack/tools
+include hack/tools.mk
 
 .PHONY: revendor
 revendor:
-	@env GO111MODULE=on go mod vendor -v
 	@env GO111MODULE=on go mod tidy -v
+	@env GO111MODULE=on go mod vendor -v
 
 .PHONY: update-dependencies
 update-dependencies:
 	@env GO111MODULE=on go get -u
 	@make revendor
+
+.PHONY: check-vulnerabilities
+check-vulnerabilities: $(GO_VULN_CHECK)
+	$(GO_VULN_CHECK) ./...
 
 .PHONY: build
 build: 
@@ -29,7 +36,7 @@ build-local:
 
 .PHONY: docker-image
 docker-image: 
-	@docker build -t $(IMAGE_REPOSITORY):$(IMAGE_TAG) -f $(BUILD_DIR)/Dockerfile --rm .
+	@docker build -t $(IMAGE_REPOSITORY):$(IMAGE_TAG) -f Dockerfile --rm .
 
 .PHONY: docker-push
 docker-push:
@@ -39,14 +46,19 @@ docker-push:
 .PHONY: clean
 clean:
 	@rm -rf $(BIN_DIR)/
+	@rm -rf $(TOOLS_BIN_DIR)
 
 .PHONY: check
-check:
-	@.ci/check
+check: $(GOIMPORTS) $(GOLANGCI_LINT)
+	@./hack/check.sh --golangci-lint-config=./.golangci.yaml ./cmd/... ./pkg/...
+
+.PHONY: format
+format:
+	@./hack/format.sh ./cmd ./pkg
 
 .PHONY: test
-test:
+test: $(GINKGO)
 	@.ci/test
 
 .PHONY: verify
-verify: check test
+verify: check format test

@@ -241,7 +241,7 @@ func (c *Controller) processEndpoint(ctx context.Context, key string) error {
 	return nil
 }
 
-func (c *Controller) shootPodsIfNecessary(ctx context.Context, namespace string, srv api.Service) error {
+func (c *Controller) shootPodsIfNecessary(ctx context.Context, namespace string, srv api.Service) {
 	for _, dependantPod := range srv.Dependants {
 		go func(depPods api.DependantPods) {
 			err := c.shootDependentPodsIfNecessary(ctx, namespace, &depPods)
@@ -250,7 +250,6 @@ func (c *Controller) shootPodsIfNecessary(ctx context.Context, namespace string,
 			}
 		}(dependantPod)
 	}
-	return nil
 }
 
 func (c *Controller) shootDependentPodsIfNecessary(ctx context.Context, namespace string, depPods *api.DependantPods) error {

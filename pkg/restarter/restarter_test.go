@@ -19,7 +19,6 @@ import (
 	kubeclient "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	test "k8s.io/client-go/testing"
-	"k8s.io/client-go/tools/cache"
 )
 
 var (
@@ -41,8 +40,6 @@ services:
 	//          - main`
 
 	watchDuration = 2 * 60 * time.Second
-	alwaysReady   = func() bool { return true }
-	neverReady    = func() bool { return false }
 )
 
 type fixture struct {
@@ -53,12 +50,6 @@ type fixture struct {
 	client  kubeclient.Interface
 	// Objects to put in the store.
 	endpoints []*v1.Endpoints
-}
-
-type depController struct {
-	*Controller
-	podStore       cache.Store
-	endpointsStore cache.Store
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -176,7 +167,7 @@ func (f *fixture) newController(deps *api.ServiceDependants, stopCh chan struct{
 
 	c := NewController(f.client, informers, deps, watchDuration, stopCh)
 	for _, d := range f.endpoints {
-		informers.Apps().V1().Deployments().Informer().GetIndexer().Add(d)
+		_ = informers.Apps().V1().Deployments().Informer().GetIndexer().Add(d)
 	}
 	return c, informers, nil
 }
@@ -236,7 +227,10 @@ func TestDeleteOnlyCrashloopBackoffPods(t *testing.T) {
 
 	go func() {
 		t.Logf("Starting dep watchdog.\n")
-		c.Run(1)
+		err := c.Run(1)
+		if err != nil {
+			t.Errorf("Error running controller: %s", err)
+		}
 	}()
 
 	// Wait for the dependency watchdog to take action.
@@ -298,12 +292,12 @@ func TestDeletePodTransitioningToCrashloopBackoff(t *testing.T) {
 		t.Fatalf("error creating Deployment controller: %v", err)
 	}
 
-	pl, err := f.client.CoreV1().Pods(metav1.NamespaceDefault).List(context.TODO(), metav1.ListOptions{})
+	_, err = f.client.CoreV1().Pods(metav1.NamespaceDefault).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("error fetching pods: %v", err)
 	}
 	watcher.Add(pH)
-	pl, err = f.client.CoreV1().Pods(metav1.NamespaceDefault).List(context.TODO(), metav1.ListOptions{})
+	pl, err := f.client.CoreV1().Pods(metav1.NamespaceDefault).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("error fetching pods: %v", err)
 	}
@@ -314,7 +308,10 @@ func TestDeletePodTransitioningToCrashloopBackoff(t *testing.T) {
 
 	go func() {
 		t.Logf("Starting dep watchdog.\n")
-		c.Run(1)
+		err := c.Run(1)
+		if err != nil {
+			t.Errorf("Error running controller: %s", err.Error())
+		}
 	}()
 
 	t.Logf("Making pod go into CrashloopBackoff and wait for 2 seconds.")

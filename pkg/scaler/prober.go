@@ -33,12 +33,7 @@ import (
 	"k8s.io/utils/pointer"
 )
 
-type probeType int
-
 const (
-	externalProbe = iota
-	internalProbe
-
 	defaultInitialDelaySeconds = 30
 	defaultPeriodSeconds       = 10
 	defaultScaleTimeoutSeconds = 10
@@ -184,7 +179,7 @@ func (p *prober) shootNotReady() (bool, error) {
 		klog.Errorf("Error extracting shoot from cluster. Cluster: %s, Err: %s", clusterName, err.Error())
 		return true, err
 	}
-	if (shoot.Spec.Hibernation == nil || shoot.Spec.Hibernation.Enabled == nil || *shoot.Spec.Hibernation.Enabled == false) && shoot.Status.IsHibernated == false {
+	if (shoot.Spec.Hibernation == nil || shoot.Spec.Hibernation.Enabled == nil || !*shoot.Spec.Hibernation.Enabled) && !shoot.Status.IsHibernated {
 		return false, nil
 	}
 	return true, nil
@@ -440,10 +435,7 @@ func (p *prober) checkSecretsRotated(err error, pr *probeResult) bool {
 }
 
 func (p *prober) checkThrottled(err error) bool {
-	if apierrors.IsTooManyRequests(err) {
-		return true
-	}
-	return false
+	return apierrors.IsTooManyRequests(err)
 }
 
 func (p *prober) updateClientsSecrets(pr *probeResult, msg string) {
@@ -665,7 +657,7 @@ func (p *prober) checkScaleRefDependsOn(ctx context.Context, prefix string, depe
 					klog.Errorf("%s: Could not find the target reference for %s: %s", prefix, dependsOnScaleRef.Name, err)
 					return false
 				}
-				var availableReplicas = int32(0)
+				availableReplicas := int32(0)
 				availableReplicas = d.Status.AvailableReplicas // check if available replicas is as desired
 				if !checkFn(availableReplicas, replicas) {
 					klog.V(4).Infof("%s: check for dependent %s succeeded as desired=%d and available=%d", prefix, d.Name, replicas, availableReplicas)

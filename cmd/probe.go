@@ -103,7 +103,12 @@ func runProbe(cmd *cobra.Command, args []string) {
 	leaderElectionClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, "dependency-watchdog-election"))
 	recorder := createRecorder(leaderElectionClient)
 	run := func(ctx context.Context) {
-		go serveMetrics()
+		go func() {
+			err := serveMetrics()
+			if err != nil {
+				klog.Errorf("Can't serve metrics: %s", err)
+			}
+		}()
 		klog.Info("Starting endpoint controller.")
 		if err = controller.Run(concurrentSyncs); err != nil {
 			klog.Fatalf("Error running controller: %s", err.Error())

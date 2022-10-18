@@ -1,3 +1,4 @@
+//go:build tools
 // +build tools
 
 // SPDX-FileCopyrightText: 2019 SAP SE or an SAP affiliate company and Gardener contributors
