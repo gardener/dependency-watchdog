@@ -16,12 +16,6 @@ Avoiding cascading failure is handled by `Prober` component and expediting recov
 
 See our documentation in the /docs repository, please [find the index here](docs/README.md).
 
-
-**Gardener Setup**
-
-Dependency watchdog prober runs as a central component in the garden namespace of a seed cluster. A seed cluster hosts the control planes for several shoot clusters setup and running in dedicated shoot-control namespaces. Prober will have access to the internal and external KubeConfig required to connect to the Kube Apiserver runnning in each of the shoot-control namespaces. A dedicated prober instance will be created per shoot which will run asynchronously as long as the shoot control plane is up and running.
-
-
 ## Feedback and Support
 
 We always look forward to active community engagement.
