@@ -70,5 +70,6 @@ Only for the sake of demonstration lets pick the first service -> dependent pods
   * `notReady` -> no backing pod is Ready
   * `Ready`    -> atleast one backing pod is Ready
 * Weeder doesn't respond on `Delete` events
+* Weeder will always wait for the entire `watchDuration`. If the dependent pods transition to CrashLoopBackOff after the watch duration or even after repeated deletion of these pods they do not recover then weeder will exit. Quality of service offered via a weeder is only Best-Effort.
 
 
