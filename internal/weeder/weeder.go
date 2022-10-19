@@ -2,6 +2,7 @@ package weeder
 
 import (
 	"context"
+
 	wapi "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
@@ -40,13 +41,7 @@ func NewWeeder(parentCtx context.Context, namespace string, config *wapi.Config,
 
 func (w *Weeder) Run() {
 	for _, ps := range w.dependantSelectors.PodSelectors {
-		pw := podWatcher{
-			eventHandlerFn: shootPodIfNecessary,
-			selector:       ps,
-			weeder:         w,
-			log:            w.logger,
-		}
-		go pw.watch()
+		go newPodWatcher(w, ps, shootPodIfNecessary).watch()
 	}
 	// weeder should wait till the context expires
 	<-w.ctx.Done()
@@ -56,8 +51,7 @@ func shootPodIfNecessary(ctx context.Context, log logr.Logger, crClient client.C
 	if !shouldDeletePod(targetPod) {
 		return nil
 	}
-	log.Info("Deleting pod", "podName", targetPod.Name)
-
+	log.Info("Deleting pod", "namespace", targetPod.Namespace, "podName", targetPod.Name)
 	return crClient.Delete(ctx, targetPod)
 }
 

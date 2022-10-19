@@ -13,3 +13,13 @@ To prevent downtime to consumer workloads that are running on the nodes of the s
 
 ## Dependency Watchdog Prober in Gardener
 
+Prober is a central component which is set up in the `garden` namespace in the seed cluster. If you are not familiar with what gardener components like seed, shoot then please see the [appendix](#appendix) for links.
+
+
+<img src="content/prober-components.png">
+
+
+## Appendix
+
+* [Gardener](https://github.com/gardener/gardener/blob/master/docs)
+* [Reverse Cluster VPN](https://github.com/gardener/gardener/blob/master/docs/proposals/14-reversed-cluster-vpn.md)

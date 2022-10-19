@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"context"
+	"time"
+
 	wapi "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/gardener/dependency-watchdog/internal/weeder"
 	"github.com/go-logr/logr"
@@ -12,7 +14,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"time"
 )
 
 // EndpointReconciler reconciles an Endpoints object
@@ -36,7 +37,7 @@ func (r *EndpointReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err != nil {
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, err
 	}
-	log.Info("Starting a new weeder for endpoint, replacing old weeder, if any exists")
+	log.Info("Starting a new weeder for endpoint, replacing old weeder, if any exists", "namespace", req.Namespace, "endpoint", ep.Name)
 	r.startWeeder(ctx, log, req.Namespace, &ep)
 	return ctrl.Result{}, nil
 }

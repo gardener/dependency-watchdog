@@ -22,12 +22,14 @@ Prober can be configured via the following flags:
 | leader-elect-renew-deadline | time.Duration | No | 10s | The interval between attempts by the acting master to renew a leadership slot before it stops leading. This must be less than or equal to the lease duration. This is only applicable if leader election is enabled. |
 | leader-elect-retry-period | time.Duration | No | 2s | The duration the clients should wait between attempting acquisition and renewal of a leadership. This is only applicable if leader election is enabled. |
 
+You can view an example kubernetes prober [deployment](../../example/01-dwd-prober-deployment.yaml) YAML to see how these command line args are configured.
+
 
 ## Probe Configuration
 
 A probe configuration is mounted as `ConfigMap` to the prober container. The path to the config file is configured via `config-file` command line argument as mentioned above. Prober will start one probe per Shoot control plane hosted within the Seed cluster. Each such probe will run asynchronously and will periodically connect to the Kube ApiServer of the Shoot. Configuration below will influence each such probe.
 
-You can view the example YAML configuration provided as `data` in a `ConfigMap` [here](../../example/04-dwd-prober-configmap.yaml).
+You can view an example YAML configuration provided as `data` in a `ConfigMap` [here](../../example/04-dwd-prober-configmap.yaml).
 
 | Name | Type |  Required | Default Value | Description |
 | --- | --- | --- | --- | --- |
@@ -119,3 +121,6 @@ Order of scale down will be:
 1. kube-controller-manager
 2. machine-controller-manager after (1) has been scaled down.
 3. cluster-autoscaler after (2) has been scaled down.
+
+
+## Weeder
