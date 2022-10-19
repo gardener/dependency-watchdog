@@ -1,17 +1,7 @@
 # Probe Status & Transitions
 
-## Table of Contents
-- [Probe Status & Transitions](#probe-status--transitions)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Probe status](#probe-status)
-  - [Probe status transitions](#probe-status-transitions)
-    - [Probe failure identification](#probe-failure-identification)
+## Overview
 
-## Summary
-
-`DWD` periodically polls the shoot `Kube-API-Server` using an `Internal` and `External` probe. If the `Internal` 
-probe is not successful then it will skip the `External` probe and subsequent actions which needs to be taken based on the result of the `External` probe.
 In this document we describe the transitions of status of a probe and what actions are taken when a probe succeeds or fails.
 
 ## Probe status
