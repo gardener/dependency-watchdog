@@ -49,16 +49,16 @@ clean:
 	@rm -rf $(TOOLS_BIN_DIR)
 
 .PHONY: check
-check: $(GOIMPORTS) $(GOLANGCI_LINT)
-	@./hack/check.sh --golangci-lint-config=./.golangci.yaml ./cmd/... ./pkg/...
+check: $(GOIMPORTS) $(GOLANGCI_LINT) $(GOMEGACHECK) $(LOGCHECK)
+	@./hack/check.sh --golangci-lint-config=./.golangci.yaml ./controllers/... ./internal/...
 
 .PHONY: format
 format:
-	@./hack/format.sh ./cmd ./pkg
+	@./hack/format.sh ./controllers ./internal
 
 .PHONY: test
-test: $(GINKGO)
-	@.ci/test
+test:
+	go test ./... -coverprofile cover.out
 
 .PHONY: verify
 verify: check format test

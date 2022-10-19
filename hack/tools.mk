@@ -19,13 +19,15 @@ TOOLS_BIN_DIR              := $(TOOLS_DIR)/bin
 GOLANGCI_LINT              := $(TOOLS_BIN_DIR)/golangci-lint
 GO_VULN_CHECK              := $(TOOLS_BIN_DIR)/govulncheck
 GOIMPORTS                  := $(TOOLS_BIN_DIR)/goimports
-GINKGO                     := $(TOOLS_BIN_DIR)/ginkgo
+GOMEGACHECK			  	   := $(TOOLS_BIN_DIR)/gomegacheck.so # plugin binary
+LOGCHECK		           := $(TOOLS_BIN_DIR)/logcheck.so # plugin binary
 
 #default tool versions
 GOLANGCI_LINT_VERSION ?= v1.48.0
 GO_VULN_CHECK_VERSION ?= latest
 GOIMPORTS_VERSION ?= latest
-GINKGO_VERSION ?= v1.16.4
+GOMEGACHECK_VERSION ?= latest
+LOGCHECK_VERSION ?= latest
 
 # add ./hack/tools/bin to the PATH
 export TOOLS_BIN_DIR := $(TOOLS_BIN_DIR)
@@ -42,5 +44,8 @@ $(GOLANGCI_LINT):
 $(GOIMPORTS):
 	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION)
 
-$(GINKGO):
-	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/onsi/ginkgo/ginkgo@$(GINKGO_VERSION)
+$(GOMEGACHECK):
+	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/gardener/gardener/hack/tools/gomegacheck@$(GOMEGACHECK_VERSION)
+
+$(LOGCHECK):
+	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/gardener/gardener/hack/tools/logcheck@$(LOGCHECK_VERSION)
