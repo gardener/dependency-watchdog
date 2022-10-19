@@ -2,14 +2,15 @@
 
 ## Overview
 
-Weeder is a loop which watches a k8s service for any downtime, and after the recovery of the service from the downtime, it restarts any Crashlooping pods which depends on that service.
-This is helpful because kubernetes pod restarts a container with an exponential backoff when the pod is in `CrashLoopBackOff` state. This backoff could become quite large if the service stays down for long. Presence of weeder would not let that happen as it'll restart the pod.
+Weeder watches for updation to service endpoints and on receipt of such an event it will create a time-bound watch for all configured dependent pods that needs to be actively recovered in case they have not yet recovered from `CrashLoopBackoff` state. In a nutshell it accelerates recovery of pods when a upstream service recovers.
+
+An interference in automatic recovery for dependent pods is required because kubernetes pod restarts a container with an exponential backoff when the pod is in `CrashLoopBackOff` state. This backoff could become quite large if the service stays down for long. Presence of weeder would not let that happen as it'll restart the pod.
 
 ## Prerequisites
 
 Before we understand how Weeder works, we need to be familiar with kubernetes [services & endpoints](https://kubernetes.io/docs/concepts/services-networking/service/).
 
-> NOTE: Services can be defined without selectors in which case endpoints objects are not created. The given documentation is explained with assumption that services with label selectors are used so using them interchangably. Though they are supported because Weeder doesn't take the service resource into account, its only concerned with endpoints resource. So in the config file for weeder, only endpoints name should be specified.
+> NOTE: If a kubernetes service is created with selectors then kubernetes will create corresponding endpoint resource which will have the same name as that of the service. In weeder implementation service and endpoint name is used interchangeably.
 
 ## Config
 
@@ -17,26 +18,53 @@ Weeder can be configured via command line arguments and a weeder configuration. 
 
 ## Internals
 
-Weeder keeps a watch on the events for the specified endpoints in the config. For every endpoints a list of `podSelectors` can be specified. It cretes a weeder object per endpoints resource when it receives a satisfactory `Create` or `Update` event. Then for every podSelector it creates a goroutine. This goroutine keeps a watch on the pods with labels as per the podSelector and kills any pod which turn into `CrashLoopBackOff`. Goroutine live for 5minutes by default. This time is configurable using the `watchDuration` in the config.
+Weeder keeps a watch on the events for the specified endpoints in the config. For every endpoints a list of `podSelectors` can be specified. It cretes a weeder object per endpoints resource when it receives a satisfactory `Create` or `Update` event. Then for every podSelector it creates a goroutine. This goroutine keeps a watch on the pods with labels as per the podSelector and kills any pod which turn into `CrashLoopBackOff`. Each weeder lives for `watchDuration` interval which has a default value of 5 mins if not explicitly set.
 
-Lets consider the diagram below
+To understand the actions taken by the weeder lets use the following diagram as a reference.
+<img src="content/weeder-components.excalidraw.png">
+Let us also assume the following configuration for the weeder:
 
-![Weeder example](content/weeder-concept-example.png)
+```yaml
+watchDuration: 2m0s
+servicesAndDependantSelectors:
+  etcd-main-client: # name of the service/endpoint for etcd statefulset that weeder will receive events for.
+    podSelectors: # all pods matching the label selector are direct dependencies for etcd service
+      - matchExpressions:
+          - key: gardener.cloud/role
+            operator: In
+            values:
+              - controlplane
+          - key: role
+            operator: In
+            values:
+              - apiserver
+  kube-apiserver: # name of the service/endpoint for kube-api-server pods that weeder will receive events for. 
+    podSelectors: # all pods matching the label selector are direct dependencies for kube-api-server service
+      - matchExpressions:
+          - key: gardener.cloud/role
+            operator: In
+            values:
+              - controlplane
+          - key: role
+            operator: NotIn
+            values:
+              - main
+              - apiserver
+```
+Only for the sake of demonstration lets pick the first service -> dependent pods tuple (`etcd-main-client` as the service endpoint).
 
-The diagram depicts the two (service,dependent-pods) relations specified in the config file specified in the [config-file-for-weeder](#config) section. Lets consider the (etcd,KAPI) relation for now.</br>
+> 1. Assume that there are 3 replicas for etcd statefulset.
+> 2. Time here is just for showing the series of events
 
-**Note**: Time here is just for showing the series of events
-
-* `t=0` -> both etcd pods go down (assuming 2)
-* `t=10` -> KAPI starts CrashLooping
-* `t=100` -> both etcd pods recover together
+* `t=0` -> all etcd pods go down 
+* `t=10` -> kube-api-server pods transition to CrashLoopBackOff
+* `t=100` -> all etcd pods recover together
 * `t=101` -> Weeder sees `Update` event for `etcd-main-client` endpoints resource
-* `t=102` -> go routine created to keep watch on KAPI pods
-* `t=103` -> KAPI pod deleted
-* `t=104` -> new KAPI pod created by replica-set controller in KCM
+* `t=102` -> go routine created to keep watch on kube-api-server pods
+* `t=103` -> Since kube-api-server pods are still in CrashLoopBackOff, weeder deletes the pods to accelerate the recovery.
+* `t=104` -> new kube-api-server pod created by replica-set controller in kube-controller-manager
 
-
-## Points to Note
+### Points to Note
 
 * Weeder only respond on `Update` events where a `notReady` endpoints resource turn to `Ready`. Thats why there was no weeder action at time `t=10` in the example above.
   * `notReady` -> no backing pod is Ready

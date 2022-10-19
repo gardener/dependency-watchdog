@@ -17,7 +17,7 @@ However, this is one such use case and usage of prober can be extended to other 
 
 Prober is a central component which is set up in the `garden` namespace in the seed cluster. Control plane components for a shoot are deployed in a dedicated control-namespace for the shoot within the seed cluster. 
 
-<img src="content/prober-components.png">
+<img src="content/prober-components.excalidraw.png">
 
 > NOTE: If you are not familiar with what gardener components like seed, shoot then please see the [appendix](#appendix) for links.
 
@@ -47,6 +47,8 @@ In the following cases it will either remove an existing probe for this cluster 
 3. There is an ongoing seed migration for this cluster.
 
 If none of the above conditions are true and there is no existing probe for this cluster then a new probe will be created, registered and started.
+
+For details on transitions of a probe see [probe-state-transition](probestatus.md).
 
 ## Appendix
 
