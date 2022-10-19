@@ -15,7 +15,7 @@ dependency-watchdog:
           dependency-watchdog:
             registry: 'gcr-readwrite'
             image: 'eu.gcr.io/gardener-project/gardener/dependency-watchdog'
-            dockerfile: 'build/Dockerfile'
+            dockerfile: 'Dockerfile'
             inputs:
               repos:
                 source: ~
