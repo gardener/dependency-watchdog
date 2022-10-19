@@ -2,9 +2,9 @@
 
 ## Prober
 
-Dependency watchdog prober command takes command-line-flags which are meant fine-tune the prober. In addition a `ConfigMap` is also mounted to the prober container which provides tuning knobs for the all probes that the prober starts.
+Dependency watchdog prober command takes command-line-flags which are meant to fine-tune the prober. In addition a `ConfigMap` is also mounted to the container which provides tuning knobs for the all probes that the prober starts.
 
-## Command line arguments
+### Command line arguments
 
 Prober can be configured via the following flags:
 
@@ -25,9 +25,9 @@ Prober can be configured via the following flags:
 You can view an example kubernetes prober [deployment](../../example/01-dwd-prober-deployment.yaml) YAML to see how these command line args are configured.
 
 
-## Probe Configuration
+### Prober Configuration
 
-A probe configuration is mounted as `ConfigMap` to the prober container. The path to the config file is configured via `config-file` command line argument as mentioned above. Prober will start one probe per Shoot control plane hosted within the Seed cluster. Each such probe will run asynchronously and will periodically connect to the Kube ApiServer of the Shoot. Configuration below will influence each such probe.
+A probe configuration is mounted as `ConfigMap` to the container. The path to the config file is configured via `config-file` command line argument as mentioned above. Prober will start one probe per Shoot control plane hosted within the Seed cluster. Each such probe will run asynchronously and will periodically connect to the Kube ApiServer of the Shoot. Configuration below will influence each such probe.
 
 You can view an example YAML configuration provided as `data` in a `ConfigMap` [here](../../example/04-dwd-prober-configmap.yaml).
 
@@ -124,3 +124,30 @@ Order of scale down will be:
 
 
 ## Weeder
+
+Dependency watchdog weeder command also (just like the prober command) takes command-line-flags which are meant to fine-tune the weeder. In addition a `ConfigMap` is also mounted to the container which helps in defining the dependency of pods on endpoints.
+
+### Command Line Arguments
+
+Weeder can be configured with the same flags as that for prober described under [command-line-arguments](#command-line-arguments) section
+You can find an example weeder [deployment](../../example/02-dwd-weeder-deployment.yaml) YAML to see how these command line args are configured.
+
+### Weeder Configuration
+
+Weeder configuration is mounted as `ConfigMap` to the container. The path to the config file is configured via `config-file` command line argument as mentioned above. Weeder will start one go routine per podSelector per endpoint on an endpoint event as described in [weeder internal concepts](../concepts/weeder.md#internals). 
+
+You can view the example YAML configuration provided as `data` in a `ConfigMap` [here](../../example/03-dwd-weeder-configmap.yaml).
+
+| Name                         | Type             | Required | Default Value | Description                                                                                              |
+|------------------------------|------------------|----------|---------------|----------------------------------------------------------------------------------------------------------|
+| watchDuration                | *metav1.Duration | No       | 5m0s          | The time duration for which watch is kept on dependent pods to see if anyone turns to `CrashLoopBackoff` |
+| servicesAndDependantSelectors | map[string]DependantSelectors           | Yes      | NA            | Endpoint name and its corresponding dependent pods. More info below.                                     |
+
+### DependantSelectors
+
+If the service recovers from downtime, then weeder starts to watch for CrashLoopBackOff pods. These pods are identified by info stored in this property.
+
+| Name                         | Type             | Required | Default Value | Description                                                                                                       |
+|------------------------------|------------------|----------|---------------|-------------------------------------------------------------------------------------------------------------------|
+| podSelectors                | []*metav1.LabelSelector | Yes      | NA            | This is a list of [Label selector](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1@v0.24.3#LabelSelector) |
+

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Weeder watches for updation to service endpoints and on receipt of such an event it will create a time-bound watch for all configured dependent pods that needs to be actively recovered in case they have not yet recovered from `CrashLoopBackoff` state. In a nutshell it accelerates recovery of pods when a upstream service recovers.
+Weeder watches for an update to service endpoints and on receiving such an event it will create a time-bound watch for all configured dependent pods that need to be actively recovered in case they have not yet recovered from `CrashLoopBackoff` state. In a nutshell it accelerates recovery of pods when an upstream service recovers.
 
 An interference in automatic recovery for dependent pods is required because kubernetes pod restarts a container with an exponential backoff when the pod is in `CrashLoopBackOff` state. This backoff could become quite large if the service stays down for long. Presence of weeder would not let that happen as it'll restart the pod.
 
