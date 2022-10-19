@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"testing"
+
 	v12 "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
@@ -9,7 +11,6 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"testing"
 )
 
 func turnReady(ep *v1.Endpoints) {

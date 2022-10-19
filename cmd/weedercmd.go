@@ -3,6 +3,7 @@ package cmd
 import (
 	"flag"
 	"fmt"
+
 	"github.com/gardener/dependency-watchdog/controllers"
 	internalutils "github.com/gardener/dependency-watchdog/internal/util"
 	"github.com/gardener/dependency-watchdog/internal/weeder"
@@ -14,6 +15,7 @@ import (
 )
 
 var (
+	// WeederCmd stores info about the weeder command
 	WeederCmd = &Command{
 		Name:      "weeder",
 		UsageLine: "",

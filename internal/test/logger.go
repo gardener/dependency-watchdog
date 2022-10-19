@@ -2,8 +2,9 @@ package test
 
 import (
 	"fmt"
-	"go.uber.org/zap"
 	"log"
+
+	"go.uber.org/zap"
 	kindlog "sigs.k8s.io/kind/pkg/log"
 )
 

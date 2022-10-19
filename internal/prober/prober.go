@@ -2,8 +2,9 @@ package prober
 
 import (
 	"context"
-	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"time"
+
+	papi "github.com/gardener/dependency-watchdog/api/prober"
 
 	"github.com/gardener/dependency-watchdog/internal/util"
 	"github.com/go-logr/logr"
@@ -74,35 +75,35 @@ func (p *Prober) Run() {
 func (p *Prober) probe(ctx context.Context) {
 	internalShootClient, err := p.setupProbeClient(ctx, p.namespace, p.config.InternalKubeConfigSecretName)
 	if err != nil {
-		p.l.Error(err, "failed to create shoot client using internal secret, ignoring error, internal probe will be re-attempted", "namespace", p.namespace)
+		p.l.Error(err, "Failed to create shoot client using internal secret, ignoring error, internal probe will be re-attempted", "namespace", p.namespace)
 		return
 	}
 	p.probeInternal(internalShootClient)
 	if p.internalProbeStatus.isHealthy(*p.config.SuccessThreshold) {
 		externalShootClient, err := p.setupProbeClient(ctx, p.namespace, p.config.ExternalKubeConfigSecretName)
 		if err != nil {
-			p.l.Error(err, "failed to create shoot client using external secret, ignoring error, probe will be re-attempted", "namespace", p.namespace)
+			p.l.Error(err, "Failed to create shoot client using external secret, ignoring error, probe will be re-attempted", "namespace", p.namespace)
 			return
 		}
 		p.probeExternal(externalShootClient)
 		// based on the external probe result it will either scale up or scale down
 		if p.externalProbeStatus.isUnhealthy(*p.config.FailureThreshold) {
-			p.l.V(4).Info("external probe is un-healthy, checking if scale down is already done or is still pending", "namespace", p.namespace)
+			p.l.V(4).Info("External probe is un-healthy, checking if scale down is already done or is still pending", "namespace", p.namespace)
 			err := p.scaler.ScaleDown(ctx)
 			if err != nil {
-				p.l.Error(err, "failed to scale down resources", "namespace", p.namespace)
+				p.l.Error(err, "Failed to scale down resources", "namespace", p.namespace)
 			}
 			return
 		}
 		if p.externalProbeStatus.isHealthy(*p.config.SuccessThreshold) {
-			p.l.V(4).Info("external probe is healthy, checking if scale up is already done or is still pending", "namespace", p.namespace)
+			p.l.V(4).Info("External probe is healthy, checking if scale up is already done or is still pending", "namespace", p.namespace)
 			err := p.scaler.ScaleUp(ctx)
 			if err != nil {
-				p.l.Error(err, "failed to scale up resources", "namespace", p.namespace)
+				p.l.Error(err, "Failed to scale up resources", "namespace", p.namespace)
 			}
 		}
 	} else {
-		p.l.V(4).Info("internal probe is not healthy, skipping external probe check and subsequent scaling", "namespace", p.namespace)
+		p.l.V(4).Info("Internal probe is not healthy, skipping external probe check and subsequent scaling", "namespace", p.namespace)
 	}
 }
 
@@ -120,15 +121,15 @@ func (p *Prober) probeInternal(shootClient kubernetes.Interface) {
 	if err != nil {
 		if !p.internalProbeStatus.canIgnoreProbeError(err) {
 			p.internalProbeStatus.recordFailure(err, *p.config.FailureThreshold, p.config.InternalProbeFailureBackoffDuration.Duration)
-			p.l.Info("recording internal probe failure", "err", err.Error(), "failedAttempts", p.internalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
+			p.l.Info("Recording internal probe failure", "err", err.Error(), "failedAttempts", p.internalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
 		} else {
 			p.internalProbeStatus.handleIgnorableError(err)
-			p.l.Info("internal probe was not successful. ignoring this error, will retry probe", "err", err.Error(), "namespace", p.namespace)
+			p.l.Info("Internal probe was not successful. ignoring this error, will retry probe", "err", err.Error(), "namespace", p.namespace)
 		}
 		return
 	}
 	p.internalProbeStatus.recordSuccess(*p.config.SuccessThreshold)
-	p.l.V(4).Info("internal probe is successful", "namespace", p.namespace, "successfulAttempts", p.internalProbeStatus.successCount, "successThreshold", p.config.SuccessThreshold)
+	p.l.V(4).Info("Internal probe is successful", "namespace", p.namespace, "successfulAttempts", p.internalProbeStatus.successCount, "successThreshold", p.config.SuccessThreshold)
 }
 
 func (p *Prober) probeExternal(shootClient kubernetes.Interface) {
@@ -137,15 +138,15 @@ func (p *Prober) probeExternal(shootClient kubernetes.Interface) {
 	if err != nil {
 		if !p.externalProbeStatus.canIgnoreProbeError(err) {
 			p.externalProbeStatus.recordFailure(err, *p.config.FailureThreshold, 0)
-			p.l.Info("recording external probe failure", "err", err.Error(), "failedAttempts", p.externalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
+			p.l.Info("Recording external probe failure", "err", err.Error(), "failedAttempts", p.externalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
 			return
 		}
 		p.externalProbeStatus.handleIgnorableError(err)
-		p.l.Info("external probe was not successful. ignoring this error, will retry probe", "err", err.Error(), "namespace", p.namespace)
+		p.l.Info("External probe was not successful. ignoring this error, will retry probe", "err", err.Error(), "namespace", p.namespace)
 		return
 	}
 	p.externalProbeStatus.recordSuccess(*p.config.SuccessThreshold)
-	p.l.V(4).Info("external probe is successful", "namespace", p.namespace, "successfulAttempts", p.externalProbeStatus.successCount)
+	p.l.V(4).Info("External probe is successful", "namespace", p.namespace, "successfulAttempts", p.externalProbeStatus.successCount)
 }
 
 func backOffIfNeeded(ps *probeStatus) {

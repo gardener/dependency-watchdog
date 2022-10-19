@@ -2,10 +2,11 @@ package util
 
 import (
 	"context"
-	"k8s.io/client-go/tools/clientcmd"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/gardener/dependency-watchdog/internal/test"
 	. "github.com/onsi/gomega"

@@ -20,12 +20,14 @@ const (
 )
 
 var (
+	// Commands is a list of possible commands that could be run
 	Commands = []*Command{
 		ProberCmd,
 		WeederCmd,
 	}
 )
 
+// Command defines a command with all its required properties
 type Command struct {
 	Name      string
 	UsageLine string
@@ -80,6 +82,7 @@ type LeaderElectionOpts struct {
 	RetryPeriod time.Duration
 }
 
+// SetSharedOpts helps in defining the location where the command flag values would be stored, it also defines default values for the flags.
 func SetSharedOpts(fs *flag.FlagSet, opts *SharedOpts) {
 	fs.StringVar(&opts.ConfigFile, "config-file", "", "Path of the config file containing the configuration")
 	fs.IntVar(&opts.ConcurrentReconciles, "concurrent-reconciles", defaultConcurrentReconciles, "Maximum number of concurrent reconciles")

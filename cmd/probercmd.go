@@ -23,6 +23,7 @@ const (
 )
 
 var (
+	// ProberCmd stores info about using the prober command
 	ProberCmd = &Command{
 		Name:      "prober",
 		UsageLine: "",

@@ -35,13 +35,13 @@ func GetKubeConfigFromSecret(ctx context.Context, namespace, secretName string, 
 	secret := corev1.Secret{}
 	err := client.Get(ctx, secretKey, &secret)
 	if err != nil {
-		logger.Error(err, "failed to retrieve secret, will not be able to create shoot client", "namespace", namespace, "secretName", secretName)
+		logger.Error(err, "Failed to retrieve secret, will not be able to create shoot client", "namespace", namespace, "secretName", secretName)
 		return nil, err
 	}
 	// Extract the kubeconfig from the secret
 	kubeConfig, ok := secret.Data[kubeConfigSecretKey]
 	if !ok {
-		logger.Error(err, "secret does not have kube-config", "namespace", namespace, "secretName", secretName)
+		logger.Error(err, "Secret does not have kube-config", "namespace", namespace, "secretName", secretName)
 		return nil, fmt.Errorf("expected key: %s in {namespace: %s, secret: %s} is missing", kubeConfigSecretKey, secretName, namespace)
 	}
 	return kubeConfig, nil

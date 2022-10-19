@@ -2,6 +2,10 @@ package controllers
 
 import (
 	"context"
+	"path/filepath"
+	"testing"
+	"time"
+
 	internalutils "github.com/gardener/dependency-watchdog/internal/util"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -9,9 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/pointer"
-	"path/filepath"
-	"testing"
-	"time"
 
 	weederpackage "github.com/gardener/dependency-watchdog/internal/weeder"
 	. "github.com/onsi/gomega"

@@ -3,10 +3,11 @@ package prober
 import (
 	"context"
 	"errors"
-	papi "github.com/gardener/dependency-watchdog/api/prober"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"testing"
 	"time"
+
+	papi "github.com/gardener/dependency-watchdog/api/prober"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	mockprober "github.com/gardener/dependency-watchdog/internal/mock/prober"
 	mockinterface "github.com/gardener/dependency-watchdog/internal/mock/prober/k8s/client"

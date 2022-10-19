@@ -2,13 +2,14 @@ package weeder
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	v12 "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 )
@@ -34,7 +35,6 @@ func setupMgrTest(t *testing.T) (Manager, func(mgr Manager)) {
 	g := NewWithT(t)
 	mgr := NewManager()
 	g.Expect(mgr).ShouldNot(BeNil(), "NewManager should return a non nil manager")
-
 	return mgr, func(mgr Manager) {
 		g.Expect(mgr.UnregisterAll()).To(BeTrue())
 	}

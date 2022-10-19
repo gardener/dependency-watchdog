@@ -54,7 +54,7 @@ func (pw *podWatcher) watch() {
 			return
 		case event, ok := <-pw.k8sWatch.ResultChan():
 			if !ok {
-				pw.log.V(3).Info("Watch has stopped, recreating kubernetes watch", "namespace", pw.weeder.namespace, "service", pw.weeder.endpoints.Name, "selector", pw.selector, pw.selector.String())
+				pw.log.V(3).Info("Watch has stopped, recreating kubernetes watch", "namespace", pw.weeder.namespace, "service", pw.weeder.endpoints.Name, "selector", pw.selector.String())
 				pw.createK8sWatch(pw.weeder.ctx)
 				continue
 			}
@@ -63,7 +63,7 @@ func (pw *podWatcher) watch() {
 			}
 			targetPod := event.Object.(*v1.Pod)
 			if err := pw.eventHandlerFn(pw.weeder.ctx, pw.log, pw.weeder.ctrlClient, targetPod); err != nil {
-				pw.log.Error(err, "error processing pod ", "namespace", pw.weeder.namespace, "podName", targetPod.Name)
+				pw.log.Error(err, "Error processing pod ", "namespace", pw.weeder.namespace, "podName", targetPod.Name)
 			}
 		}
 	}

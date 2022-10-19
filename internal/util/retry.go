@@ -16,7 +16,7 @@ func Retry[T any](ctx context.Context, operation string, fn func() (T, error), n
 	for i := 1; i <= numAttempts; i++ {
 		select {
 		case <-ctx.Done():
-			logger.Error(ctx.Err(), "context has been cancelled, stopping retry", "operation", operation)
+			logger.Error(ctx.Err(), "Context has been cancelled, stopping retry", "operation", operation)
 			return RetryResult[T]{Err: ctx.Err()}
 		default:
 		}
@@ -25,15 +25,15 @@ func Retry[T any](ctx context.Context, operation string, fn func() (T, error), n
 			return RetryResult[T]{Value: result, Err: err}
 		}
 		if !canRetry(err) {
-			logger.Error(err, "exiting retry as canRetry has returned false", "operation", operation, "exitOnAttempt", i)
+			logger.Error(err, "Exiting retry as canRetry has returned false", "operation", operation, "exitOnAttempt", i)
 			return RetryResult[T]{Err: err}
 		}
 		select {
 		case <-ctx.Done():
-			logger.Error(ctx.Err(), "context has been cancelled, stopping retry", "operation", operation)
+			logger.Error(ctx.Err(), "Context has been cancelled, stopping retry", "operation", operation)
 			return RetryResult[T]{Err: ctx.Err()}
 		case <-time.After(backOff):
-			logger.V(4).Info("will attempt to retry operation", "operation", operation, "currentAttempt", i, "error", err)
+			logger.V(4).Info("Will attempt to retry operation", "operation", operation, "currentAttempt", i, "error", err)
 		}
 	}
 	return RetryResult[T]{Value: result, Err: err}
@@ -44,10 +44,10 @@ func RetryUntilPredicate(ctx context.Context, operation string, predicateFn func
 	for {
 		select {
 		case <-ctx.Done():
-			logger.V(4).Info("context has been cancelled, exiting retrying operation", "operation", operation)
+			logger.V(4).Info("Context has been cancelled, exiting retrying operation", "operation", operation)
 			return false
 		case <-timer.C:
-			logger.V(4).Info("timed out waiting for predicateFn to be true", "operation", operation)
+			logger.V(4).Info("Timed out waiting for predicateFn to be true", "operation", operation)
 			return false
 		default:
 			if predicateFn() {
@@ -65,12 +65,12 @@ func RetryOnError(ctx context.Context, operation string, retriableFn func() erro
 	for {
 		select {
 		case <-ctx.Done():
-			logger.V(4).Info("context has either timed-out or has been cancelled", "operation", operation)
+			logger.V(4).Info("Context has either timed-out or has been cancelled", "operation", operation)
 			return
 		default:
 			err := retriableFn()
 			if err != nil {
-				logger.Error(err, "Error encountered during retry. Will re-attempt if possible.", "operation", operation)
+				logger.Error(err, "Error encountered during retry. Will re-attempt if possible", "operation", operation)
 				time.Sleep(interval)
 				continue
 			}

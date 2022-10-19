@@ -2,10 +2,11 @@ package weeder
 
 import (
 	"fmt"
-	multierr "github.com/hashicorp/go-multierror"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"path/filepath"
 	"testing"
+
+	multierr "github.com/hashicorp/go-multierror"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	. "github.com/onsi/gomega"
 

@@ -3,11 +3,12 @@ package prober
 import (
 	"context"
 	"fmt"
-	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	papi "github.com/gardener/dependency-watchdog/api/prober"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
@@ -45,10 +46,10 @@ func NewDeploymentScaler(namespace string, config *papi.Config, client client.Cl
 		l:         logger,
 	}
 	scaleDownFlow := ds.createResourceScaleFlow(namespace, fmt.Sprintf("scale-down-%s", namespace), createScaleDownResourceInfos(config.DependentResourceInfos), util.ScaleDownReplicasMismatch)
-	ds.l.V(5).Info(fmt.Sprintf("created scaleDownFlow with flowStepInfos as %v", scaleDownFlow.flowStepInfos))
+	ds.l.V(5).Info("Created scaleDownFlow", "flowStepInfos", scaleDownFlow.flowStepInfos)
 	ds.scaleDownFlow = scaleDownFlow.flow
 	scaleUpFlow := ds.createResourceScaleFlow(namespace, fmt.Sprintf("scale-up-%s", namespace), createScaleUpResourceInfos(config.DependentResourceInfos), util.ScaleUpReplicasMismatch)
-	ds.l.V(5).Info(fmt.Sprintf("created scaleUpFlow with flowStepInfos as %v", scaleUpFlow.flowStepInfos))
+	ds.l.V(5).Info("Created scaleUpFlow", "flowStepInfos", scaleUpFlow.flowStepInfos)
 	ds.scaleUpFlow = scaleUpFlow.flow
 	return &ds
 }
@@ -201,7 +202,7 @@ func (ds *deploymentScaler) scale(ctx context.Context, resourceInfo scaleableRes
 	// sleep for initial delay
 	err = util.SleepWithContext(ctx, resourceInfo.initialDelay)
 	if err != nil {
-		ds.l.Error(err, "looks like the context has been cancelled. exiting scaling operation", "resourceInfo", resourceInfo)
+		ds.l.Error(err, "Looks like the context has been cancelled. exiting scaling operation", "resourceInfo", resourceInfo)
 		return err
 	}
 	deployment, err := util.GetDeploymentFor(ctx, ds.namespace, resourceInfo.ref.Name, ds.client, nil)
@@ -210,12 +211,12 @@ func (ds *deploymentScaler) scale(ctx context.Context, resourceInfo scaleableRes
 			ds.l.V(4).Info("Skipping scaling of resource as it is not found", "resourceInfo", resourceInfo)
 			return nil
 		}
-		ds.l.Error(err, "scaling operation skipped due to error in getting deployment", "resourceInfo", resourceInfo)
+		ds.l.Error(err, "Scaling operation skipped due to error in getting deployment", "resourceInfo", resourceInfo)
 		return err
 	}
 	if ds.shouldScale(ctx, deployment, resourceInfo.replicas, mismatchReplicas, waitOnResourceInfos) {
 		if _, err = ds.doScale(ctx, resourceInfo); err == nil {
-			ds.l.V(4).Info("resource has been scaled", "resInfo", resourceInfo)
+			ds.l.V(4).Info("Resource has been scaled", "resInfo", resourceInfo)
 		}
 	}
 	return err
@@ -223,13 +224,13 @@ func (ds *deploymentScaler) scale(ctx context.Context, resourceInfo scaleableRes
 
 func (ds *deploymentScaler) shouldScale(ctx context.Context, deployment *appsv1.Deployment, targetReplicas int32, mismatchReplicas mismatchReplicasCheckFn, waitOnResourceInfos []scaleableResourceInfo) bool {
 	if isIgnoreScalingAnnotationSet(deployment) {
-		ds.l.V(4).Info("scaling ignored due to explicit instruction via annotation", "namespace", ds.namespace, "deploymentName", deployment.Name, "annotation", ignoreScalingAnnotationKey)
+		ds.l.V(4).Info("Scaling ignored due to explicit instruction via annotation", "namespace", ds.namespace, "deploymentName", deployment.Name, "annotation", ignoreScalingAnnotationKey)
 		return false
 	}
 	// check the current replicas and compare it against the desired replicas
 	deploymentSpecReplicas := *deployment.Spec.Replicas
 	if !mismatchReplicas(deploymentSpecReplicas, targetReplicas) {
-		ds.l.V(4).Info("spec replicas matches the target replicas. scaling for this resource is skipped", "namespace", ds.namespace, "deploymentName", deployment.Name, "deploymentSpecReplicas", deploymentSpecReplicas, "targetReplicas", targetReplicas)
+		ds.l.V(4).Info("Spec replicas matches the target replicas. scaling for this resource is skipped", "namespace", ds.namespace, "deploymentName", deployment.Name, "deploymentSpecReplicas", deploymentSpecReplicas, "targetReplicas", targetReplicas)
 		return false
 	}
 	// check if all resources this resource should wait on have been scaled, if not then we cannot scale this resource.
@@ -251,20 +252,20 @@ func (ds *deploymentScaler) resourceMatchDesiredReplicas(ctx context.Context, re
 			ds.l.V(4).Info("Upstream resource not found. Ignoring this resource as its existence is marked as optional", "resource", resInfo.ref)
 			return true
 		}
-		ds.l.Error(err, "error trying to get Deployment for resource", "resource", resInfo.ref)
+		ds.l.Error(err, "Error trying to get Deployment for resource", "resource", resInfo.ref)
 		return false
 	}
 	if !isIgnoreScalingAnnotationSet(d) {
 		actualReplicas := d.Status.Replicas
 		if !mismatchReplicas(actualReplicas, resInfo.replicas) {
-			ds.l.V(4).Info("upstream resource has been scaled to desired replicas", "namespace", ds.namespace, "name", d.Name, "resInfo", resInfo, "replicas", actualReplicas)
+			ds.l.V(4).Info("Upstream resource has been scaled to desired replicas", "namespace", ds.namespace, "name", d.Name, "resInfo", resInfo, "replicas", actualReplicas)
 			return true
 		} else {
-			ds.l.V(5).Info("upstream resource has not been scaled to desired replicas", "namespace", ds.namespace, "name", d.Name, "resInfo", resInfo, "actualReplicas", actualReplicas)
+			ds.l.V(5).Info("Upstream resource has not been scaled to desired replicas", "namespace", ds.namespace, "name", d.Name, "resInfo", resInfo, "actualReplicas", actualReplicas)
 			return false
 		}
 	} else {
-		ds.l.V(5).Info("ignoring upstream resource due to explicit instruction via annotation", "namespace", ds.namespace, "name", d.Name, "resInfo", resInfo, "annotation", ignoreScalingAnnotationKey)
+		ds.l.V(5).Info("Ignoring upstream resource due to explicit instruction via annotation", "namespace", ds.namespace, "name", d.Name, "resInfo", resInfo, "annotation", ignoreScalingAnnotationKey)
 	}
 	return true
 }
@@ -322,7 +323,7 @@ func (ds *deploymentScaler) getGroupResource(resourceRef *autoscalingv1.CrossVer
 	}
 	mapping, err := ds.client.RESTMapper().RESTMapping(gk, gv.Version)
 	if err != nil {
-		ds.l.Error(err, "failed to get RESTMapping for resource", "resourceRef", resourceRef)
+		ds.l.Error(err, "Failed to get RESTMapping for resource", "resourceRef", resourceRef)
 		return schema.GroupResource{}, err
 	}
 	return mapping.Resource.GroupResource(), nil

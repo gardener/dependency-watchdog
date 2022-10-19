@@ -2,8 +2,9 @@ package prober
 
 import (
 	"context"
-	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"testing"
+
+	papi "github.com/gardener/dependency-watchdog/api/prober"
 
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/log"
