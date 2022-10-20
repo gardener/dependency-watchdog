@@ -62,3 +62,7 @@ test:
 
 .PHONY: verify
 verify: check format test
+
+.PHONY: update-license-headers
+update-license-headers: $(GO_ADD_LICENSE)
+	@./hack/addlicenseheaders.sh

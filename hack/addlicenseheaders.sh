@@ -16,7 +16,7 @@
 
 set -e
 
-echo "> Format"
+echo "> Adding Apache License header to all go files where it is not present"
 
 # shellcheck disable=SC2068
-goimports -l -w $@
+addlicense -v -c "SAP SE or an SAP affiliate company" -y 2022 -l apache -ignore vendor/** *.go
