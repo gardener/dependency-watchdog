@@ -24,9 +24,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
 
+// ControllerTestEnv is a convenience interface to be used by tests to access controller-runtime testEnv.
 type ControllerTestEnv interface {
+	// GetClient provides access to the kubernetes client.Client to access the Kube ApiServer.
 	GetClient() client.Client
+	// GetConfig provides access to *rest.Config.
 	GetConfig() *rest.Config
+	// Delete deletes the resources created as part of testEnv.
 	Delete()
 }
 
@@ -36,6 +40,7 @@ type controllerTestEnv struct {
 	testEnv    *envtest.Environment
 }
 
+// CreateControllerTestEnv creates a controller-runtime testEnv and provides access to the convenience interface to interact with it.
 func CreateControllerTestEnv() (ControllerTestEnv, error) {
 	testEnv := &envtest.Environment{}
 	cfg, err := testEnv.Start()

@@ -46,16 +46,26 @@ const (
 	kubeConfigFileName     = "kubeconfig"
 )
 
+// KindCluster provides a convenient interface to interact with a KIND cluster.
 type KindCluster interface {
+	// CreateNamespace creates a kubernetes namespace with the give name.
 	CreateNamespace(name string) error
+	// CreateDeployment creates a kubernetes deployment.
 	CreateDeployment(name, namespace, imageName string, replicas int32, annotations map[string]string) error
+	// DeleteAllDeployments deletes all kubernetes deployments in a given namespace.
 	DeleteAllDeployments(namespace string) error
+	// GetRestConfig provides access to *rest.Config.
 	GetRestConfig() *rest.Config
+	// GetClient provides access to client.Client to connect to the Kube ApiServer of the KIND cluster.
 	GetClient() client.Client
+	// GetDeployment looks up a kubernetes deployment with a given name and namespace and returns it if it is found else returns an error.
+	// The consumer will have to check if the error is NotFoundError and take appropriate action.
 	GetDeployment(namespace, name string) (*appsv1.Deployment, error)
+	// Delete deletes the KIND cluster.
 	Delete() error
 }
 
+// KindConfig holds configuration which will be used when creating a KIND cluster.
 type KindConfig struct {
 	Name                    string
 	NodeImage               string
