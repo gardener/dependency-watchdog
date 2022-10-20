@@ -3,36 +3,41 @@
 
 ## Overview
 
-Prober starts asynchronous and periodic probes for every shoot cluster's control plane. Each probe detects the reachability status for the Kube ApiServer for each shoot cluster and based on the status it takes decision to scale up/down dependent kubernetes deployments which are given as configuration to the prober.
+Prober runs asynchronous periodic probes for every shoot cluster's control plane. 
 
-### Why is this required?
+Each probe detects the reachability of `kube-apiserver` from the worker nodes and if the `kube-apiserver` is not reachable it will scale down the dependent kubernetes deployments which are given as [configuration](/example/04-dwd-prober-configmap.yaml) to the prober. Once the connectivity to `kube-apiserver` is reestablished, the prober will then proactively scale up the deployments it had scaled down earlier. 
 
-In a shoot cluster (a.k.a data plane) each node runs a kubelet which periodically renewes its lease. Leases serve as heartbeats informing Kube Controller Manager that the node is alive. The connectivity between the kubelet and the Kube ApiServer can break for different reasons and not recover in time. This happend for one of the large shoot cluster with several hundred nodes where the issue was with a NAT gateway on the shoot cluster which prevented the Kubelet to reach its control plane Kube ApiServer. As a consequence, Kube Controller Manager transitioned the nodes to `Unknown` state. 
+### Origin and Purpose
 
-There is another component namely Machine Controller Manager which also runs in the shoot control plane which reacts to any changes to the Node status and then takes action to recover backing VMs/machine(s). It waits for a timeout and then starts to bring up new machines and deletes the older machines. This has a potential for causing downtime for customer workloads that were running on existing nodes. It is therefore required that there be an actor which detects the connectivity loss to the Kubelet and proactively scales down components in the shoot control namespace which could exacerbate the availability of nodes in the shoot cluster. 
+In a shoot cluster (a.k.a data plane) each node runs a `kubelet` which periodically renews its lease. Leases serve as heartbeats informing Kube Controller Manager that the node is alive. The connectivity between the `kubelet` and the `kube- apiserver` can break for different reasons and not recover in time. 
 
-However, this is one such use case and usage of prober can be extended to other similar scenarios where the components involved might be different.
+As an example, imagine for one of the large shoot cluster with several hundred nodes, there is a broken NAT gateway at the Infra-Provider layer which prevents the `kubelet` to reach `kube-apiserver`. Although everything on the workers is running healthy and the kube-apiserver is accessible from the public endpoint, but as a consequence of missing heartbeat from `kubelet` for a defined grace period the Kube Controller Manager will start to transition the node(s) to `Unknown` state. Machine Controller Manager(MCM) which also runs in the shoot control plane and watches changes to the Node state shall wait for a grace period, and if the machines still remains in the `Unknown` status, `MCM` will then start to replace the unhealthy machine(s) with new ones. 
+
+This replacement of healthy machines due to a broken connectivity between the worker nodes and the control plane results in undesired downtimes for customer workloads that were running on these otherwise healthy nodes. It is therefore required that there be an actor which detects the connectivity loss to the `kubelet` and proactively scales down components in the shoot control namespace which could exacerbate the availability of nodes in the shoot cluster. 
+
+### Future Scope 
+Although in the current offering the Prober is tailored to handle one such use case of `kube-apiserver` connectivity, but the usage of prober can be extended to solve similar needs for other scenarios where the components involved might be different.
 
 ## Dependency Watchdog Prober in Gardener
 
-Prober is a central component which is set up in the `garden` namespace in the seed cluster. Control plane components for a shoot are deployed in a dedicated control-namespace for the shoot within the seed cluster. 
+Prober is a central component which is deployed in the `garden` namespace in the seed cluster. Control plane components for each shoot cluster are deployed in a dedicated shoot namespace within the seed cluster. 
 
 <img src="content/prober-components.excalidraw.png">
 
 > NOTE: If you are not familiar with what gardener components like seed, shoot then please see the [appendix](#appendix) for links.
 
-Prober periodically probes Kube ApiServer via two separate probes:
-1.  Internal Probe: Local cluster DNS name which resolves to the ClusterIP of the Kube Apiserver
-2.  External Probe: DNS name via which the kubelet running in each node in the data plane (a.k.a shoot in gardener terminology) communicates to the Kube Apiserver running in its control plane (a.k.a seed in gardener terminology)
+Prober periodically probes `kube-apiserver` via two separate probes:
+1.  Internal Probe: Local cluster DNS name which resolves to the ClusterIP of the `kube-apiserver`
+2.  External Probe: DNS name via which the kubelet running in each node in the data plane (a.k.a shoot in gardener terminology) communicates to the `kube-apiserver` running in its control plane (a.k.a seed in gardener terminology)
 
 ## Behind the scene
 
-For all live shoot clusters (which have not been hibernated or deleted or moved to another seed via control-plane-migration), prober will schedule a probe to run periodically. In a single run of a probe it will do the following:
-1. Tries to determine if the Kube ApiServer is reachable via local cluster DNS. This should always succeed and will fail only when the Kube ApiServer has gone down. If the Kube ApiServer is down then there can be no further damage to the existing shoot cluster (barring new requests to the Kube Api Server).
-2. Only if the probe is able to reach the Kube ApiServer via local cluster DNS, will it attempt to reach the Kube ApiServer via internal DNS route. This is the same DNS used by the kubelet. This is not an exact replication of how the kubelet would reach its Kube ApiServer but it is close enough. The result of the attempt to reach the Kube ApiServer is recorded in the probe status.
-3. If a probe fails to successfully reach the Kube ApiServer via interal DNS route `failureThreshold` times consecutively then it transitions the probe to `Failed` state.
-4. If and when a probe status transitions to `Failed` then it will initiate a scale-down operation as defined in the prober configuration.
-5. In subsequent runs it will keep checking if it is able to reach the Kube ApiServer via internal DNS route. If it is able to successfully reach it `successThreshold` times consecutively as defined in the prober configuration, then it will start the scale-up operation for components defined in the configuration.
+For all active shoot clusters (which have not been hibernated or deleted or moved to another seed via control-plane-migration), prober will schedule a probe to run periodically. During each run of a probe it will do the following:
+1. Checks if the `kube-apiserver` is reachable via local cluster DNS. This should always succeed and will fail only when the `kube-apiserver` has gone down. If the `kube-apiserver` is down then there can be no further damage to the existing shoot cluster (barring new requests to the Kube Api Server) and the probe exits.
+2. Only if the probe is able to reach the `kube-apiserver` via local cluster DNS, will it attempt to reach the `kube-apiserver` via internal DNS route. This is the same DNS used by the kubelet. This is not an exact replication of how the kubelet would reach its `kube-apiserver` but it is close enough. The result of the attempt to reach the `kube-apiserver` is recorded in the probe status.
+3. If a probe fails to successfully reach the `kube-apiserver` via internal DNS route `failureThreshold` times consecutively then it transitions the probe to `Failed` state.
+4. If and when a probe status transitions to `Failed` it will then initiate a scale-down operation as defined in the prober configuration.
+5. In subsequent runs it will keep checking if it is able to reach the `kube-apiserver` via internal DNS route. If it is able to successfully reach it `successThreshold` times consecutively as defined in the prober configuration, then it will start the scale-up operation for components defined in the configuration.
 
 ### Prober lifecycle
 

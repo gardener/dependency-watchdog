@@ -8,9 +8,11 @@
 [![GoDoc](https://godoc.org/github.com/gardener/dependency-watchdog?status.svg)](https://pkg.go.dev/github.com/gardener/dependency-watchdog)
 
 ## Overview
-A watchdog which actively looks out for disruption and recovery of critical services. If there is a disruption then it will prevent cascading failure by conservatively scaling down dependent configured services and if a critical service has just recovered then it will expedite the recovery of dependent services/pods.
+A watchdog which actively looks out for disruption and recovery of critical services like `kube-apiserver` and `etcd`. 
 
-Avoiding cascading failure is handled by `Prober` component and expediting recovery of dependent services/pods is handled by `Weeder` component. These are separately deployed as individual pods.
+If there is a disruption in the availability of `kube-apiserver` from the shoots then it will prevent cascading failure by conservatively scaling down dependent configured services and if a critical service like `etcd` has just recovered then it will expedite the recovery of dependent services/pods.
+
+Avoiding cascading failure is handled by [`Prober`](/docs/concepts/prober.md) component and expediting recovery of dependent services/pods is handled by [`Weeder`](/docs/concepts/weeder.md) component. These are separately deployed as individual pods.
 
 ## Start using or developing the Dependency Watchdog
 
