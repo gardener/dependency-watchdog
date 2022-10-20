@@ -97,6 +97,9 @@ func (pw *podWatcher) createK8sWatch(ctx context.Context) {
 
 func doCreateK8sWatch(ctx context.Context, client kubernetes.Interface, namespace string, lSelector *metav1.LabelSelector) (watch.Interface, error) {
 	selector, err := metav1.LabelSelectorAsSelector(lSelector)
+	if err != nil {
+		return nil, err
+	}
 	w, err := client.CoreV1().Pods(namespace).Watch(ctx, metav1.ListOptions{
 		LabelSelector: selector.String(),
 	})

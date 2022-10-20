@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+// SleepWithContext sleeps until sleepFor duration has expired or the context has been cancelled.
 func SleepWithContext(ctx context.Context, sleepFor time.Duration) error {
 	for {
 		select {

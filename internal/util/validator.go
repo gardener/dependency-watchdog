@@ -24,10 +24,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
+// Validator is a struct to store all validation errors.
 type Validator struct {
 	Error error
 }
 
+// MustNotBeEmpty checks whether the given value is empty. It returns false if it is empty or nil.
 func (v *Validator) MustNotBeEmpty(key string, value interface{}) bool {
 	if value == nil {
 		v.Error = multierr.Append(v.Error, fmt.Errorf("%s must not be nil or empty", key))
@@ -55,6 +57,7 @@ func (v *Validator) MustNotBeEmpty(key string, value interface{}) bool {
 	return true
 }
 
+// MustNotBeNil checks whether the given value is nil and returns false if it is nil.
 func (v *Validator) MustNotBeNil(key string, value interface{}) bool {
 	if value == nil || reflect.ValueOf(value).IsNil() {
 		v.Error = multierr.Append(v.Error, fmt.Errorf("%s must not be nil", key))
@@ -63,6 +66,7 @@ func (v *Validator) MustNotBeNil(key string, value interface{}) bool {
 	return true
 }
 
+// ResourceRefMustBeValid validates the given resourceRef by parsing the apiVersion.
 func (v *Validator) ResourceRefMustBeValid(resourceRef *autoscalingv1.CrossVersionObjectReference) bool {
 	_, err := schema.ParseGroupVersion(resourceRef.APIVersion)
 	if err != nil {

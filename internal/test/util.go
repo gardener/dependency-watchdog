@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
+// GetStructured reads the file present at the given filePath and returns a structured object based on the type specified in place of T.
 func GetStructured[T any](filepath string) (*T, error) {
 	unstructuredObject, err := GetUnstructured(filepath)
 	if err != nil {
@@ -39,6 +40,7 @@ func GetStructured[T any](filepath string) (*T, error) {
 	return &structuredObject, nil
 }
 
+// GetUnstructured reads the file present at the given filePath and returns an unstructured.Unstructured object from its contents.
 func GetUnstructured(filePath string) (*unstructured.Unstructured, error) {
 	buff, err := ReadFile(filePath)
 	if err != nil {
@@ -60,6 +62,7 @@ func GetUnstructured(filePath string) (*unstructured.Unstructured, error) {
 	return unstructuredObject, nil
 }
 
+// ReadFile reads the file present at the given filePath and returns a byte Buffer containing its contents.
 func ReadFile(filePath string) (*bytes.Buffer, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -75,6 +78,7 @@ func ReadFile(filePath string) (*bytes.Buffer, error) {
 	return buff, nil
 }
 
+// FileExistsOrFail checks if the given filepath is valid and returns an error if file is not found or does not exist.
 func FileExistsOrFail(filepath string) {
 	var err error
 	if _, err = os.Stat(filepath); errors.Is(err, os.ErrNotExist) {

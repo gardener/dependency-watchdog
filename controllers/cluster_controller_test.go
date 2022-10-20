@@ -56,7 +56,7 @@ func buildScheme() *runtime.Scheme {
 	return scheme
 }
 
-func setupProberEnv(t *testing.T, g *WithT, ctx context.Context) (client.Client, *envtest.Environment, *ClusterReconciler, manager.Manager) {
+func setupProberEnv(ctx context.Context, t *testing.T, g *WithT) (client.Client, *envtest.Environment, *ClusterReconciler, manager.Manager) {
 	t.Log("setting up the test Env for Prober")
 	scheme := buildScheme()
 	testEnv := &envtest.Environment{
@@ -131,21 +131,21 @@ func testProberDedicatedEnvTest(t *testing.T) {
 	g := NewWithT(t)
 	tests := []struct {
 		title string
-		run   func(t *testing.T, envTest *envtest.Environment, ctx context.Context, crClient client.Client, reconciler *ClusterReconciler, mgr manager.Manager, cancelFn context.CancelFunc)
+		run   func(ctx context.Context, t *testing.T, envTest *envtest.Environment, crClient client.Client, reconciler *ClusterReconciler, mgr manager.Manager, cancelFn context.CancelFunc)
 	}{
 		{"calling reconciler after shutting down API server", testReconciliationAfterAPIServerIsDown},
 	}
 	for _, test := range tests {
 		ctx, cancelFn := context.WithCancel(context.Background())
-		crClient, testEnv, reconciler, mgr := setupProberEnv(t, g, ctx)
+		crClient, testEnv, reconciler, mgr := setupProberEnv(ctx, t, g)
 		t.Run(test.title, func(t *testing.T) {
-			test.run(t, testEnv, ctx, crClient, reconciler, mgr, cancelFn)
+			test.run(ctx, t, testEnv, crClient, reconciler, mgr, cancelFn)
 		})
 		teardownEnv(t, g, testEnv, cancelFn)
 	}
 }
 
-func testReconciliationAfterAPIServerIsDown(t *testing.T, testEnv *envtest.Environment, ctx context.Context, _ client.Client, reconciler *ClusterReconciler, _ manager.Manager, cancelFn context.CancelFunc) {
+func testReconciliationAfterAPIServerIsDown(ctx context.Context, t *testing.T, testEnv *envtest.Environment, _ client.Client, reconciler *ClusterReconciler, _ manager.Manager, cancelFn context.CancelFunc) {
 	g := NewWithT(t)
 	cluster, _ := createClusterResource()
 	cancelFn()
@@ -161,7 +161,7 @@ func testReconciliationAfterAPIServerIsDown(t *testing.T, testEnv *envtest.Envir
 func testProberCommonEnvTest(t *testing.T) {
 	g := NewWithT(t)
 	ctx, cancelFn := context.WithCancel(context.Background())
-	crClient, testEnv, reconciler, _ := setupProberEnv(t, g, ctx)
+	crClient, testEnv, reconciler, _ := setupProberEnv(ctx, t, g)
 	defer teardownEnv(t, g, testEnv, cancelFn)
 
 	tests := []struct {
