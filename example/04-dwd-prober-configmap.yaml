@@ -6,8 +6,8 @@ metadata:
   name: dependency-watchdog-prober-config
   data:
     dep-config.yaml: |
-      internalKubeConfigSecretName: "dws-internal-probe-secret"
-      externalKubeConfigSecretName: "dws-external-probe-secret"
+      internalKubeConfigSecretName: "shoot-access-dependency-watchdog-internal-probe"
+      externalKubeConfigSecretName: "shoot-access-dependency-watchdog-external-probe"
       dependentResourceInfos:
         - ref:
             kind: "Deployment"
