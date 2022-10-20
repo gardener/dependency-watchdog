@@ -54,9 +54,6 @@ func CreateControllerTestEnv() (ControllerTestEnv, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new client %w", err)
 	}
-	if k8sClient == nil {
-		log.Fatalf("Got a nil k8sClient")
-	}
 	return &controllerTestEnv{
 		client:     k8sClient,
 		restConfig: cfg,

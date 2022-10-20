@@ -26,6 +26,8 @@ import (
 
 const crashLoopBackOff = "CrashLoopBackOff"
 
+// Weeder represents an actor which will be responsible for watching dependent pods and weeding them out if they
+// are in CrashLoopBackOff.
 type Weeder struct {
 	namespace          string
 	endpoints          *v1.Endpoints
@@ -37,6 +39,7 @@ type Weeder struct {
 	logger             logr.Logger
 }
 
+// NewWeeder creates a new Weeder for a service/endpoint.
 func NewWeeder(parentCtx context.Context, namespace string, config *wapi.Config, ctrlClient client.Client, seedClient kubernetes.Interface, ep *v1.Endpoints, logger logr.Logger) *Weeder {
 	wLogger := logger.WithValues("weederRunning", true, "watchDuration", (*config.WatchDuration).String())
 	ctx, cancelFn := context.WithTimeout(parentCtx, config.WatchDuration.Duration)
@@ -53,6 +56,7 @@ func NewWeeder(parentCtx context.Context, namespace string, config *wapi.Config,
 	}
 }
 
+// Run runs the Weeder which will intern create one go-routine for dependents identified by respective PodSelector.
 func (w *Weeder) Run() {
 	for _, ps := range w.dependantSelectors.PodSelectors {
 		go newPodWatcher(w, ps, shootPodIfNecessary).watch()

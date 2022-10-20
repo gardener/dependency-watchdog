@@ -51,7 +51,19 @@ git clone https://github.com/gardener/dependency-watchdog.git
 
 ## Using Makefile
 
+For every change following make targets are recommended to run.
 
+```bash
+
+> make 
+
+```
+
+Before raising a pull request ensure that if you are introducing any new file then you must add licesence header to all new files. To add license header you can run this make target:
+```bash
+> make add-license-headers
+# This will add license headers to any file which does not already have it.
+```
 
 ## Raising a Pull Request
 

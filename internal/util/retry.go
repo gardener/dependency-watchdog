@@ -19,11 +19,18 @@ import (
 	"time"
 )
 
+// RetryResult captures the result of a retriable operation.
 type RetryResult[T any] struct {
 	Value T
 	Err   error
 }
 
+// Retry retries an operation `fn`, `numAttempts` number of times with a given `backOff` until one of the conditions is met:
+// 1. Invocation of `fn` succeeds.
+// 2. `canRetry` returns false.
+// 3. `numAttempts` have exhausted.
+// 4. `ctx` (context) has either been cancelled or it has expired.
+// The result is captured eventually in `RetryResult`.
 func Retry[T any](ctx context.Context, operation string, fn func() (T, error), numAttempts int, backOff time.Duration, canRetry func(error) bool) RetryResult[T] {
 	var result T
 	var err error
@@ -53,6 +60,11 @@ func Retry[T any](ctx context.Context, operation string, fn func() (T, error), n
 	return RetryResult[T]{Value: result, Err: err}
 }
 
+// RetryUntilPredicate retries an operation with a given `interval` until one of the following condition is met:
+// 1. `predicateFn` returns true.
+// 2. `timeout` expires.
+// 3. `ctx` (context) is cancelled or expires.
+// Returns true if the invocation of the `predicateFn` was successful and false otherwise.
 func RetryUntilPredicate(ctx context.Context, operation string, predicateFn func() bool, timeout time.Duration, interval time.Duration) bool {
 	timer := time.NewTimer(timeout)
 	for {
@@ -93,6 +105,7 @@ func RetryOnError(ctx context.Context, operation string, retriableFn func() erro
 	}
 }
 
-func AlwaysRetry(err error) bool {
+// AlwaysRetry always returns true irrespective of the error passed.
+func AlwaysRetry(_ error) bool {
 	return true
 }

@@ -136,6 +136,7 @@ func GetDeploymentFor(ctx context.Context, namespace string, name string, client
 	return &deployment, nil
 }
 
+// CreateClientSetFromRestConfig creates a kubernetes.Clientset from rest.Config.
 func CreateClientSetFromRestConfig(config *rest.Config) (*kubernetes.Clientset, error) {
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {

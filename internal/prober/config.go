@@ -23,21 +23,37 @@ import (
 )
 
 const (
+	// ScaleUp represents a scale-up operation for a kubernetes resource.
 	ScaleUp int = iota
+	// ScaleDown represents a scale-up operation for a kubernetes resource.
 	ScaleDown
-	DefaultProbeInterval                             = 10 * time.Second
-	DefaultProbeInitialDelay                         = 30 * time.Second
-	DefaultScaleInitialDelay                         = 0 * time.Second
-	DefaultProbeTimeout                              = 30 * time.Second
-	DefaultInternalProbeFailureBackoffDuration       = 30 * time.Second
-	DefaultSuccessThreshold                          = 1
-	DefaultFailureThreshold                          = 3
-	DefaultBackoffJitterFactor                       = 0.2
-	DefaultScaleUpReplicas                     int32 = 1
-	DefaultScaleDownReplicas                   int32 = 0
-	DefaultScaleUpdateTimeout                        = 30 * time.Second
+
+	// DefaultProbeInterval is the default duration representing the interval for a probe.
+	DefaultProbeInterval = 10 * time.Second
+	// DefaultProbeInitialDelay is the default duration representing an initial delay to start a probe.
+	DefaultProbeInitialDelay = 30 * time.Second
+	// DefaultScaleInitialDelay is the default duration representing an initial delay to start to scale up a kubernetes resource.
+	DefaultScaleInitialDelay = 0 * time.Second
+	// DefaultProbeTimeout is the default duration representing total timeout for a probe to complete.
+	DefaultProbeTimeout = 30 * time.Second
+	// DefaultInternalProbeFailureBackoffDuration is the default duration representing a backOff duration in the event the internal probe transitions to failed state.
+	DefaultInternalProbeFailureBackoffDuration = 30 * time.Second
+	// DefaultSuccessThreshold is the default value for consecutive successful probes required to transition a probe status to success.
+	DefaultSuccessThreshold = 1
+	// DefaultFailureThreshold is the default value for consecutive erroneous probes required to transition a probe status to failed.
+	DefaultFailureThreshold = 3
+	// DefaultBackoffJitterFactor is the default jitter value with which successive probe runs are scheduled.
+	DefaultBackoffJitterFactor = 0.2
+	// DefaultScaleUpReplicas is the default value of number of replicas for a scale-up operation by a probe when the external probe transitions from failed to success.
+	DefaultScaleUpReplicas int32 = 1
+	// DefaultScaleDownReplicas is the default value of number of replicas for a scale-down operation by a probe when the external probe transitions from success to failed.
+	DefaultScaleDownReplicas int32 = 0
+	// DefaultScaleUpdateTimeout is the default duration representing a timeout for the scale operation to complete.
+	DefaultScaleUpdateTimeout = 30 * time.Second
 )
 
+// LoadConfig reads the prober configuration from a file, unmarshalls it, fills in the default values and
+// validates the unmarshalled configuration If all validations pass it will return papi.Config else it will return an error.
 func LoadConfig(file string) (*papi.Config, error) {
 	config, err := util.ReadAndUnmarshall[papi.Config](file)
 	if err != nil {

@@ -21,9 +21,15 @@ import (
 
 // Manager provides a single point for registering and unregistering weeders
 type Manager interface {
+	// Register registers a weeder with the manager. If a weeder with a key identified by `createKey`
+	// exists then it will close it and replace it with the new weeder.
 	Register(weeder Weeder) bool
+	// Unregister checks if there is an existing weeder with the key. If it is found then it will close the weeder
+	// and remove it from the manager.
 	Unregister(key string) bool
+	// UnregisterAll unregisters all weeders from the manager.
 	UnregisterAll() bool
+	// GetWeederRegistration returns a weederRegistration which will give access to the context and the cancelFn to the caller.
 	GetWeederRegistration(key string) (weederRegistration, bool)
 }
 
@@ -48,11 +54,6 @@ func (wr weederRegistration) isClosed() bool {
 	}
 }
 
-// close cancels the weeder
-func (wr weederRegistration) close() {
-	wr.cancelFn()
-}
-
 // Register registers the new weeder. If the weeder with the same key (see `createKey` function) exists
 // then it will close the registration (if not already closed) which cancels the weeder.
 // It will then create a new weeder registration which will replace the existing weeder registration.
@@ -72,14 +73,12 @@ func (wm *weederManager) Register(weeder Weeder) bool {
 	return true
 }
 
-// NewManager creates a new manager to manager weeder registrations
 func NewManager() *weederManager {
 	return &weederManager{
 		weeders: make(map[string]weederRegistration),
 	}
 }
 
-// Unregister cancels the weeder registration if one exists using the passed key (see `createKey` function)
 func (wm *weederManager) Unregister(key string) bool {
 	wm.Lock()
 	defer wm.Unlock()
@@ -93,11 +92,16 @@ func (wm *weederManager) Unregister(key string) bool {
 
 func (wm *weederManager) UnregisterAll() bool {
 	for key := range wm.weeders {
-		if wm.Unregister(key) != true {
+		if !wm.Unregister(key) {
 			return false
 		}
 	}
 	return true
+}
+
+func (wm *weederManager) GetWeederRegistration(key string) (weederRegistration, bool) {
+	wr, ok := wm.weeders[key]
+	return wr, ok
 }
 
 // createKey creates a key to uniquely identify a weeder
@@ -105,7 +109,7 @@ func createKey(w Weeder) string {
 	return w.namespace + "/" + w.endpoints.Name
 }
 
-func (wm *weederManager) GetWeederRegistration(key string) (weederRegistration, bool) {
-	wr, ok := wm.weeders[key]
-	return wr, ok
+// close cancels the weeder
+func (wr weederRegistration) close() {
+	wr.cancelFn()
 }

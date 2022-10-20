@@ -44,11 +44,13 @@ const (
 	defaultScaleResourceBackoff       = 100 * time.Millisecond
 )
 
+// DeploymentScaler is a facade to provide scaling operations for kubernetes deployments.
 type DeploymentScaler interface {
 	ScaleUp(ctx context.Context) error
 	ScaleDown(ctx context.Context) error
 }
 
+// NewDeploymentScaler creates an instance of DeploymentScaler.
 func NewDeploymentScaler(namespace string, config *papi.Config, client client.Client, scalerGetter scalev1.ScalesGetter, logger logr.Logger, options ...scalerOption) DeploymentScaler {
 	logger = logger.WithName("scaler")
 	opts := buildScalerOptions(options...)

@@ -24,9 +24,12 @@ import (
 )
 
 const (
+	// DefaultWatchDuration is the default duration after which the watch expires.
 	DefaultWatchDuration = 5 * time.Minute
 )
 
+// LoadConfig reads the weeder configuration from a file, unmarshalls it, fills in the default values and
+// validates the unmarshalled configuration If all validations pass it will return papi.Config else it will return an error.
 func LoadConfig(filename string) (*wapi.Config, error) {
 	config, err := util.ReadAndUnmarshall[wapi.Config](filename)
 	if err != nil {

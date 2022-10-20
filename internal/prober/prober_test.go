@@ -46,7 +46,7 @@ var (
 	fakeClient                          client.WithWatch
 	mki                                 *mockinterface.MockInterface
 	mdi                                 *mockdiscovery.MockDiscoveryInterface
-	notIgnorableErr                     = errors.New("not Ignorable error")
+	errNotIgnorable                     = errors.New("not Ignorable error")
 	internalProbeFailureBackoffDuration = metav1.Duration{Duration: time.Millisecond}
 	pLogger                             = log.FromContext(context.Background()).WithName("proberLogger")
 	defaultProbeTimeout                 = metav1.Duration{Duration: 40 * time.Second}
@@ -64,7 +64,7 @@ type probeStatusEntry struct {
 func TestInternalProbeErrorCount(t *testing.T) {
 	table := []probeStatusEntry{
 		{"Success Count is less than Threshold", nil, 1, 0, 0, 0},
-		{"Unignorable error is returned by pingKubeApiServer", notIgnorableErr, 0, 1, 0, 0},
+		{"Unignorable error is returned by pingKubeApiServer", errNotIgnorable, 0, 1, 0, 0},
 		{"Forbidden request error is returned by pingKubeApiServer", apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden")), 0, 0, 0, 0},
 		{"Unauthorized request error is returned by pingKubeApiServer", apierrors.NewUnauthorized("unauthorized"), 0, 0, 0, 0},
 		{"Throttling error is returned by pingKubeApiServer", apierrors.NewTooManyRequests("Too many requests", 10), 0, 0, 0, 0},
@@ -124,7 +124,7 @@ func TestExternalProbeFailingShouldRunScaleDown(t *testing.T) {
 				if runCounter%2 == 1 {
 					return nil, nil
 				}
-				return nil, notIgnorableErr
+				return nil, errNotIgnorable
 			}).Times(4)
 			mds.EXPECT().ScaleDown(gomock.Any()).Return(probeStatusEntry.err).Times(1)
 

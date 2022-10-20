@@ -25,10 +25,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// ShootClientCreator provides a facade to create kubernetes client targeting a shoot.
 type ShootClientCreator interface {
+	// CreateClient creates a new clientSet to connect to the Kube ApiServer running in the passed-in shoot control namespace.
 	CreateClient(ctx context.Context, namespace string, secretName string, connectionTimeout time.Duration) (kubernetes.Interface, error)
 }
 
+// NewShootClientCreator creates an instance of ShootClientCreator.
 func NewShootClientCreator(client client.Client) ShootClientCreator {
 	return &shootclientCreator{client}
 }
