@@ -218,9 +218,12 @@ func testChangingHibernationSpec(t *testing.T, crClient client.Client, reconcile
 	cluster, shoot := createClusterResource()
 	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
 	updateShootHibernationSpecAndCheckProber(g, crClient, cluster, shoot, &enableHibernation, reconciler, proberShouldNotBePresent)
+	t.Log("prober is removed if hibernation is enabled.")
 
 	disableHibernation := false
 	updateShootHibernationSpecAndCheckProber(g, crClient, cluster, shoot, &disableHibernation, reconciler, proberShouldBePresent)
+	t.Log("prober is started if cluster has woken up.")
+
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
@@ -237,7 +240,7 @@ func testChangingHibernationStatus(t *testing.T, crClient client.Client, reconci
 	g := NewWithT(t)
 	cluster, shoot := createClusterResource()
 	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
-	updateShootHibernationStatus(g, crClient, reconciler, cluster, shoot, true, nil)
+	updateShootHibernationStatus(g, crClient, reconciler, cluster, shoot, true, nil) // checkProber is nil because in practice it is not possible that prober is present and cluster is hibernated.
 	updateShootHibernationStatus(g, crClient, reconciler, cluster, shoot, false, proberShouldBePresent)
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
@@ -248,6 +251,7 @@ func testInvalidShootInClusterSpec(t *testing.T, crClient client.Client, reconci
 	cluster.Spec.Shoot.Object = nil
 	cluster.Spec.Shoot.Raw = []byte(`{"apiVersion": 8}`)
 	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
+	t.Log("prober is not started if shoot spec is invalid")
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
@@ -269,6 +273,7 @@ func testProberShouldBeRemovedIfDeletionTimeStampIsSet(t *testing.T, crClient cl
 	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
 	updateShootDeletionTimeStamp(g, crClient, cluster, shoot)
 	proberShouldNotBePresent(g, reconciler, cluster)
+	t.Log("prober is removed if cluster has a deletionTimeStamp")
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
@@ -287,16 +292,22 @@ func testShootCreationNotComplete(t *testing.T, crClient client.Client, reconcil
 	cluster, shoot := createClusterResource()
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeCreate, gardencorev1beta1.LastOperationStateProcessing)
 	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
+	t.Log("prober is absent if creation of cluster is in processing state")
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeCreate, gardencorev1beta1.LastOperationStatePending)
 	updateClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
+	t.Log("prober is absent if creation of cluster is in pending state")
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeCreate, gardencorev1beta1.LastOperationStateFailed)
 	updateClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
+	t.Log("prober is absent if creation of cluster is in failure state")
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeCreate, gardencorev1beta1.LastOperationStateError)
 	updateClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
+	t.Log("prober is absent if creation of cluster is in error state")
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeCreate, gardencorev1beta1.LastOperationStateAborted)
 	updateClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
+	t.Log("prober is absent if creation of cluster is aborted")
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeCreate, gardencorev1beta1.LastOperationStateSucceeded)
 	updateClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
+	t.Log("prober is started if creation of cluster is succesful")
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
@@ -306,6 +317,7 @@ func testShootIsMigrating(t *testing.T, crClient client.Client, reconciler *Clus
 	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeMigrate, "")
 	updateClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
+	t.Log("prober is removed if cluster is in migration")
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
@@ -318,6 +330,7 @@ func testShootRestoringIsNotComplete(t *testing.T, crClient client.Client, recon
 	updateClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
 	// cluster migrate done, restore in progress
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeRestore, gardencorev1beta1.LastOperationStateProcessing)
+	t.Log("prober is not started if cluster restore has not succeeded")
 	updateClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
@@ -327,6 +340,7 @@ func testLastOperationIsRestoreAndSuccessful(t *testing.T, crClient client.Clien
 	cluster, shoot := createClusterResource()
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeRestore, gardencorev1beta1.LastOperationStateSucceeded)
 	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
+	t.Log("prober is started when cluster restore is successful")
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
@@ -335,6 +349,7 @@ func testLastOperationIsShootReconciliation(t *testing.T, crClient client.Client
 	cluster, shoot := createClusterResource()
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeReconcile, "")
 	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
+	t.Log("prober is started when the cluster is reconciling")
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 

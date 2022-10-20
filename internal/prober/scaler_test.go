@@ -36,7 +36,7 @@ const (
 	ignoreScaleAnnotationKey = "dependency-watchdog.gardener.cloud/ignore-scaling"
 )
 
-func beforeAllScalerEnvTests(g *WithT) func(g *WithT) {
+func setUpScalerEnvTests(g *WithT) func(g *WithT) {
 	var err error
 	kindTestEnv, err = test.CreateKindCluster(test.KindConfig{Name: "test"})
 	g.Expect(err).To(BeNil())
@@ -57,8 +57,8 @@ func createDeploymentScaler(g *WithT, probeCfg *papi.Config) DeploymentScaler {
 
 func TestScalerSuite(t *testing.T) {
 	g := NewWithT(t)
-	afterAllScalerTests := beforeAllScalerEnvTests(g)
-	defer afterAllScalerTests(g)
+	tearDownScalerTests := setUpScalerEnvTests(g)
+	defer tearDownScalerTests(g)
 	tests := []struct {
 		title string
 		run   func(t *testing.T)
