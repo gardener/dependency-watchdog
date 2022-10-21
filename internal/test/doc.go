@@ -47,8 +47,11 @@ To create a KIND cluster use:
 Utilities in testenv.go: Tests that require a controller-runtime envtest should use utilities inside this file
 ```
 
-	// to create a controller-runtime test environment
-	ctrlTestEnv, err := test.CreateControllerTestEnv()
+	// to create a default controller-runtime test environment
+	ctrlTestEnv, err := test.CreateDefaultControllerTestEnv()
+
+	// to create a controller-runtime test environment using custom scheme and crdDirectoryPaths
+	ctrlTestEnv, err:= test.CreateControllerTestEnv(scheme, crdDirectoryPaths)
 
 	// to stop the controller-runtime test environment
 	ctrlTestEnv.Delete()

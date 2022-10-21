@@ -24,6 +24,7 @@ import (
 	"time"
 
 	proberpackage "github.com/gardener/dependency-watchdog/internal/prober"
+	"github.com/gardener/dependency-watchdog/internal/test"
 	"github.com/gardener/dependency-watchdog/internal/util"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardenerv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
@@ -59,19 +60,14 @@ func buildScheme() *runtime.Scheme {
 func setupProberEnv(ctx context.Context, t *testing.T, g *WithT) (client.Client, *envtest.Environment, *ClusterReconciler, manager.Manager) {
 	t.Log("setting up the test Env for Prober")
 	scheme := buildScheme()
-	testEnv := &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("testdata", "crd", "prober")},
-		ErrorIfCRDPathMissing: false,
-		Scheme:                scheme,
-	}
+	crdDirectoryPaths := []string{filepath.Join("testdata", "crd", "prober")}
 
-	cfg, err := testEnv.Start()
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(cfg).NotTo(BeNil())
+	controllerTestEnv, err := test.CreateControllerTestEnv(scheme, crdDirectoryPaths)
+	g.Expect(err).To(BeNil())
 
-	crClient, err := client.New(cfg, client.Options{Scheme: scheme})
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(crClient).NotTo(BeNil())
+	testEnv := controllerTestEnv.GetEnv()
+	cfg := controllerTestEnv.GetConfig()
+	crClient := controllerTestEnv.GetClient()
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme,

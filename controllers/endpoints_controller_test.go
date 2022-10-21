@@ -16,6 +16,7 @@ package controllers
 
 import (
 	"context"
+	testenv "github.com/gardener/dependency-watchdog/internal/test"
 	"path/filepath"
 	"testing"
 	"time"
@@ -82,24 +83,19 @@ var (
 func setupWeederEnv(ctx context.Context, t *testing.T, g *WithT, apiServerFlags map[string]string, withManager bool) (client.Client, *envtest.Environment, *EndpointReconciler, *runtime.Scheme, *rest.Config) {
 	t.Log("setting up the test Env for Weeder")
 	scheme := buildScheme()
-	testEnv := &envtest.Environment{
-		Scheme:                scheme,
-		ErrorIfCRDPathMissing: false,
-	}
+
+	controllerTestEnv, err := testenv.CreateControllerTestEnv(scheme, nil)
+	g.Expect(err).To(BeNil())
+
+	testEnv := controllerTestEnv.GetEnv()
+	cfg := controllerTestEnv.GetConfig()
+	crClient := controllerTestEnv.GetClient()
 
 	kubeAPIServer := testEnv.ControlPlane.GetAPIServer()
 	args := kubeAPIServer.Configure()
 	for k, v := range apiServerFlags {
 		args.Set(k, v)
 	}
-
-	cfg, err := testEnv.Start()
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(cfg).NotTo(BeNil())
-
-	crClient, err := client.New(cfg, client.Options{Scheme: scheme})
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(crClient).NotTo(BeNil())
 
 	clientSet, err := internalutils.CreateClientSetFromRestConfig(cfg)
 	g.Expect(err).NotTo(HaveOccurred())

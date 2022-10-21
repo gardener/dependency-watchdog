@@ -16,6 +16,7 @@ package test
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/runtime"
 	"log"
 
 	"k8s.io/client-go/kubernetes/scheme"
@@ -30,6 +31,8 @@ type ControllerTestEnv interface {
 	GetClient() client.Client
 	// GetConfig provides access to *rest.Config.
 	GetConfig() *rest.Config
+	// GetEnv returns the kubernetes test environment.
+	GetEnv() *envtest.Environment
 	// Delete deletes the resources created as part of testEnv.
 	Delete()
 }
@@ -40,9 +43,18 @@ type controllerTestEnv struct {
 	testEnv    *envtest.Environment
 }
 
-// CreateControllerTestEnv creates a controller-runtime testEnv and provides access to the convenience interface to interact with it.
-func CreateControllerTestEnv() (ControllerTestEnv, error) {
-	testEnv := &envtest.Environment{}
+// CreateDefaultControllerTestEnv creates a controller-runtime testEnv and provides access to the convenience interface to interact with it.
+func CreateDefaultControllerTestEnv() (ControllerTestEnv, error) {
+	return CreateControllerTestEnv(scheme.Scheme, nil)
+}
+
+// CreateControllerTestEnv creates a controller-runtime testEnv using the provided scheme and crdDirectoryPaths and provides access to the convenience interface to interact with it.
+func CreateControllerTestEnv(scheme *runtime.Scheme, crdDirectoryPaths []string) (ControllerTestEnv, error) {
+	testEnv := &envtest.Environment{
+		CRDDirectoryPaths:     crdDirectoryPaths,
+		ErrorIfCRDPathMissing: false,
+		Scheme:                scheme,
+	}
 	cfg, err := testEnv.Start()
 	if err != nil {
 		log.Fatalf("error in starting testEnv: %v", err)
@@ -50,7 +62,7 @@ func CreateControllerTestEnv() (ControllerTestEnv, error) {
 	if cfg == nil {
 		log.Fatalf("Got nil config from testEnv")
 	}
-	k8sClient, err := client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	k8sClient, err := client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new client %w", err)
 	}
@@ -67,6 +79,10 @@ func (te *controllerTestEnv) GetClient() client.Client {
 
 func (te *controllerTestEnv) GetConfig() *rest.Config {
 	return te.restConfig
+}
+
+func (te *controllerTestEnv) GetEnv() *envtest.Environment {
+	return te.testEnv
 }
 
 func (te *controllerTestEnv) Delete() {

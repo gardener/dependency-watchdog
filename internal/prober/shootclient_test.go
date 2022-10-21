@@ -48,7 +48,7 @@ func TestSuite(t *testing.T) {
 		{"kubeconfig not found", testConfigNotFound},
 		{"shootclient should be created", testCreateShootClient},
 	}
-	envTest, err = test.CreateControllerTestEnv()
+	envTest, err = test.CreateDefaultControllerTestEnv()
 	g.Expect(err).To(BeNil())
 	sk8sClient = envTest.GetClient()
 	for _, test := range tests {

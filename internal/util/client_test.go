@@ -48,7 +48,7 @@ func beforeAll(t *testing.T) {
 	test.FileExistsOrFail(secretPath)
 	test.FileExistsOrFail(deploymentPath)
 	test.FileExistsOrFail(kubeConfigPath)
-	testEnv, err = test.CreateControllerTestEnv()
+	testEnv, err = test.CreateDefaultControllerTestEnv()
 	g.Expect(err).To(BeNil())
 	k8sClient = testEnv.GetClient()
 	cfg = testEnv.GetConfig()
