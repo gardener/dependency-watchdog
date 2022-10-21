@@ -23,11 +23,6 @@ import (
 )
 
 const (
-	// ScaleUp represents a scale-up operation for a kubernetes resource.
-	ScaleUp int = iota
-	// ScaleDown represents a scale-up operation for a kubernetes resource.
-	ScaleDown
-
 	// DefaultProbeInterval is the default duration representing the interval for a probe.
 	DefaultProbeInterval = 10 * time.Second
 	// DefaultProbeInitialDelay is the default duration representing an initial delay to start a probe.
@@ -123,17 +118,13 @@ func fillDefaultValues(c *papi.Config) {
 
 func fillDefaultValuesForResourceInfos(resourceInfos []papi.DependentResourceInfo) {
 	for _, resInfo := range resourceInfos {
-		fillDefaultValuesForScaleInfo(ScaleUp, resInfo.ScaleUpInfo)
-		fillDefaultValuesForScaleInfo(ScaleDown, resInfo.ScaleDownInfo)
+		fillDefaultValuesForScaleInfo(resInfo.ScaleUpInfo)
+		fillDefaultValuesForScaleInfo(resInfo.ScaleDownInfo)
 	}
 }
 
-func fillDefaultValuesForScaleInfo(scaleType int, scaleInfo *papi.ScaleInfo) {
+func fillDefaultValuesForScaleInfo(scaleInfo *papi.ScaleInfo) {
 	if scaleInfo != nil {
-		if scaleInfo.Replicas == nil {
-			scaleInfo.Replicas = new(int32)
-			*scaleInfo.Replicas = getDefaultScaleTargetReplicas(scaleType)
-		}
 		if scaleInfo.Timeout == nil {
 			scaleInfo.Timeout = &metav1.Duration{
 				Duration: DefaultScaleUpdateTimeout,
@@ -145,11 +136,4 @@ func fillDefaultValuesForScaleInfo(scaleType int, scaleInfo *papi.ScaleInfo) {
 			}
 		}
 	}
-}
-
-func getDefaultScaleTargetReplicas(scaleType int) int32 {
-	if scaleType == ScaleUp {
-		return DefaultScaleUpReplicas
-	}
-	return DefaultScaleDownReplicas
 }
