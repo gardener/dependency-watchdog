@@ -8,6 +8,12 @@ metadata:
     dep-config.yaml: |
       internalKubeConfigSecretName: "shoot-access-dependency-watchdog-internal-probe"
       externalKubeConfigSecretName: "shoot-access-dependency-watchdog-external-probe"
+      # probeInterval: 10s
+      # initialDelay: 30s
+      # successThreshold: 1
+      # failureThreshold: 3
+      # internalProbeFailureBackoffDuration: 30s
+      # backoffJitterFactor: 0.2
       dependentResourceInfos:
         - ref:
             kind: "Deployment"
