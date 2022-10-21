@@ -15,7 +15,7 @@
 package cmd
 
 import (
-	bufio "bufio"
+	"bufio"
 	"html/template"
 	"io"
 	"strings"

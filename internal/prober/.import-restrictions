@@ -1,0 +1,12 @@
+rules:
+  - selectorRegexp: (.+[.])?k8s[.]io
+    allowedPrefixes:
+      - ""
+  - selectorRegexp: github[.]com/gardener/dependency-watchdog
+    allowedPrefixes:
+    # should be self-contained and must not import any other dependency watchdog packages
+      - github.com/gardener/dependency-watchdog/api
+      - github.com/gardener/dependency-watchdog/internal/util
+      - github.com/gardener/dependency-watchdog/internal/test
+      - github.com/gardener/dependency-watchdog/internal/mock
+      - github.com/gardener/dependency-watchdog/internal/prober

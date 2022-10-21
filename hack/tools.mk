@@ -8,6 +8,7 @@ GOIMPORTS         := $(TOOLS_BIN_DIR)/goimports
 GOMEGACHECK       := $(TOOLS_BIN_DIR)/gomegacheck.so # plugin binary
 LOGCHECK          := $(TOOLS_BIN_DIR)/logcheck.so # plugin binary
 GO_ADD_LICENSE    := $(TOOLS_BIN_DIR)/addlicense
+GO_IMPORT_BOSS       := $(TOOLS_BIN_DIR)/import-boss
 
 #default tool versions
 GOLANGCI_LINT_VERSION ?= v1.48.0
@@ -16,6 +17,7 @@ GOIMPORTS_VERSION ?= latest
 GOMEGACHECK_VERSION ?= latest
 LOGCHECK_VERSION ?= latest
 GO_ADD_LICENSE_VERSION ?= latest
+GO_IMPORT_BOSS_VERSION ?= latest
 
 # add ./hack/tools/bin to the PATH
 export TOOLS_BIN_DIR := $(TOOLS_BIN_DIR)
@@ -40,3 +42,6 @@ $(LOGCHECK):
 
 $(GO_ADD_LICENSE):
     GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/google/addlicense@$(GO_ADD_LICENSE_VERSION)
+
+$(GO_IMPORT_BOSS):
+	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install k8s.io/code-generator/cmd/import-boss@$(GO_IMPORT_BOSS_VERSION)
