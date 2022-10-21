@@ -19,5 +19,6 @@
 package tools
 
 import (
+	_ "github.com/golang/mock/mockgen/model"
 	_ "k8s.io/code-generator/cmd/import-boss"
 )

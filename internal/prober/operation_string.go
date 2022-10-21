@@ -8,8 +8,8 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[scaleUp-3]
-	_ = x[scaleDown-4]
+	_ = x[scaleUp-4]
+	_ = x[scaleDown-5]
 }
 
 const _operation_name = "scale-upscale-down"
@@ -17,9 +17,9 @@ const _operation_name = "scale-upscale-down"
 var _operation_index = [...]uint8{0, 8, 18}
 
 func (i operation) String() string {
-	i -= 3
+	i -= 4
 	if i >= operation(len(_operation_index)-1) {
-		return "operation(" + strconv.FormatInt(int64(i+3), 10) + ")"
+		return "operation(" + strconv.FormatInt(int64(i+4), 10) + ")"
 	}
 	return _operation_name[_operation_index[i]:_operation_index[i+1]]
 }
