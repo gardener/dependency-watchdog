@@ -16,8 +16,9 @@ package test
 
 import (
 	"fmt"
-	"k8s.io/apimachinery/pkg/runtime"
 	"log"
+
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"

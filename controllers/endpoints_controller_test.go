@@ -16,10 +16,11 @@ package controllers
 
 import (
 	"context"
-	testenv "github.com/gardener/dependency-watchdog/internal/test"
 	"path/filepath"
 	"testing"
 	"time"
+
+	testenv "github.com/gardener/dependency-watchdog/internal/test"
 
 	internalutils "github.com/gardener/dependency-watchdog/internal/util"
 	v1 "k8s.io/api/core/v1"
