@@ -10,7 +10,7 @@
 ## Overview
 A watchdog which actively looks out for disruption and recovery of critical services. If there is a disruption then it will prevent cascading failure by conservatively scaling down dependent configured services and if a critical service has just recovered then it will expedite the recovery of dependent services/pods.
 
-Avoiding cascading failure is handled by `Prober`(/docs/concepts/prober.md)  component and expediting recovery of dependent services/pods is handled by `Weeder`(/docs/concepts/weeder.md)  component. These are separately deployed as individual pods.
+Avoiding cascading failure is handled by [Prober](/docs/concepts/prober.md)  component and expediting recovery of dependent services/pods is handled by [Weeder](/docs/concepts/weeder.md)  component. These are separately deployed as individual pods.
 
 ### Current Limitation & Future Scope
 Although in the current offering the `Prober` is tailored to handle one such use case of `kube-apiserver` connectivity, but the usage of prober can be extended to solve similar needs for other scenarios where the components involved might be different.
