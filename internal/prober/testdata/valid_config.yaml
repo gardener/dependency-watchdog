@@ -14,7 +14,6 @@ dependentResourceInfos:
     shouldExist: true
     scaleUp:
       level: 0
-      replicas: 1
     scaleDown:
       level: 1
   - ref:
@@ -25,7 +24,6 @@ dependentResourceInfos:
     scaleUp:
       level: 1
       initialDelay: 30s
-      replicas: 1
     scaleDown:
       level: 0
   - ref:
@@ -35,6 +33,5 @@ dependentResourceInfos:
     shouldExist: false
     scaleUp:
       level: 2
-      replicas: 1
     scaleDown:
       level: 0

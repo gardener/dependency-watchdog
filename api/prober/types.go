@@ -64,7 +64,4 @@ type ScaleInfo struct {
 	InitialDelay *metav1.Duration `json:"initialDelay,omitempty"`
 	// ScaleTimeout is the time timeout duration to wait for when attempting to update the scaling sub-resource.
 	Timeout *metav1.Duration `json:"timeout,omitempty"`
-	// Replicas is the desired set of replicas. In case of scale down it represents the replicas to which it should scale down. If not specified its default value will be 0.
-	// In case of a scale up it represents the replicas to which it should scale up to. If not specified its default value will be 1.
-	Replicas *int32 `json:"replicas,omitempty"`
 }

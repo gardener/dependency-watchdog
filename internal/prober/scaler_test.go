@@ -393,13 +393,11 @@ func createDependentResourceInfo(name string, scaleUpLevel, scaleDownLevel int, 
 			Level:        scaleUpLevel,
 			InitialDelay: &metav1.Duration{Duration: defaultInitialDelay},
 			Timeout:      &metav1.Duration{Duration: *timeout},
-			Replicas:     &scaleUpReplicas,
 		},
 		ScaleDownInfo: &papi.ScaleInfo{
 			Level:        scaleDownLevel,
 			InitialDelay: &metav1.Duration{Duration: defaultInitialDelay},
 			Timeout:      &metav1.Duration{Duration: *timeout},
-			Replicas:     &scaleDownReplicas,
 		},
 	}
 }

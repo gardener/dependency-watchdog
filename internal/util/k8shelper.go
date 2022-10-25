@@ -17,10 +17,13 @@ package util
 import (
 	"context"
 	"fmt"
+	"github.com/go-logr/logr"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"net/http"
 	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery/cached/memory"
@@ -114,26 +117,33 @@ func CreateScalesGetter(config *rest.Config) (scale.ScalesGetter, error) {
 	return scale.New(clientSet.RESTClient(), mapper, dynamic.LegacyAPIPathResolverFunc, resolver), nil
 }
 
-// GetDeploymentFor Looks-up a k8s deployment with the give name and namespace
-func GetDeploymentFor(ctx context.Context, namespace string, name string, client client.Client, timeout *time.Duration) (*appsv1.Deployment, error) {
-	childCtx := ctx
-	var cancelFn context.CancelFunc
-	if timeout != nil {
-		childCtx, cancelFn = context.WithTimeout(ctx, *timeout)
-	}
-	if cancelFn != nil {
-		defer cancelFn()
-	}
-	key := types.NamespacedName{
-		Namespace: namespace,
-		Name:      name,
-	}
-	deployment := appsv1.Deployment{}
-	err := client.Get(childCtx, key, &deployment)
+// GetScaleResource returns a kubernetes scale subresource.
+func GetScaleResource(ctx context.Context, client client.Client, scaler scale.ScaleInterface, logger logr.Logger, resourceRef *autoscalingv1.CrossVersionObjectReference, timeout time.Duration) (*schema.GroupResource, *autoscalingv1.Scale, error) {
+	gr, err := getGroupResource(client, logger, resourceRef)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return &deployment, nil
+	scaleRes, err := func() (*autoscalingv1.Scale, error) {
+		childCtx, cancelFn := context.WithTimeout(ctx, timeout)
+		defer cancelFn()
+		return scaler.Get(childCtx, gr, resourceRef.Name, metav1.GetOptions{})
+	}()
+	return &gr, scaleRes, err
+}
+
+// getGroupResource returns a schema.GroupResource for the given resourceRef.
+func getGroupResource(client client.Client, logger logr.Logger, resourceRef *autoscalingv1.CrossVersionObjectReference) (schema.GroupResource, error) {
+	gv, _ := schema.ParseGroupVersion(resourceRef.APIVersion) // Ignoring the error as this validation has already been done when initially validating the Config
+	gk := schema.GroupKind{
+		Group: gv.Group,
+		Kind:  resourceRef.Kind,
+	}
+	mapping, err := client.RESTMapper().RESTMapping(gk, gv.Version)
+	if err != nil {
+		logger.Error(err, "Failed to get RESTMapping for resource", "resourceRef", resourceRef)
+		return schema.GroupResource{}, err
+	}
+	return mapping.Resource.GroupResource(), nil
 }
 
 // CreateClientSetFromRestConfig creates a kubernetes.Clientset from rest.Config.

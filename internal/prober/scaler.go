@@ -233,7 +233,7 @@ func (ds *deploymentScaler) scale(ctx context.Context, resourceInfo scaleableRes
 		return err
 	}
 
-	gr, scaleRes, err := ds.getScaleableResource(ctx, resourceInfo)
+	gr, scaleRes, err := util.GetScaleResource(ctx, ds.client, ds.scaler, ds.l, resourceInfo.ref, resourceInfo.timeout)
 	if err != nil {
 		if !resourceInfo.shouldExist && apierrors.IsNotFound(err) {
 			ds.l.V(4).Info("Skipping scaling of resource as it is not found", "resourceInfo", resourceInfo)
@@ -254,22 +254,6 @@ func (ds *deploymentScaler) scale(ctx context.Context, resourceInfo scaleableRes
 		}
 	}
 	return err
-}
-
-func (ds *deploymentScaler) getScaleableResource(ctx context.Context, resourceInfo scaleableResourceInfo) (*schema.GroupResource, *autoscalingv1.Scale, error) {
-	gr, err := ds.getGroupResource(resourceInfo.ref)
-	if err != nil {
-		return nil, nil, err
-	}
-	scale, err := func() (*autoscalingv1.Scale, error) {
-		childCtx, cancelFn := context.WithTimeout(ctx, resourceInfo.timeout)
-		defer cancelFn()
-		return ds.scaler.Get(childCtx, gr, resourceInfo.ref.Name, metav1.GetOptions{})
-	}()
-	if err != nil {
-		return nil, nil, err
-	}
-	return &gr, scale, nil
 }
 
 func (ds *deploymentScaler) determineTargetReplicas(objMeta metav1.ObjectMeta, scaleOp operation) (int32, error) {
@@ -310,7 +294,7 @@ func (ds *deploymentScaler) shouldScale(ctx context.Context, scaleRes *autoscali
 }
 
 func (ds *deploymentScaler) resourceMatchDesiredReplicas(ctx context.Context, resInfo scaleableResourceInfo, mismatchReplicas mismatchReplicasCheckFn) bool {
-	d, err := util.GetDeploymentFor(ctx, ds.namespace, resInfo.ref.Name, ds.client, nil)
+	_, scaleRes, err := util.GetScaleResource(ctx, ds.client, ds.scaler, ds.l, resInfo.ref, resInfo.timeout)
 	if err != nil {
 		if apierrors.IsNotFound(err) && !resInfo.shouldExist {
 			ds.l.V(4).Info("Upstream resource not found. Ignoring this resource as its existence is marked as optional", "resource", resInfo.ref)
@@ -319,17 +303,17 @@ func (ds *deploymentScaler) resourceMatchDesiredReplicas(ctx context.Context, re
 		ds.l.Error(err, "Error trying to get Deployment for resource", "resource", resInfo.ref)
 		return false
 	}
-	if !isIgnoreScalingAnnotationSet(d.ObjectMeta) {
-		actualReplicas := d.Status.Replicas
+	if !isIgnoreScalingAnnotationSet(scaleRes.ObjectMeta) {
+		actualReplicas := scaleRes.Status.Replicas
 		if !mismatchReplicas(actualReplicas, resInfo.replicas) {
-			ds.l.V(4).Info("Upstream resource has been scaled to desired replicas", "namespace", ds.namespace, "name", d.Name, "resInfo", resInfo, "replicas", actualReplicas)
+			ds.l.V(4).Info("Upstream resource has been scaled to desired replicas", "namespace", ds.namespace, "name", scaleRes.Name, "resInfo", resInfo, "replicas", actualReplicas)
 			return true
 		} else {
-			ds.l.V(5).Info("Upstream resource has not been scaled to desired replicas", "namespace", ds.namespace, "name", d.Name, "resInfo", resInfo, "actualReplicas", actualReplicas)
+			ds.l.V(5).Info("Upstream resource has not been scaled to desired replicas", "namespace", ds.namespace, "name", scaleRes.Name, "resInfo", resInfo, "actualReplicas", actualReplicas)
 			return false
 		}
 	} else {
-		ds.l.V(5).Info("Ignoring upstream resource due to explicit instruction via annotation", "namespace", ds.namespace, "name", d.Name, "resInfo", resInfo, "annotation", ignoreScalingAnnotationKey)
+		ds.l.V(5).Info("Ignoring upstream resource due to explicit instruction via annotation", "namespace", ds.namespace, "name", scaleRes.Name, "resInfo", resInfo, "annotation", ignoreScalingAnnotationKey)
 	}
 	return true
 }
@@ -369,20 +353,6 @@ func (ds *deploymentScaler) doScale(ctx context.Context, gr *schema.GroupResourc
 	}
 	ds.l.V(5).Info("updating kubernetes scalable resource", "objectKey", client.ObjectKeyFromObject(scaleRes), "replicas", scaleRes.Spec.Replicas, "annotations", scaleRes.Annotations)
 	return ds.scaler.Update(childCtx, *gr, scaleRes, metav1.UpdateOptions{})
-}
-
-func (ds *deploymentScaler) getGroupResource(resourceRef *autoscalingv1.CrossVersionObjectReference) (schema.GroupResource, error) {
-	gv, _ := schema.ParseGroupVersion(resourceRef.APIVersion) // Ignoring the error as this validation has already been done when initially validating the Config
-	gk := schema.GroupKind{
-		Group: gv.Group,
-		Kind:  resourceRef.Kind,
-	}
-	mapping, err := ds.client.RESTMapper().RESTMapping(gk, gv.Version)
-	if err != nil {
-		ds.l.Error(err, "Failed to get RESTMapping for resource", "resourceRef", resourceRef)
-		return schema.GroupResource{}, err
-	}
-	return mapping.Resource.GroupResource(), nil
 }
 
 func collectResourceInfosByLevel(resourceInfos []scaleableResourceInfo) map[int][]scaleableResourceInfo {

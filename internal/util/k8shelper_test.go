@@ -16,7 +16,9 @@ package util
 
 import (
 	"context"
+	"k8s.io/client-go/scale"
 	"path/filepath"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"testing"
 	"time"
 
@@ -39,7 +41,9 @@ var (
 	k8sClient      client.Client
 	testEnv        test.ControllerTestEnv
 	cfg            *rest.Config
+	testScaler 		   scale.ScaleInterface
 	err            error
+	testLogger     = log.Log.WithName("testUtil")
 )
 
 func beforeAll(t *testing.T) {
@@ -182,7 +186,7 @@ func testTimeoutBeforeGettingDeployment(t *testing.T) {
 	g.Expect(err).Should(BeNil())
 
 	timeout := time.Nanosecond
-	actual, err := GetDeploymentFor(ctx, deployment.ObjectMeta.Namespace, deployment.ObjectMeta.Name, k8sClient, &timeout)
+	actual, err := GetScaleResource(ctx, k8sClient, , testLogger, ,&timeout)
 	g.Expect(err).ShouldNot(BeNil())
 	g.Expect(err.Error()).Should(ContainSubstring(context.DeadlineExceeded.Error()))
 	g.Expect(actual).Should(BeNil())

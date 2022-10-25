@@ -19,12 +19,10 @@ dependentResourceInfos:
       level: 1
       initialDelay: 10s
       timeout: 60s
-      replicas: 1
     scaleDown:
       level: 0
       initialDelay: 15s
       timeout: 45s
-      replicas: 0
   - ref:
       kind: "Deployment"
       name: "cluster-autoscaler"
@@ -33,4 +31,3 @@ dependentResourceInfos:
       level: 0
       initialDelay: 10s
       timeout: 60s
-      replicas: 1
