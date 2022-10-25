@@ -68,7 +68,6 @@ How to scale a `DependentResourceInfo` is captured in `ScaleInfo`. It has the fo
 | level | int | Yes | NA | Detailed below. |
 | initialDelay | metav1.Duration | No | 0s (No initial delay) | Once a decision is taken to scale a resource then via this property a delay can be induced before triggering the scale of the dependent resource. |
 | timeout | metav1.Duration | No | 30s | Defines the timeout for the scale operation to finish for a dependent resource. |
-| replicas | int | Yes | NA | It is the desired set of replicas post scale up/down operation for a dependent resource. |
 
 **Level**
 
@@ -82,30 +81,24 @@ dependentResourceInfos:
       apiVersion: "apps/v1"
     scaleUp: 
       level: 1 
-      replicas: 1 
     scaleDown: 
       level: 0 
-      replicas: 0 
   - ref:
       kind: "Deployment"
       name: "machine-controller-manager"
       apiVersion: "apps/v1"
     scaleUp:
       level: 1
-      replicas: 1
     scaleDown:
       level: 1
-      replicas: 0
   - ref:
       kind: "Deployment"
       name: "cluster-autoscaler"
       apiVersion: "apps/v1"
     scaleUp:
       level: 0
-      replicas: 1
     scaleDown:
       level: 2
-      replicas: 0
 ```
 Let us order the dependent resources by their respective levels for both scale-up and scale-down. We get the following order:
 
