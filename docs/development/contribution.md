@@ -54,10 +54,13 @@ git clone https://github.com/gardener/dependency-watchdog.git
 For every change following make targets are recommended to run.
 
 ```bash
-
-> make 
-
+# build the code changes
+> make build
+# ensure that all required checks pass
+> make check
 ```
+All tests should be run and the test coverage should ideally not reduce. 
+Please ensure that you have read [testing guidelines](testing.md).
 
 Before raising a pull request ensure that if you are introducing any new file then you must add licesence header to all new files. To add license header you can run this make target:
 ```bash
