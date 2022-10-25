@@ -12,4 +12,3 @@
 
 ## Deployment
 * [Configure dependency watchdog](deployment/configure.md)
-* [Monitor dependency watchdog](deployment/monitor.md)

@@ -69,6 +69,24 @@ How to scale a `DependentResourceInfo` is captured in `ScaleInfo`. It has the fo
 | initialDelay | metav1.Duration | No | 0s (No initial delay) | Once a decision is taken to scale a resource then via this property a delay can be induced before triggering the scale of the dependent resource. |
 | timeout | metav1.Duration | No | 30s | Defines the timeout for the scale operation to finish for a dependent resource. |
 
+**Determining target replicas**
+
+Prober cannot assume any target replicas during a scale-up operation for the following reasons:
+
+1. Kubernetes resources could be set to provide highly availability and the number of replicas could wary from one shoot control plane to the other. In gardener the number of replicas of pods in shoot namespace are controled by the [shoot control plane configuration](https://github.com/gardener/gardener/blob/master/docs/usage/shoot_high_availability.md).
+2. If Horizontal pod autoscaler has been configured for a kubernetes dependent resource then it could potentially change the `spec.replicas` for a deployment/statefulset.
+
+Given the above constraint lets look at how prober determines the target replicas during scale-down or scale-up operations.
+
+1. `Scale-Up`: Primary responsibility of a probe while performing a scale-up is to restore the replicas of a kubernetes dependent resource prior to scale-down. In order to do that it updates the following for each dependent resource that requires a scale-up:
+    1. `spec.replicas`: Checks if `dependency-watchdog.gardener.cloud/replicas` is set. If it is, then it will take the value stored against this key as the target replicas. To be a valid value it should always be greater than 0.
+    2. If `dependency-watchdog.gardener.cloud/replicas` annotation is not present then it falls back to the hard coded default value for scale-up which is set to 1.
+    3. Removes the annotation `dependency-watchdog.gardener.cloud/replicas` if it exists.
+
+2. `Scale-Down`: To scale down a dependent kubernetes resource it does the following:
+    1. Adds an annotation `dependency-watchdog.gardener.cloud/replicas` and sets its value to the current value of `spec.replicas`.
+    2. Updates `spec.replicas` to 0.
+
 **Level**
 
 Each dependent resource that should be scaled up or down is associated to a level. Levels are ordered and processed in ascending order (starting with 0 assigning it the highest priority). Consider the following configuration:
