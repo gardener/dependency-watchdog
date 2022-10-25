@@ -67,3 +67,11 @@ verify: check format test
 .PHONY: add-license-headers
 add-license-headers: $(GO_ADD_LICENSE)
 	@./hack/addlicenseheaders.sh
+
+# Taken this trick from https://pawamoy.github.io/posts/pass-makefile-args-as-typed-in-command-line/
+args = $(foreach a,$($(subst -,_,$1)_args),$(if $(value $a),$a="$($a)"))
+stress_args = test-package test-func tool-params
+
+.PHONY: stress
+stress: $(GO_STRESS)
+	@./hack/stress-test.sh $@ $(call args,$@)

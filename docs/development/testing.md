@@ -65,8 +65,20 @@ To run all the tests, use the following Makefile target
 ```shell
 make test
 ```
-
 To view coverage after running the tests, run :
 ```shell
 go tool cover -html=cover.out
 ```
+## Flaky tests
+
+If you see that a test is flaky then you can use `make stress` target which internally uses [stress tool](https://pkg.go.dev/golang.org/x/tools/cmd/stress)
+```bash
+make stress test-package=<test-package> test-func=<test-func> tool-params="<tool-params>"
+```
+An example invocation:
+```bash
+make stress test-package=./internal/util test-func=TestRetryUntilPredicateWithBackgroundContext tool-params="-p 10"
+```
+The make target will do the following:
+1. It will create a test binary for the package specified via `test-package` at `/tmp/pkg-stress.test` directory.
+2. It will run `stress` tool passing the `tool-params` and targets the function `test-func`.

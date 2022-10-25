@@ -47,7 +47,7 @@ You can view an example YAML configuration provided as `data` in a `ConfigMap` [
 
 ### DependentResourceInfo
 
-If a `failureThreshold` is breached by a probe while trying to reach the Shoot Kube ApiServer via external DNS route then it scales down the dependent resources defined by this property. Similarly if the probe is now able to reach the Shoot Kube ApiServer it transitions the probe status from unhealthy to healthy and it scales up the dependent resources defined by this property.
+If a `failureThreshold` is breached by a probe while trying to reach the Shoot Kube ApiServer via external DNS route then it scales down the dependent resources defined by this property. Similarly, if the probe is now able to reach the Shoot Kube ApiServer it transitions the probe status from unhealthy to healthy and it scales up the dependent resources defined by this property.
 
 Each dependent resource info has the following properties:
 
@@ -133,6 +133,9 @@ Order of scale down will be:
 2. machine-controller-manager after (1) has been scaled down.
 3. cluster-autoscaler after (2) has been scaled down.
 
+### Disable/Ignore Scaling
+A probe can be configured to ignore scaling of configured dependent kubernetes resources.
+To do that one must set `dependency-watchdog.gardener.cloud/ignore-scaling` annotation to `true` on the scalable resource for which scaling should be ignored.
 
 ## Weeder
 

@@ -14,27 +14,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script uses import-boss to check import restrictions.
-# It checks all imports of the given packages (including transitive imports) against rules defined in
-# `.import-restrictions` files in each directory.
-# An import is allowed if it matches at least one allowed prefix and does not match any forbidden prefixes.
-# Note: "" is a prefix of everything
-# Also see: https://github.com/kubernetes/code-generator/tree/master/cmd/import-boss
+set -e
 
-# Usage: `hack/check-imports.sh package [package...]`.
-
-set -o errexit
-set -o nounset
-set -o pipefail
-
-echo "> Check Imports"
-
-this_module=$(go list -m)
-export GO111MODULE=on
-
-packages=()
+shift # first argument will be the name of the command which we are not interested in, so ignoring it
 for p in "$@" ; do
-  packages+=("$this_module/${p#./}")
+  IFS='=' read -r key val <<< "$p"
+  case $key in
+   test-package)
+    package="$val"
+      ;;
+   test-func)
+    func="$val"
+    ;;
+   tool-params)
+     params="$val"
+    ;;
+  esac
 done
 
-import-boss --include-test-files=true --verify-only --input-dirs "$(IFS=, ; echo "${packages[*]}")"
+# compile test binary
+rm -f /tmp/pkg-stress.test
+go test -c "$package" -o /tmp/pkg-stress.test
+chmod +x /tmp/pkg-stress.test
+
+# run the stress tool
+stress $params  /tmp/pkg-stress.test -test.run=$func
