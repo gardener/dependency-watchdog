@@ -77,7 +77,7 @@ func TestScalerSuite(t *testing.T) {
 		title string
 		run   func(t *testing.T)
 	}{
-		{"test doScale returns an error", testDoScaleReturnsError},
+		{"test updateResourceAndScale returns an error", testDoScaleReturnsError},
 		{"test scaling when KCM deployment(shouldExist is true in resourceInfo) is not found", testScalingWhenKCMDeploymentNotFound},
 		{"test scaling when CA deployment(shouldExist is false in resourceInfo) is not found", testScalingWhenCADeploymentNotFound},
 		{"test scaling when all deployments are found", testScalingWhenAllDeploymentsAreFound},

@@ -116,13 +116,6 @@ func (ds *deploymentScaler) ScaleUp(ctx context.Context) error {
 	return ds.scaleUpFlow.Run(ctx, flow.Opts{})
 }
 
-func isIgnoreScalingAnnotationSet(objMeta metav1.ObjectMeta) bool {
-	if val, ok := objMeta.Annotations[ignoreScalingAnnotationKey]; ok {
-		return val == "true"
-	}
-	return false
-}
-
 type scaleFlow struct {
 	flow          *flow.Flow
 	flowStepInfos []scaleStepInfo
@@ -233,52 +226,48 @@ func (ds *deploymentScaler) scale(ctx context.Context, resourceInfo scaleableRes
 		return err
 	}
 
-	gr, scaleRes, err := util.GetScaleResource(ctx, ds.client, ds.scaler, ds.l, resourceInfo.ref, resourceInfo.timeout)
+	st, err := ds.createScaleTarget(ctx, resourceInfo)
 	if err != nil {
-		if !resourceInfo.shouldExist && apierrors.IsNotFound(err) {
-			ds.l.V(4).Info("Skipping scaling of resource as it is not found", "resourceInfo", resourceInfo)
-			return nil
-		}
-		ds.l.Error(err, "Scaling operation skipped due to error in getting deployment", "resourceInfo", resourceInfo)
 		return err
 	}
 
-	targetReplicas, err := ds.determineTargetReplicas(scaleRes.ObjectMeta, resourceInfo.operation)
-	if err != nil {
-		return err
-	}
-	resourceInfo.replicas = targetReplicas
-	if ds.shouldScale(ctx, scaleRes, resourceInfo.replicas, mismatchReplicas, waitOnResourceInfos) {
-		if _, err = ds.doScale(ctx, gr, scaleRes, resourceInfo); err == nil {
+	if ds.shouldScale(ctx, st, mismatchReplicas, waitOnResourceInfos) {
+		if _, err = ds.updateResourceAndScale(ctx, st); err == nil {
 			ds.l.V(4).Info("Resource has been scaled", "resInfo", resourceInfo)
 		}
 	}
+
 	return err
 }
 
-func (ds *deploymentScaler) determineTargetReplicas(objMeta metav1.ObjectMeta, scaleOp operation) (int32, error) {
+func (ds *deploymentScaler) getObjectKey(resourceInfo scaleableResourceInfo) client.ObjectKey {
+	return client.ObjectKey{Namespace: ds.namespace, Name: resourceInfo.ref.Name}
+}
+
+func (ds *deploymentScaler) determineTargetReplicas(resName string, annotations map[string]string, scaleOp operation) (int32, error) {
 	if scaleOp == scaleDown {
 		return DefaultScaleDownReplicas, nil
 	}
-	if replicas, ok := objMeta.Annotations[replicasAnnotationKey]; ok {
+	if replicas, ok := annotations[replicasAnnotationKey]; ok {
 		r, err := strconv.Atoi(replicas)
 		if err != nil {
 			return 0, fmt.Errorf("unexpected and invalid replicas set as value for annotation: %s, %w", replicasAnnotationKey, err)
 		}
 		return int32(r), nil
 	}
-	ds.l.V(3).Info("replicas annotation not present on resource, falling back to default scale-up replicas.", "operation", scaleOp, "namespace", objMeta.Namespace, "name", objMeta.Name, "annotationKey", replicasAnnotationKey, "default-replicas", DefaultScaleUpReplicas)
+	ds.l.V(3).Info("replicas annotation not present on resource, falling back to default scale-up replicas.", "operation", scaleOp, "namespace", ds.namespace, "name", resName, "annotationKey", replicasAnnotationKey, "default-replicas", DefaultScaleUpReplicas)
 	return DefaultScaleUpReplicas, nil
 }
 
-func (ds *deploymentScaler) shouldScale(ctx context.Context, scaleRes *autoscalingv1.Scale, targetReplicas int32, mismatchReplicas mismatchReplicasCheckFn, waitOnResourceInfos []scaleableResourceInfo) bool {
-	if isIgnoreScalingAnnotationSet(scaleRes.ObjectMeta) {
-		ds.l.V(4).Info("Scaling ignored due to explicit instruction via annotation", "namespace", ds.namespace, "deploymentName", scaleRes.Name, "annotation", ignoreScalingAnnotationKey)
+func (ds *deploymentScaler) shouldScale(ctx context.Context, st *scaleTarget, mismatchReplicas mismatchReplicasCheckFn, waitOnResourceInfos []scaleableResourceInfo) bool {
+	if ignoreScaling(st.resourceObject.GetAnnotations()) {
+		ds.l.V(4).Info("Scaling ignored due to explicit instruction via annotation", "namespace", ds.namespace, "deploymentName", st.scaleSubRes.Name, "annotation", ignoreScalingAnnotationKey)
 		return false
 	}
+
 	// check the current replicas and compare it against the desired replicas
-	if !mismatchReplicas(scaleRes.Spec.Replicas, targetReplicas) {
-		ds.l.V(4).Info("Spec replicas matches the target replicas. scaling for this resource is skipped", "namespace", ds.namespace, "deploymentName", scaleRes.Name, "deploymentSpecReplicas", scaleRes.Spec.Replicas, "targetReplicas", targetReplicas)
+	if !mismatchReplicas(st.getCurrentReplicas(), st.targetReplicas) {
+		ds.l.V(4).Info("Spec replicas matches the target replicas. scaling for this resource is skipped", "namespace", ds.namespace, "deploymentName", st.scaleSubRes.Name, "deploymentSpecReplicas", st.getCurrentReplicas(), "targetReplicas", st.targetReplicas)
 		return false
 	}
 	// check if all resources this resource should wait on have been scaled, if not then we cannot scale this resource.
@@ -286,11 +275,33 @@ func (ds *deploymentScaler) shouldScale(ctx context.Context, scaleRes *autoscali
 	if len(waitOnResourceInfos) > 0 {
 		areUpstreamResourcesScaled := ds.waitUntilUpstreamResourcesAreScaled(ctx, waitOnResourceInfos, mismatchReplicas)
 		if !areUpstreamResourcesScaled {
-			ds.l.V(4).Info("Upstream resources are not scaled. scaling for this resource is skipped", "namespace", ds.namespace, "deploymentName", scaleRes.Name)
+			ds.l.V(4).Info("Upstream resources are not scaled. scaling for this resource is skipped", "namespace", ds.namespace, "deploymentName", st.scaleSubRes.Name)
 		}
 		return areUpstreamResourcesScaled
 	}
 	return true
+}
+
+func (ds *deploymentScaler) updateResourceAndScale(ctx context.Context, st *scaleTarget) (*autoscalingv1.Scale, error) {
+	childCtx, cancelFn := context.WithTimeout(ctx, st.timeout)
+	defer cancelFn()
+
+	// update the annotation capturing the current spec.replicas as the annotation value if the operation is scale down.
+	// This allows restoration of the resource to the same replica count when a subsequent scale up operation is triggered.
+	resAnnot := st.resourceObject.GetAnnotations()
+	if st.operation == scaleDown {
+		resAnnot[replicasAnnotationKey] = string(st.getCurrentReplicas())
+		st.resourceObject.SetAnnotations(resAnnot)
+		err := ds.client.Update(ctx, st.resourceObject)
+		if err != nil {
+			ds.l.Error(err, "failed to update annotation to capture the current replicas", "namespace", ds.namespace, "objectKey", client.ObjectKeyFromObject(st.scaleSubRes))
+			return nil, err
+		}
+	}
+
+	st.scaleSubRes.Spec.Replicas = st.targetReplicas
+	ds.l.V(5).Info("updating kubernetes scalable resource", "objectKey", client.ObjectKeyFromObject(st.scaleSubRes), "replicas", st.targetReplicas, "annotations", st.resourceObject.GetAnnotations())
+	return ds.scaler.Update(childCtx, *st.groupResource, st.scaleSubRes, metav1.UpdateOptions{})
 }
 
 func (ds *deploymentScaler) resourceMatchDesiredReplicas(ctx context.Context, resInfo scaleableResourceInfo, mismatchReplicas mismatchReplicasCheckFn) bool {
@@ -303,7 +314,7 @@ func (ds *deploymentScaler) resourceMatchDesiredReplicas(ctx context.Context, re
 		ds.l.Error(err, "Error trying to get Deployment for resource", "resource", resInfo.ref)
 		return false
 	}
-	if !isIgnoreScalingAnnotationSet(scaleRes.ObjectMeta) {
+	if !ignoreScaling(scaleRes.ObjectMeta.Annotations) {
 		actualReplicas := scaleRes.Status.Replicas
 		if !mismatchReplicas(actualReplicas, resInfo.replicas) {
 			ds.l.V(4).Info("Upstream resource has been scaled to desired replicas", "namespace", ds.namespace, "name", scaleRes.Name, "resInfo", resInfo, "replicas", actualReplicas)
@@ -341,18 +352,57 @@ func (ds *deploymentScaler) waitUntilUpstreamResourcesAreScaled(ctx context.Cont
 	return result
 }
 
-func (ds *deploymentScaler) doScale(ctx context.Context, gr *schema.GroupResource, scaleRes *autoscalingv1.Scale, resourceInfo scaleableResourceInfo) (*autoscalingv1.Scale, error) {
-	childCtx, cancelFn := context.WithTimeout(ctx, resourceInfo.timeout)
-	defer cancelFn()
+type scaleTarget struct {
+	resourceObject client.Object
+	groupResource  *schema.GroupResource
+	scaleSubRes    *autoscalingv1.Scale
+	targetReplicas int32
+	timeout        time.Duration
+	operation      operation
+}
 
-	scaleRes.Spec.Replicas = resourceInfo.replicas
-	if resourceInfo.operation == scaleUp {
-		delete(scaleRes.Annotations, replicasAnnotationKey)
-	} else {
-		metav1.SetMetaDataAnnotation(&scaleRes.ObjectMeta, replicasAnnotationKey, string(scaleRes.Spec.Replicas))
+func (ds *deploymentScaler) createScaleTarget(ctx context.Context, resourceInfo scaleableResourceInfo) (*scaleTarget, error) {
+	var resObj client.Object
+	err := ds.client.Get(ctx, ds.getObjectKey(resourceInfo), resObj)
+	if err != nil {
+		ds.l.Error(err, "failed to get kubernetes object", "namespace", ds.namespace, "resourceInfo", resourceInfo)
+		return nil, err
 	}
-	ds.l.V(5).Info("updating kubernetes scalable resource", "objectKey", client.ObjectKeyFromObject(scaleRes), "replicas", scaleRes.Spec.Replicas, "annotations", scaleRes.Annotations)
-	return ds.scaler.Update(childCtx, *gr, scaleRes, metav1.UpdateOptions{})
+
+	gr, scaleSubRes, err := util.GetScaleResource(ctx, ds.client, ds.scaler, ds.l, resourceInfo.ref, resourceInfo.timeout)
+	if err != nil {
+		if !resourceInfo.shouldExist && apierrors.IsNotFound(err) {
+			ds.l.V(4).Info("Skipping scaling of resource as it is not found", "resourceInfo", resourceInfo)
+			return nil, nil
+		}
+		ds.l.Error(err, "Scaling operation skipped due to error in getting deployment", "resourceInfo", resourceInfo)
+		return nil, err
+	}
+	targetReplicas, err := ds.determineTargetReplicas(resourceInfo.ref.Name, resObj.GetAnnotations(), resourceInfo.operation)
+
+	return &scaleTarget{
+		resourceObject: resObj,
+		groupResource:  gr,
+		scaleSubRes:    scaleSubRes,
+		targetReplicas: targetReplicas,
+		timeout:        resourceInfo.timeout,
+		operation:      resourceInfo.operation,
+	}, nil
+}
+
+func (st *scaleTarget) getCurrentReplicas() int32 {
+	return st.scaleSubRes.Spec.Replicas
+}
+
+func ignoreScaling(annotations map[string]string) bool {
+	if val, ok := annotations[ignoreScalingAnnotationKey]; ok {
+		b, err := strconv.ParseBool(val)
+		if err != nil {
+			return false
+		}
+		return b
+	}
+	return false
 }
 
 func collectResourceInfosByLevel(resourceInfos []scaleableResourceInfo) map[int][]scaleableResourceInfo {
