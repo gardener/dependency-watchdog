@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"github.com/gardener/dependency-watchdog/internal/prober/scaler"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"github.com/go-logr/logr"
@@ -137,7 +138,7 @@ func canStartProber(shoot *v1beta1.Shoot) bool {
 func (r *ClusterReconciler) startProber(ctx context.Context, logger logr.Logger, key string) {
 	_, ok := r.ProberMgr.GetProber(key)
 	if !ok {
-		deploymentScaler := prober.NewDeploymentScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter, logger)
+		deploymentScaler := scaler.NewScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter, logger)
 		shootClientCreator := prober.NewShootClientCreator(r.Client)
 		p := prober.NewProber(ctx, key, r.ProbeConfig, r.Client, deploymentScaler, shootClientCreator, logger)
 		r.ProberMgr.Register(*p)

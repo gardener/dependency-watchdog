@@ -84,7 +84,7 @@ func (c *creator) createScaleTaskFn(namespace string, resourceInfos []scalableRe
 func (c *creator) doCreateTaskFn(namespace string, resInfo scalableResourceInfo, waitOnResourceInfos []scalableResourceInfo) flow.TaskFn {
 	return func(ctx context.Context) error {
 		operation := fmt.Sprintf("scale-resource-%s.%s", namespace, resInfo.ref.Name)
-		resScaler := newResourceScaler(c.client, c.scaler, namespace, resInfo, waitOnResourceInfos)
+		resScaler := newResourceScaler(c.client, c.scaler, c.options, namespace, resInfo, waitOnResourceInfos)
 		result := util.Retry(ctx,
 			operation,
 			func() (interface{}, error) {

@@ -19,12 +19,12 @@ import (
 	"time"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
-
+	dwdScaler "github.com/gardener/dependency-watchdog/internal/prober/scaler"
 	"github.com/gardener/dependency-watchdog/internal/util"
+
 	"github.com/go-logr/logr"
 
 	"k8s.io/apimachinery/pkg/util/wait"
-
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -40,7 +40,7 @@ type Prober struct {
 	namespace           string
 	config              *papi.Config
 	client              client.Client
-	scaler              DeploymentScaler
+	scaler              dwdScaler.Scaler
 	shootClientCreator  ShootClientCreator
 	internalProbeStatus probeStatus
 	externalProbeStatus probeStatus
@@ -50,7 +50,7 @@ type Prober struct {
 }
 
 // NewProber creates a new Prober
-func NewProber(parentCtx context.Context, namespace string, config *papi.Config, ctrlClient client.Client, scaler DeploymentScaler, shootClientCreator ShootClientCreator, logger logr.Logger) *Prober {
+func NewProber(parentCtx context.Context, namespace string, config *papi.Config, ctrlClient client.Client, scaler dwdScaler.Scaler, shootClientCreator ShootClientCreator, logger logr.Logger) *Prober {
 	pLogger := logger.WithValues("proberRunning", true, "proberKey", namespace)
 	ctx, cancelFn := context.WithCancel(parentCtx)
 	return &Prober{

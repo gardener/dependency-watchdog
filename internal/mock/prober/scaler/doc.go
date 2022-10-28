@@ -12,5 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:generate mockgen -package prober -destination=mocks.go github.com/gardener/dependency-watchdog/internal/prober ShootClientCreator
-package prober
+//go:generate mockgen -package scaler -destination=mocks.go github.com/gardener/dependency-watchdog/internal/prober/scaler Scaler
+package scaler
