@@ -19,8 +19,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/go-logr/logr"
 	"os"
+
+	"github.com/go-logr/logr"
 
 	"github.com/gardener/dependency-watchdog/cmd"
 	"go.uber.org/zap/zapcore"
@@ -44,7 +45,6 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
 	// +kubebuilder:scaffold:scheme
 }
 

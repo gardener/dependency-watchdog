@@ -23,6 +23,7 @@ import (
 	"time"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
+	"github.com/gardener/dependency-watchdog/internal/prober/scaler"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/gardener/dependency-watchdog/internal/test"
@@ -65,7 +66,7 @@ func createDeploymentScaler(g *WithT, probeCfg *papi.Config) DeploymentScaler {
 	scalesGetter, err := util.CreateScalesGetter(cfg)
 	g.Expect(err).To(BeNil())
 	ds := NewDeploymentScaler(namespace, probeCfg, kindTestEnv.GetClient(), scalesGetter, sLogger,
-		withDependentResourceCheckTimeout(10*time.Second), withDependentResourceCheckInterval(100*time.Millisecond))
+		scaler.withDependentResourceCheckTimeout(10*time.Second), scaler.withDependentResourceCheckInterval(100*time.Millisecond))
 	return ds
 }
 

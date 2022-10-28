@@ -17,12 +17,14 @@ package util
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/go-logr/logr"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"net/http"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -144,6 +146,63 @@ func getGroupResource(client client.Client, logger logr.Logger, resourceRef *aut
 		return schema.GroupResource{}, err
 	}
 	return mapping.Resource.GroupResource(), nil
+}
+
+// GetResourceAnnotations gets the annotations for a resource identified by resourceRef withing the given namespace.
+func GetResourceAnnotations(ctx context.Context, client client.Client, namespace string, resourceRef *autoscalingv1.CrossVersionObjectReference) (map[string]string, error) {
+	partialObjMeta := &metav1.PartialObjectMetadata{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       resourceRef.Kind,
+			APIVersion: resourceRef.APIVersion,
+		},
+	}
+	err := client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: resourceRef.Name}, partialObjMeta)
+	if err != nil {
+		return nil, fmt.Errorf("error getting annotations for resource %s. Err: %w", resourceRef, err)
+	}
+	return partialObjMeta.Annotations, nil
+}
+
+// PatchResourceAnnotations patches the resource annotation with patchBytes. It uses StrategicMergePatchType strategy so the consumers should only provide changes to the annotations.
+func PatchResourceAnnotations(ctx context.Context, cl client.Client, namespace string, resourceRef *autoscalingv1.CrossVersionObjectReference, patchBytes []byte) error {
+	partialObjMeta := &metav1.PartialObjectMetadata{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       resourceRef.Kind,
+			APIVersion: resourceRef.APIVersion,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceRef.Name,
+			Namespace: namespace,
+		},
+	}
+	return cl.Patch(ctx, partialObjMeta, client.RawPatch(types.StrategicMergePatchType, patchBytes))
+}
+
+// GetAnnotationsAndReadyReplicasForResource gets metadata.annotations and spec.replicas for any resource identified via resourceRef withing the given namespace.
+// It is an error if there is no spec.replicas or if there is an error fetching the resource.
+func GetAnnotationsAndReadyReplicasForResource(ctx context.Context, client client.Client, namespace string, resourceRef *autoscalingv1.CrossVersionObjectReference) (map[string]string, int32, error) {
+	resObj := unstructured.Unstructured{}
+	groupVersion, err := schema.ParseGroupVersion(resourceRef.APIVersion)
+	if err != nil {
+		return nil, 0, err
+	}
+	resObj.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   groupVersion.Group,
+		Version: groupVersion.Version,
+		Kind:    resourceRef.Kind,
+	})
+	err = client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: resourceRef.Name}, &resObj)
+	if err != nil {
+		return nil, 0, err
+	}
+	readyReplicas, found, err := unstructured.NestedInt64(resObj.Object, "spec", "replicas")
+	if !found {
+		return nil, 0, fmt.Errorf("spec.replicas not found for resource %s in namespace: %s", resourceRef, namespace)
+	}
+	if err != nil {
+		return nil, 0, err
+	}
+	return resObj.GetAnnotations(), int32(readyReplicas), nil
 }
 
 // CreateClientSetFromRestConfig creates a kubernetes.Clientset from rest.Config.

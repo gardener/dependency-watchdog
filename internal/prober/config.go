@@ -39,10 +39,6 @@ const (
 	DefaultFailureThreshold = 3
 	// DefaultBackoffJitterFactor is the default jitter value with which successive probe runs are scheduled.
 	DefaultBackoffJitterFactor = 0.2
-	// DefaultScaleUpReplicas is the default value of number of replicas for a scale-up operation by a probe when the external probe transitions from failed to success.
-	DefaultScaleUpReplicas int32 = 1
-	// DefaultScaleDownReplicas is the default value of number of replicas for a scale-down operation by a probe when the external probe transitions from success to failed.
-	DefaultScaleDownReplicas int32 = 0
 	// DefaultScaleUpdateTimeout is the default duration representing a timeout for the scale operation to complete.
 	DefaultScaleUpdateTimeout = 30 * time.Second
 )

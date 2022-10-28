@@ -12,13 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prober
+package scaler
 
-import "time"
+import (
+	"time"
+
+	"k8s.io/utils/pointer"
+)
 
 const (
 	defaultDependentResourceCheckTimeout  = 20 * time.Millisecond
 	defaultDependentResourceCheckInterval = 5 * time.Millisecond
+	defaultScaleResourceBackoff           = 100 * time.Millisecond
 )
 
 type scalerOption func(options *scalerOptions)
@@ -26,6 +31,7 @@ type scalerOption func(options *scalerOptions)
 type scalerOptions struct {
 	dependentResourceCheckTimeout  *time.Duration
 	dependentResourceCheckInterval *time.Duration
+	scaleResourceBackOff           *time.Duration
 }
 
 func buildScalerOptions(options ...scalerOption) *scalerOptions {
@@ -49,13 +55,20 @@ func withDependentResourceCheckInterval(interval time.Duration) scalerOption {
 	}
 }
 
+func withScaleResourceBackOff(interval time.Duration) scalerOption {
+	return func(options *scalerOptions) {
+		options.scaleResourceBackOff = &interval
+	}
+}
+
 func fillDefaultsOptions(options *scalerOptions) {
 	if options.dependentResourceCheckTimeout == nil {
-		options.dependentResourceCheckTimeout = new(time.Duration)
-		*options.dependentResourceCheckTimeout = defaultDependentResourceCheckTimeout
+		options.dependentResourceCheckTimeout = pointer.Duration(defaultDependentResourceCheckTimeout)
 	}
 	if options.dependentResourceCheckInterval == nil {
-		options.dependentResourceCheckInterval = new(time.Duration)
-		*options.dependentResourceCheckInterval = defaultDependentResourceCheckInterval
+		options.dependentResourceCheckInterval = pointer.Duration(defaultDependentResourceCheckInterval)
+	}
+	if options.scaleResourceBackOff == nil {
+		options.scaleResourceBackOff = pointer.Duration(defaultScaleResourceBackoff)
 	}
 }

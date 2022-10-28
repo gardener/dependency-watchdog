@@ -24,6 +24,7 @@ import (
 	"time"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
+	"github.com/gardener/dependency-watchdog/internal/prober/scaler"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/go-logr/logr"
@@ -61,9 +62,9 @@ type DeploymentScaler interface {
 }
 
 // NewDeploymentScaler creates an instance of DeploymentScaler.
-func NewDeploymentScaler(namespace string, config *papi.Config, client client.Client, scalerGetter scalev1.ScalesGetter, logger logr.Logger, options ...scalerOption) DeploymentScaler {
+func NewDeploymentScaler(namespace string, config *papi.Config, client client.Client, scalerGetter scalev1.ScalesGetter, logger logr.Logger, options ...scaler.scalerOption) DeploymentScaler {
 	logger = logger.WithName("scaler")
-	opts := buildScalerOptions(options...)
+	opts := scaler.buildScalerOptions(options...)
 	ds := deploymentScaler{
 		namespace: namespace,
 		scaler:    scalerGetter.Scales(namespace),
@@ -104,7 +105,7 @@ type deploymentScaler struct {
 	client        client.Client
 	scaleDownFlow *flow.Flow
 	scaleUpFlow   *flow.Flow
-	options       *scalerOptions
+	options       *scaler.scalerOptions
 	l             logr.Logger
 }
 
@@ -337,6 +338,7 @@ func (ds *deploymentScaler) waitUntilUpstreamResourcesAreScaled(ctx context.Cont
 		resInfo := resInfo
 		go func() {
 			defer wg.Done()
+			// get the target replicas for the upstream resource info and pass it to resourceMatchDesiredReplicas
 			operation := fmt.Sprintf("wait for upstream resource: %s in namespace %s to reach replicas %d", resInfo.ref.Name, ds.namespace, resInfo.replicas)
 			resultC <- util.RetryUntilPredicate(ctx, operation, func() bool { return ds.resourceMatchDesiredReplicas(ctx, resInfo, mismatchReplicas) }, *ds.options.dependentResourceCheckTimeout, *ds.options.dependentResourceCheckInterval)
 		}()
