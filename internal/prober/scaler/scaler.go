@@ -104,6 +104,6 @@ type scalableResourceInfo struct {
 }
 
 func (r scalableResourceInfo) String() string {
-	return fmt.Sprintf("{Resource ref: %#v, level: %d, initialDelay: %#v, timeout: %#v, operation: %s}",
+	return fmt.Sprintf("{Resource ref: %#v, level: %d, initialDelay: %#v, timeout: %#v, operation: %v}",
 		*r.ref, r.level, r.initialDelay, r.timeout, r.operation)
 }
