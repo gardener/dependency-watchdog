@@ -6,7 +6,6 @@ import (
 	"time"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
-	"github.com/gardener/dependency-watchdog/internal/util"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	"github.com/go-logr/logr"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
@@ -18,8 +17,11 @@ var (
 	logger logr.Logger
 )
 
-// mismatchReplicasCheckFn
-type mismatchReplicasCheckFn func(replicas, targetReplicas int32) bool
+// replicasCheckPredicate checks if scaling should be done for the current number of replicas
+type replicasCheckPredicate func(currentReplicas int32) bool
+
+// scalingCompletePredicate checks if scaling of the resource is complete based on the current and target replica count
+type scalingCompletePredicate func(currentReplicas, targetReplicas int32) bool
 
 // operation denotes either a scale up or scale down operation.
 type operationType uint8
@@ -76,20 +78,29 @@ func (ds *scaleFlowRunner) ScaleUp(ctx context.Context) error {
 }
 
 type operation struct {
-	opType                     operationType
-	replicaMismatchPredicateFn mismatchReplicasCheckFn
+	opType                   operationType
+	replicasCheckPredicate   replicasCheckPredicate
+	scalingCompletePredicate scalingCompletePredicate
 }
 
 func newScaleOperation(opType operationType) operation {
-	var fn mismatchReplicasCheckFn
+	var (
+		fn1 replicasCheckPredicate
+		fn2 scalingCompletePredicate
+	)
+
 	if opType == scaleUp {
-		fn = util.ScaleUpReplicasMismatch
+		fn1 = scaleUpReplicasPredicate
+		fn2 = scaleUpCompletePredicate
+
 	} else {
-		fn = util.ScaleDownReplicasMismatch
+		fn1 = scaleDownReplicasPredicate
+		fn2 = scaleDownCompletePredicate
 	}
 	return operation{
-		opType:                     opType,
-		replicaMismatchPredicateFn: fn,
+		opType:                   opType,
+		replicasCheckPredicate:   fn1,
+		scalingCompletePredicate: fn2,
 	}
 }
 

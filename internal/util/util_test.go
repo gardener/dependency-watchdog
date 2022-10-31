@@ -23,20 +23,6 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestScaleUpReplicaMismatch(t *testing.T) {
-	g := NewWithT(t)
-	g.Expect(ScaleUpReplicasMismatch(1, 2)).To(BeTrue())
-	g.Expect(ScaleUpReplicasMismatch(2, 1)).To(BeFalse())
-	g.Expect(ScaleUpReplicasMismatch(1, 1)).To(BeFalse())
-}
-
-func TestScaleDownReplicaMismatch(t *testing.T) {
-	g := NewWithT(t)
-	g.Expect(ScaleDownReplicasMismatch(1, 2)).To(BeFalse())
-	g.Expect(ScaleDownReplicasMismatch(2, 1)).To(BeTrue())
-	g.Expect(ScaleDownReplicasMismatch(1, 1)).To(BeFalse())
-}
-
 func TestSleepWithContextShouldStopIfDeadlineExceeded(t *testing.T) {
 	g := NewWithT(t)
 	ctx, cancelFn := context.WithTimeout(context.Background(), 2*time.Millisecond)

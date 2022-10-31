@@ -83,3 +83,23 @@ func createTaskName(resInfos []scalableResourceInfo, level int) string {
 	}
 	return fmt.Sprintf("scale:level-%d:%s", level, strings.Join(resNames, "#"))
 }
+
+// scaleUpReplicasPredicate scales up if current number of replicas is zero
+func scaleUpReplicasPredicate(currentReplicas int32) bool {
+	return currentReplicas == 0
+}
+
+// scaleDownReplicasPredicate scales down if current number of replicas is positive
+func scaleDownReplicasPredicate(currentReplicas int32) bool {
+	return currentReplicas > 0
+}
+
+// scaleUpCompletePredicate checks if current number of replicas is more than target replicas
+func scaleUpCompletePredicate(currentReplicas, targetReplicas int32) bool {
+	return currentReplicas >= targetReplicas
+}
+
+// scaleDownCompletePredicate checks if current number of replicas is less than target replicas
+func scaleDownCompletePredicate(currentReplicas, targetReplicas int32) bool {
+	return currentReplicas <= targetReplicas
+}

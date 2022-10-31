@@ -90,8 +90,8 @@ func (r *resScaler) shouldScale(ctx context.Context, resourceAnnot map[string]st
 		return false
 	}
 
-	// check the current replicas and compare it against the desired replicas
-	if !r.resourceInfo.operation.replicaMismatchPredicateFn(currentReplicas, targetReplicas) {
+	// check the current replicas to decide if scaling is needed
+	if r.resourceInfo.operation.replicasCheckPredicate(currentReplicas) {
 		logger.V(4).Info("Spec replicas matches the target replicas. scaling for this resource is skipped", "namespace", r.namespace, "name", r.resourceInfo.ref.Name, "currentReplicas", currentReplicas, "targetReplicas", targetReplicas)
 		return false
 	}
@@ -153,7 +153,7 @@ func (r *resScaler) resourceMatchDesiredReplicas(ctx context.Context, resourceIn
 		logger.Error(err, "(resourceMatchDesiredReplicas) error trying to determine target replicas for resource", "namespace", r.namespace, "resource", resourceInfo.ref)
 		return false
 	}
-	if !resourceInfo.operation.replicaMismatchPredicateFn(readyReplicas, targetReplicas) {
+	if resourceInfo.operation.scalingCompletePredicate(readyReplicas, targetReplicas) {
 		logger.V(4).Info("upstream resource has been scaled to desired replicas", "namespace", r.namespace, "name", resourceInfo.ref.Name, "targetReplicas", targetReplicas)
 		return true
 	}

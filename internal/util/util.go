@@ -37,16 +37,6 @@ func SleepWithContext(ctx context.Context, sleepFor time.Duration) error {
 	}
 }
 
-// ScaleUpReplicasMismatch scales down if current number of replicas is less than target replicas
-func ScaleUpReplicasMismatch(replicas, targetReplicas int32) bool {
-	return targetReplicas > replicas
-}
-
-// ScaleDownReplicasMismatch scales down if current number of replicas is more than target replicas
-func ScaleDownReplicasMismatch(replicas, targetReplicas int32) bool {
-	return replicas > targetReplicas
-}
-
 // ValidateIfFileExists validates the existence of a file
 func ValidateIfFileExists(file string, t *testing.T) {
 	g := gomega.NewWithT(t)
