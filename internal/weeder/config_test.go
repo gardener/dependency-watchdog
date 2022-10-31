@@ -49,7 +49,7 @@ func TestMissingMandatoryFieldsShouldReturnErrorAndNilConfig(t *testing.T) {
 		expectedErrCount int
 	}{
 		{"config_missing_mandatory_values.yaml", 1},
-		{"config_missing_dependent_resource_infos.yaml", 1},
+		{"config_missing_pod_selectors.yaml", 1},
 	}
 
 	for _, entry := range table {
