@@ -24,6 +24,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+const namespace = "default"
+
 var pmLogger = log.Log.WithName("test")
 
 func setupMgrTest(t *testing.T) (Manager, func(mgr Manager)) {

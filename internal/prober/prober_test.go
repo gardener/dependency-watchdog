@@ -23,11 +23,14 @@ import (
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	mockdiscovery "github.com/gardener/dependency-watchdog/internal/mock/client-go/discovery"
+	mockinterface "github.com/gardener/dependency-watchdog/internal/mock/client-go/kubernetes"
 	mockprober "github.com/gardener/dependency-watchdog/internal/mock/prober"
-	mockinterface "github.com/gardener/dependency-watchdog/internal/mock/prober/k8s/client"
-	mockdiscovery "github.com/gardener/dependency-watchdog/internal/mock/prober/k8s/discovery"
+	mockscaler "github.com/gardener/dependency-watchdog/internal/mock/prober/scaler"
+
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/gomega"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/version"
@@ -40,7 +43,7 @@ import (
 var (
 	config                              *papi.Config
 	ctrl                                *gomock.Controller
-	mds                                 *mockprober.MockDeploymentScaler
+	mds                                 *mockscaler.MockScaler
 	msc                                 *mockprober.MockShootClientCreator
 	clientBuilder                       *fake.ClientBuilder
 	fakeClient                          client.WithWatch
@@ -237,7 +240,7 @@ func checkProbeStatus(t *testing.T, ps probeStatus, successCount int, errCount i
 
 func setupProberTest(t *testing.T) {
 	ctrl = gomock.NewController(t)
-	mds = mockprober.NewMockDeploymentScaler(ctrl)
+	mds = mockscaler.NewMockScaler(ctrl)
 	msc = mockprober.NewMockShootClientCreator(ctrl)
 	clientBuilder = fake.NewClientBuilder()
 	fakeClient = clientBuilder.Build()
