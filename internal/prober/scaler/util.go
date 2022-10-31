@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
@@ -13,12 +14,25 @@ import (
 func createScalableResourceInfos(opType operationType, dependentResourceInfos []papi.DependentResourceInfo) []scalableResourceInfo {
 	resourceInfos := make([]scalableResourceInfo, 0, len(dependentResourceInfos))
 	for _, depResInfo := range dependentResourceInfos {
+		var (
+			level                 int
+			initialDelay, timeout time.Duration
+		)
+		if opType == scaleUp {
+			level = depResInfo.ScaleUpInfo.Level
+			initialDelay = depResInfo.ScaleUpInfo.InitialDelay.Duration
+			timeout = depResInfo.ScaleUpInfo.Timeout.Duration
+		} else {
+			level = depResInfo.ScaleDownInfo.Level
+			initialDelay = depResInfo.ScaleDownInfo.InitialDelay.Duration
+			timeout = depResInfo.ScaleDownInfo.Timeout.Duration
+		}
 		resInfo := scalableResourceInfo{
 			ref:          depResInfo.Ref,
 			shouldExist:  *depResInfo.ShouldExist,
-			level:        depResInfo.ScaleUpInfo.Level,
-			initialDelay: depResInfo.ScaleUpInfo.InitialDelay.Duration,
-			timeout:      depResInfo.ScaleUpInfo.Timeout.Duration,
+			level:        level,
+			initialDelay: initialDelay,
+			timeout:      timeout,
 			operation:    newScaleOperation(opType),
 		}
 		resourceInfos = append(resourceInfos, resInfo)

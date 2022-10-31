@@ -3,25 +3,52 @@ package scaler
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
+	"k8s.io/utils/pointer"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 )
 
-func TestCreateScalableResourceInfos(t *testing.T) {
+func TestCreateScaleUpResourceInfos(t *testing.T) {
 	g := NewWithT(t)
 	var depResInfos []papi.DependentResourceInfo
-	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(mcmObjectRef.Name, 1, 0, nil, true))
-	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(caObjectRef.Name, 1, 0, nil, true))
-	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(kcmObjectRef.Name, 0, 1, nil, true))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(mcmObjectRef.Name, 1, 0, nil, nil, true))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(caObjectRef.Name, 1, 0, nil, nil, true))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(kcmObjectRef.Name, 0, 1, nil, nil, true))
 
 	resInfos := createScalableResourceInfos(scaleUp, depResInfos)
 	g.Expect(resInfos).To(HaveLen(len(depResInfos)))
-	expectedObjectRefs := []autoscalingv1.CrossVersionObjectReference{mcmObjectRef, kcmObjectRef, caObjectRef}
-	for _, resInfo := range resInfos {
-		g.Expect(expectedObjectRefs).Should(ContainElement(Equal(*resInfo.ref)))
+	expectedObjectRefs := []autoscalingv1.CrossVersionObjectReference{mcmObjectRef, caObjectRef, kcmObjectRef}
+	for i, resInfo := range resInfos {
+		g.Expect(expectedObjectRefs[i]).To(Equal(*resInfo.ref))
+		g.Expect(depResInfos[i].ScaleUpInfo.Level).To(Equal(resInfo.level))
+		g.Expect(resInfo.initialDelay).To(Equal(defaultInitialDelay))
+		g.Expect(resInfo.timeout).To(Equal(defaultTimeout))
+	}
+}
+
+func TestCreateScaleDownResourceInfos(t *testing.T) {
+	g := NewWithT(t)
+	var depResInfos []papi.DependentResourceInfo
+	const (
+		timeout      = 20 * time.Second
+		initialDelay = 45 * time.Second
+	)
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(mcmObjectRef.Name, 1, 0, pointer.Duration(timeout), pointer.Duration(initialDelay), true))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(caObjectRef.Name, 1, 0, pointer.Duration(timeout), pointer.Duration(initialDelay), true))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(kcmObjectRef.Name, 0, 1, pointer.Duration(timeout), pointer.Duration(initialDelay), true))
+
+	resInfos := createScalableResourceInfos(scaleDown, depResInfos)
+	g.Expect(resInfos).To(HaveLen(len(depResInfos)))
+	expectedObjectRefs := []autoscalingv1.CrossVersionObjectReference{mcmObjectRef, caObjectRef, kcmObjectRef}
+	for i, resInfo := range resInfos {
+		g.Expect(expectedObjectRefs[i]).To(Equal(*resInfo.ref))
+		g.Expect(depResInfos[i].ScaleDownInfo.Level).To(Equal(resInfo.level))
+		g.Expect(resInfo.initialDelay).To(Equal(initialDelay))
+		g.Expect(resInfo.timeout).To(Equal(timeout))
 	}
 }
 
