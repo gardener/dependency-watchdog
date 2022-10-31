@@ -93,12 +93,16 @@ func CreateKindCluster(config KindConfig) (KindCluster, error) {
 	}
 	// create the kind cluster
 	provider := kind.NewProvider(kind.ProviderWithLogger(newKindLogger()))
+	err = doDeleteCluster(provider, clusterConfig.Name, kubeConfigPath)
+	if err != nil {
+		return nil, err
+	}
 	kubeConfigBytes, err := doCreateCluster(clusterConfig, provider)
 	if err != nil {
 		return nil, err
 	}
 	// store the kubeconfig file at kubeConfigPath, this will be later used to delete the cluster or perform operations on the cluster
-	err = ioutil.WriteFile(kubeConfigPath, kubeConfigBytes, 0644)
+	err = os.WriteFile(kubeConfigPath, kubeConfigBytes, 0644)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store the kubeconfig file at %s :%w", kubeConfigPath, err)
 	}
@@ -239,14 +243,18 @@ func (kc *kindCluster) Delete() error {
 		return fmt.Errorf("kind cluster %s has not been started yet. You must call Create to first create a kind cluster", kc.clusterConfig.Name)
 	}
 	log.Printf("deleting cluster %s\n", kc.clusterConfig.Name)
-	err := kc.provider.Delete(kc.clusterConfig.Name, kc.kubeConfigPath)
+	return doDeleteCluster(kc.provider, kc.clusterConfig.Name, kc.kubeConfigPath)
+}
+
+func doDeleteCluster(provider *kind.Provider, clusterName string, kubeConfigPath string) error {
+	err := provider.Delete(clusterName, kubeConfigPath)
 	if err != nil {
 		return err
 	}
 	// cleanup the kubeconfig file
-	err = os.RemoveAll(kc.kubeConfigPath)
+	err = os.RemoveAll(kubeConfigPath)
 	if err != nil {
-		log.Printf("Failed to remove test kubeconfig file at %s. This should ideally not happen! : %v", kc.kubeConfigPath, err)
+		log.Printf("Failed to remove test kubeconfig file at %s. This should ideally not happen! : %v", kubeConfigPath, err)
 	}
 	return nil
 }
