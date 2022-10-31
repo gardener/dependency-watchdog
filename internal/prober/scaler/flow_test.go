@@ -32,11 +32,11 @@ func TestCreateScaleUpSequentialFlow(t *testing.T) {
 	for i := 0; i < len(f.flowStepInfos); i++ {
 		currentTaskStep := f.flowStepInfos[i]
 		// using taskID format (see createTaskName function) extract and assert level and resource ref targeted in the task step
-		level, resourceRefs, err := parseTaskID(string(currentTaskStep.taskID))
+		level, resourceRefNames, err := parseTaskID(string(currentTaskStep.taskID))
 		g.Expect(err).To(BeNil())
 		g.Expect(level).To(Equal(i))
-		g.Expect(resourceRefs).To(HaveLen(1))
-		g.Expect(resourceRefs[0]).To(Equal(expectedScaleUpResNames[i]))
+		g.Expect(resourceRefNames).To(HaveLen(1))
+		g.Expect(resourceRefNames[0]).To(Equal(expectedScaleUpResNames[i]))
 
 		// using dependent taskIDs to check if the dependency has been maintained correctly
 		depTaskIDs := currentTaskStep.dependentTaskIDs.TaskIDs()
@@ -54,10 +54,26 @@ func TestCreateScaleDownSequentialAndConcurrentFlow(t *testing.T) {
 	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(mcmObjectRef.Name, 1, 0, nil, nil, true))
 	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(caObjectRef.Name, 2, 0, nil, nil, true))
 
+	expectedScaleUpResNames := map[int][]string{0: {mcmObjectRef.Name, caObjectRef.Name}, 1: {kcmObjectRef.Name}}
 	flowName := "testCreateSequentialAndConcurrentFlow"
 	namespace := "test-sequential-and-concurrent"
 
 	fc := newFlowCreator(&client.MockClient{}, &scale.MockScaleInterface{}, &scalerOptions{}, depResInfos)
 	f := fc.createFlow(flowName, namespace, scaleDown)
 	g.Expect(f.flowStepInfos).To(HaveLen(2))
+
+	previousDepTaskIDs := make([]flow.TaskID, 0, 3)
+	for i := 0; i < len(f.flowStepInfos); i++ {
+		currentTaskStep := f.flowStepInfos[i]
+		// using taskID format (see createTaskName function) extract and assert level and resource ref targeted in the task step
+		level, resourceRefNames, err := parseTaskID(string(currentTaskStep.taskID))
+		g.Expect(err).To(BeNil())
+		g.Expect(level).To(Equal(i))
+		g.Expect(expectedScaleUpResNames[i]).To(Equal(resourceRefNames))
+
+		// using dependent taskIDs to check if the dependency has been maintained correctly
+		depTaskIDs := currentTaskStep.dependentTaskIDs.TaskIDs()
+		g.Expect(depTaskIDs).To(Equal(previousDepTaskIDs))
+		previousDepTaskIDs = append(previousDepTaskIDs, currentTaskStep.taskID)
+	}
 }
