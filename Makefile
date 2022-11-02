@@ -11,6 +11,7 @@ BIN_DIR             := bin
 # Tools
 TOOLS_DIR := hack/tools
 include hack/tools.mk
+ENVTEST   := $(TOOLS_BIN_DIR)/setup-envtest
 
 .PHONY: revendor
 revendor:
@@ -58,8 +59,12 @@ format:
 	@./hack/format.sh ./controllers ./internal
 
 .PHONY: test
-test:
-	go test ./... -coverprofile cover.out
+test: $(SETUP_ENVTEST)
+	@./hack/test.sh
+
+.PHONY: install-envtest
+install-envtest: $(SETUP_ENVTEST)
+	$(shell $(ENVTEST) --os $(go env GOOS) --arch $(go env GOARCH) --use-env use $(ENVTEST_K8S_VERSION) -p path)
 
 .PHONY: verify
 verify: check format test

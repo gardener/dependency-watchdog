@@ -10,6 +10,7 @@ LOGCHECK          := $(TOOLS_BIN_DIR)/logcheck.so # plugin binary
 GO_ADD_LICENSE    := $(TOOLS_BIN_DIR)/addlicense
 GO_IMPORT_BOSS    := $(TOOLS_BIN_DIR)/import-boss
 GO_STRESS         := $(TOOLS_BIN_DIR)/stress
+SETUP_ENVTEST     := $(TOOLS_BIN_DIR)/setup-envtest
 
 #default tool versions
 GOLANGCI_LINT_VERSION ?= v1.48.0
@@ -20,6 +21,7 @@ LOGCHECK_VERSION ?= latest
 GO_ADD_LICENSE_VERSION ?= latest
 GO_IMPORT_BOSS_VERSION ?= latest
 GO_STRESS_VERSION ?= latest
+SETUP_ENVTEST_VERSION ?= latest
 
 # add ./hack/tools/bin to the PATH
 export TOOLS_BIN_DIR := $(TOOLS_BIN_DIR)
@@ -50,3 +52,6 @@ $(GO_IMPORT_BOSS):
 
 $(GO_STRESS):
 	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install golang.org/x/tools/cmd/stress@$(GO_STRESS_VERSION)
+
+$(SETUP_ENVTEST):
+	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@$(SETUP_ENVTEST_VERSION)
