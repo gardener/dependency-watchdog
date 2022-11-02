@@ -195,9 +195,9 @@ func GetAnnotationsAndReadyReplicasForResource(ctx context.Context, client clien
 	if err != nil {
 		return nil, 0, err
 	}
-	readyReplicas, found, err := unstructured.NestedInt64(resObj.Object, "spec", "replicas")
+	readyReplicas, found, err := unstructured.NestedInt64(resObj.Object, "status", "readyReplicas")
 	if !found {
-		return nil, 0, fmt.Errorf("spec.replicas not found for resource %s in namespace: %s", resourceRef, namespace)
+		return resObj.GetAnnotations(), 0, nil
 	}
 	if err != nil {
 		return nil, 0, err
