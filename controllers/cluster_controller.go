@@ -138,9 +138,10 @@ func canStartProber(shoot *v1beta1.Shoot) bool {
 func (r *ClusterReconciler) startProber(ctx context.Context, logger logr.Logger, key string) {
 	_, ok := r.ProberMgr.GetProber(key)
 	if !ok {
-		deploymentScaler := scaler.NewScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter, logger)
+		shootLogger := logger.WithName(fmt.Sprintf("%s", key))
+		deploymentScaler := scaler.NewScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter, shootLogger)
 		shootClientCreator := prober.NewShootClientCreator(r.Client)
-		p := prober.NewProber(ctx, key, r.ProbeConfig, r.Client, deploymentScaler, shootClientCreator, logger)
+		p := prober.NewProber(ctx, key, r.ProbeConfig, r.Client, deploymentScaler, shootClientCreator, shootLogger)
 		r.ProberMgr.Register(*p)
 		go p.Run()
 	}

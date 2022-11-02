@@ -27,10 +27,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var (
-	logger logr.Logger
-)
-
 // replicasCheckPredicate checks if scaling should be done for the current number of replicas
 type replicasCheckPredicate func(currentReplicas int32) bool
 
@@ -62,7 +58,7 @@ func NewScaler(namespace string, config *papi.Config, client client.Client, scal
 	logger = logger.WithName("scaleFlowRunner")
 	opts := buildScalerOptions(options...)
 
-	fc := newFlowCreator(client, scalerGetter.Scales(namespace), opts, config.DependentResourceInfos)
+	fc := newFlowCreator(client, scalerGetter.Scales(namespace), logger, opts, config.DependentResourceInfos)
 	scaleUpFlow := fc.createFlow(fmt.Sprintf("scale-up-%s", namespace), namespace, scaleUp)
 	logger.V(5).Info("Created scaleUpFlow", "flowStepInfos", scaleUpFlow.flowStepInfos)
 	scaleDownFlow := fc.createFlow(fmt.Sprintf("scale-down-%s", namespace), namespace, scaleDown)
@@ -92,9 +88,9 @@ func (ds *scaleFlowRunner) ScaleUp(ctx context.Context) error {
 }
 
 type operation struct {
-	opType                   operationType
-	replicasCheckPredicate   replicasCheckPredicate
-	scalingCompletePredicate scalingCompletePredicate
+	opType                       operationType
+	shouldScaleReplicasPredicate replicasCheckPredicate
+	scalingCompletePredicate     scalingCompletePredicate
 }
 
 func newScaleOperation(opType operationType) operation {
@@ -112,9 +108,9 @@ func newScaleOperation(opType operationType) operation {
 		fn2 = scaleDownCompletePredicate
 	}
 	return operation{
-		opType:                   opType,
-		replicasCheckPredicate:   fn1,
-		scalingCompletePredicate: fn2,
+		opType:                       opType,
+		shouldScaleReplicasPredicate: fn1,
+		scalingCompletePredicate:     fn2,
 	}
 }
 

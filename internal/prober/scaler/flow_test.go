@@ -15,6 +15,7 @@
 package scaler
 
 import (
+	"github.com/go-logr/logr"
 	"testing"
 
 	"github.com/gardener/dependency-watchdog/internal/mock/client-go/scale"
@@ -24,6 +25,8 @@ import (
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 )
+
+var flowTestLogger logr.Logger
 
 // Tests creation of the flow where there are no parallel tasks at any level.
 // There is exactly zero or one task at each level executed sequentially one after the other.
@@ -38,7 +41,7 @@ func TestCreateScaleUpSequentialFlow(t *testing.T) {
 	flowName := "testCreateSequentialFlow"
 	namespace := "test-sequential"
 
-	fc := newFlowCreator(&client.MockClient{}, &scale.MockScaleInterface{}, &scalerOptions{}, depResInfos)
+	fc := newFlowCreator(&client.MockClient{}, &scale.MockScaleInterface{}, flowTestLogger, &scalerOptions{}, depResInfos)
 	f := fc.createFlow(flowName, namespace, scaleUp)
 	g.Expect(f.flowStepInfos).To(HaveLen(3))
 
@@ -55,7 +58,7 @@ func TestCreateScaleUpSequentialFlow(t *testing.T) {
 		// using dependent taskIDs to check if the dependency has been maintained correctly
 		depTaskIDs := currentTaskStep.dependentTaskIDs.TaskIDs()
 		g.Expect(depTaskIDs).To(HaveLen(i))
-		g.Expect(depTaskIDs).To(Equal(previousDepTaskIDs))
+		g.Expect(depTaskIDs).To(ConsistOf(previousDepTaskIDs))
 		previousDepTaskIDs = append(previousDepTaskIDs, currentTaskStep.taskID)
 	}
 }
@@ -72,7 +75,7 @@ func TestCreateScaleDownSequentialAndConcurrentFlow(t *testing.T) {
 	flowName := "testCreateSequentialAndConcurrentFlow"
 	namespace := "test-sequential-and-concurrent"
 
-	fc := newFlowCreator(&client.MockClient{}, &scale.MockScaleInterface{}, &scalerOptions{}, depResInfos)
+	fc := newFlowCreator(&client.MockClient{}, &scale.MockScaleInterface{}, flowTestLogger, &scalerOptions{}, depResInfos)
 	f := fc.createFlow(flowName, namespace, scaleDown)
 	g.Expect(f.flowStepInfos).To(HaveLen(2))
 
@@ -87,7 +90,7 @@ func TestCreateScaleDownSequentialAndConcurrentFlow(t *testing.T) {
 
 		// using dependent taskIDs to check if the dependency has been maintained correctly
 		depTaskIDs := currentTaskStep.dependentTaskIDs.TaskIDs()
-		g.Expect(depTaskIDs).To(Equal(previousDepTaskIDs))
+		g.Expect(depTaskIDs).To(ConsistOf(previousDepTaskIDs))
 		previousDepTaskIDs = append(previousDepTaskIDs, currentTaskStep.taskID)
 	}
 }

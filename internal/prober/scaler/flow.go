@@ -17,6 +17,7 @@ package scaler
 import (
 	"context"
 	"fmt"
+	"github.com/go-logr/logr"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"github.com/gardener/dependency-watchdog/internal/util"
@@ -37,14 +38,16 @@ type flowCreator interface {
 type creator struct {
 	client                 client.Client
 	scaler                 scalev1.ScaleInterface
+	logger                 logr.Logger
 	options                *scalerOptions
 	dependentResourceInfos []papi.DependentResourceInfo
 }
 
-func newFlowCreator(client client.Client, scaler scalev1.ScaleInterface, options *scalerOptions, dependentResourceInfos []papi.DependentResourceInfo) flowCreator {
+func newFlowCreator(client client.Client, scaler scalev1.ScaleInterface, logger logr.Logger, options *scalerOptions, dependentResourceInfos []papi.DependentResourceInfo) flowCreator {
 	return &creator{
 		client:                 client,
 		scaler:                 scaler,
+		logger:                 logger,
 		options:                options,
 		dependentResourceInfos: dependentResourceInfos,
 	}
@@ -98,7 +101,7 @@ func (c *creator) createScaleTaskFn(namespace string, resourceInfos []scalableRe
 func (c *creator) doCreateTaskFn(namespace string, resInfo scalableResourceInfo, waitOnResourceInfos []scalableResourceInfo) flow.TaskFn {
 	return func(ctx context.Context) error {
 		operation := fmt.Sprintf("scale-resource-%s.%s", namespace, resInfo.ref.Name)
-		resScaler := newResourceScaler(c.client, c.scaler, c.options, namespace, resInfo, waitOnResourceInfos)
+		resScaler := newResourceScaler(c.client, c.scaler, c.logger, c.options, namespace, resInfo, waitOnResourceInfos)
 		result := util.Retry(ctx,
 			operation,
 			func() (interface{}, error) {
