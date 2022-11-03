@@ -57,7 +57,7 @@ func createScaler(g *WithT, probeCfg *papi.Config) Scaler {
 	scalesGetter, err := util.CreateScalesGetter(cfg)
 	g.Expect(err).To(BeNil())
 	ds := NewScaler(namespace, probeCfg, kindTestEnv.GetClient(), scalesGetter, scalerTestLogger,
-		withDependentResourceCheckTimeout(1*time.Minute), withDependentResourceCheckInterval(1*time.Second))
+		withResourceCheckTimeout(1*time.Minute), withResourceCheckInterval(1*time.Second))
 	return ds
 }
 

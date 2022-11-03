@@ -29,17 +29,17 @@ var (
 func TestWithDependentResourceCheckTimeout(t *testing.T) {
 	g := NewWithT(t)
 	opts := scalerOptions{}
-	fn := withDependentResourceCheckTimeout(timeout)
+	fn := withResourceCheckTimeout(timeout)
 	fn(&opts)
-	g.Expect(*opts.dependentResourceCheckTimeout).To(Equal(timeout))
+	g.Expect(*opts.resourceCheckTimeout).To(Equal(timeout))
 }
 
 func TestWithDependentResourceCheckInterval(t *testing.T) {
 	g := NewWithT(t)
 	opts := scalerOptions{}
-	fn := withDependentResourceCheckInterval(interval)
+	fn := withResourceCheckInterval(interval)
 	fn(&opts)
-	g.Expect(*opts.dependentResourceCheckInterval).To(Equal(interval))
+	g.Expect(*opts.resourceCheckInterval).To(Equal(interval))
 }
 
 func TestWithScaleResourceBackOff(t *testing.T) {
@@ -52,14 +52,14 @@ func TestWithScaleResourceBackOff(t *testing.T) {
 
 func TestBuildScalerOptions(t *testing.T) {
 	g := NewWithT(t)
-	opts := buildScalerOptions(withDependentResourceCheckTimeout(timeout), withDependentResourceCheckInterval(interval))
-	g.Expect(*opts.dependentResourceCheckInterval).To(Equal(interval))
-	g.Expect(*opts.dependentResourceCheckTimeout).To(Equal(timeout))
+	opts := buildScalerOptions(withResourceCheckTimeout(timeout), withResourceCheckInterval(interval))
+	g.Expect(*opts.resourceCheckInterval).To(Equal(interval))
+	g.Expect(*opts.resourceCheckTimeout).To(Equal(timeout))
 }
 
 func TestBuildScalerOptionsShouldFillDefaultValues(t *testing.T) {
 	g := NewWithT(t)
 	opts := buildScalerOptions()
-	g.Expect(*opts.dependentResourceCheckInterval).To(Equal(defaultDependentResourceCheckInterval))
-	g.Expect(*opts.dependentResourceCheckTimeout).To(Equal(defaultDependentResourceCheckTimeout))
+	g.Expect(*opts.resourceCheckInterval).To(Equal(defaultResourceCheckInterval))
+	g.Expect(*opts.resourceCheckTimeout).To(Equal(defaultResourceCheckTimeout))
 }

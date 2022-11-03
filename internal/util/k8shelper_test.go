@@ -75,12 +75,12 @@ func TestSuitForK8sHelper(t *testing.T) {
 		title string
 		run   func(t *testing.T)
 	}{
-		{"secret not found", testSecretNotFound},
-		{"extract KubeConfig from secret", testExtractKubeConfigFromSecret},
-		{"secret with no KubeConfig", testExtractKubeConfigFromSecretWithNoKubeConfig},
-		{"create client from KubeConfig", testCreateClientFromKubeConfigBytes},
-		{"create transport with keep-alive disabled", testCreateTransportWithDisabledKeepAlive},
-		{"create scales getter", testCreateScalesGetter},
+		//{"secret not found", testSecretNotFound},
+		//{"extract KubeConfig from secret", testExtractKubeConfigFromSecret},
+		//{"secret with no KubeConfig", testExtractKubeConfigFromSecretWithNoKubeConfig},
+		//{"create client from KubeConfig", testCreateClientFromKubeConfigBytes},
+		//{"create transport with keep-alive disabled", testCreateTransportWithDisabledKeepAlive},
+		//{"create scales getter", testCreateScalesGetter},
 		{"get scale resource", testGetScaleResource},
 	}
 
@@ -161,8 +161,8 @@ func testGetScaleResource(t *testing.T) {
 	)
 	g := NewWithT(t)
 	ctx := context.Background()
-	config := getRestConfig(g, kubeConfigPath)
-	scalesGetter, err := CreateScalesGetter(config)
+	//config := getRestConfig(g, kubeConfigPath)
+	scalesGetter, err := CreateScalesGetter(restConfig)
 	g.Expect(err).To(BeNil())
 	g.Expect(scalesGetter).ToNot(BeNil())
 

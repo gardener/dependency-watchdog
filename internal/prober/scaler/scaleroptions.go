@@ -21,17 +21,17 @@ import (
 )
 
 const (
-	defaultDependentResourceCheckTimeout  = 20 * time.Millisecond
-	defaultDependentResourceCheckInterval = 5 * time.Millisecond
-	defaultScaleResourceBackoff           = 100 * time.Millisecond
+	defaultResourceCheckTimeout  = 20 * time.Millisecond
+	defaultResourceCheckInterval = 5 * time.Millisecond
+	defaultScaleResourceBackoff  = 100 * time.Millisecond
 )
 
 type scalerOption func(options *scalerOptions)
 
 type scalerOptions struct {
-	dependentResourceCheckTimeout  *time.Duration
-	dependentResourceCheckInterval *time.Duration
-	scaleResourceBackOff           *time.Duration
+	resourceCheckTimeout  *time.Duration
+	resourceCheckInterval *time.Duration
+	scaleResourceBackOff  *time.Duration
 }
 
 func buildScalerOptions(options ...scalerOption) *scalerOptions {
@@ -43,15 +43,15 @@ func buildScalerOptions(options ...scalerOption) *scalerOptions {
 	return opts
 }
 
-func withDependentResourceCheckTimeout(timeout time.Duration) scalerOption {
+func withResourceCheckTimeout(timeout time.Duration) scalerOption {
 	return func(options *scalerOptions) {
-		options.dependentResourceCheckTimeout = &timeout
+		options.resourceCheckTimeout = &timeout
 	}
 }
 
-func withDependentResourceCheckInterval(interval time.Duration) scalerOption {
+func withResourceCheckInterval(interval time.Duration) scalerOption {
 	return func(options *scalerOptions) {
-		options.dependentResourceCheckInterval = &interval
+		options.resourceCheckInterval = &interval
 	}
 }
 
@@ -62,11 +62,11 @@ func withScaleResourceBackOff(interval time.Duration) scalerOption {
 }
 
 func fillDefaultsOptions(options *scalerOptions) {
-	if options.dependentResourceCheckTimeout == nil {
-		options.dependentResourceCheckTimeout = pointer.Duration(defaultDependentResourceCheckTimeout)
+	if options.resourceCheckTimeout == nil {
+		options.resourceCheckTimeout = pointer.Duration(defaultResourceCheckTimeout)
 	}
-	if options.dependentResourceCheckInterval == nil {
-		options.dependentResourceCheckInterval = pointer.Duration(defaultDependentResourceCheckInterval)
+	if options.resourceCheckInterval == nil {
+		options.resourceCheckInterval = pointer.Duration(defaultResourceCheckInterval)
 	}
 	if options.scaleResourceBackOff == nil {
 		options.scaleResourceBackOff = pointer.Duration(defaultScaleResourceBackoff)

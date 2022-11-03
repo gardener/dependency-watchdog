@@ -69,9 +69,8 @@ func newResourceScaler(client client.Client, scaler scalev1.ScaleInterface, logg
 
 func (r *resScaler) scale(ctx context.Context) error {
 	var (
-		err            error
-		resourceAnnot  map[string]string
-		targetReplicas int32
+		err           error
+		resourceAnnot map[string]string
 	)
 	r.logger.V(4).Info("attempting to scale resource", "resourceInfo", r.resourceInfo)
 	// sleep for initial delay
@@ -98,15 +97,10 @@ func (r *resScaler) scale(ctx context.Context) error {
 	}
 
 	if r.shouldScale(resourceAnnot, scaleSubRes.Spec.Replicas) {
-		if err = r.updateResourceAndScale(ctx, gr, scaleSubRes, resourceAnnot); err != nil {
-			return err
-		}
-		if !r.waitTillResourceScaled(ctx, targetReplicas) {
-			return fmt.Errorf("timed out waiting for {namespace: %s, resource %v} to be scaled", r.namespace, r.resourceInfo.ref)
-		}
+		return r.updateResourceAndScale(ctx, gr, scaleSubRes, resourceAnnot)
 	}
 
-	return err
+	return nil
 }
 
 func (r *resScaler) shouldScale(resourceAnnot map[string]string, currentReplicas int32) bool {
@@ -140,7 +134,7 @@ func (r *resScaler) waitTillResourceScaled(ctx context.Context, targetReplicas i
 			return true
 		}
 		return false
-	}, *r.opts.dependentResourceCheckTimeout, *r.opts.dependentResourceCheckInterval)
+	}, *r.opts.resourceCheckTimeout, *r.opts.resourceCheckInterval)
 }
 
 func (r *resScaler) updateResourceAndScale(ctx context.Context, gr *schema.GroupResource, scaleSubRes *autoscalingv1.Scale, annot map[string]string) error {
@@ -165,11 +159,15 @@ func (r *resScaler) updateResourceAndScale(ctx context.Context, gr *schema.Group
 
 	scaleSubRes.Spec.Replicas = targetReplicas
 	r.logger.V(5).Info("Scaling kubernetes resource", "namespace", r.namespace, "objectKey", client.ObjectKeyFromObject(scaleSubRes), "targetReplicas", targetReplicas)
-	_, err = r.scaler.Update(childCtx, *gr, scaleSubRes, metav1.UpdateOptions{})
-	if err == nil {
-		r.logger.V(4).Info("resource scaling has been triggered successfully", "namespace", r.namespace, "resource", r.resourceInfo.ref)
+	if _, err = r.scaler.Update(childCtx, *gr, scaleSubRes, metav1.UpdateOptions{}); err != nil {
+		return err
 	}
-	return err
+	r.logger.V(4).Info("resource scaling has been triggered successfully, waiting for resource scaling to complete", "namespace", r.namespace, "resource", r.resourceInfo.ref)
+
+	if !r.waitTillResourceScaled(ctx, targetReplicas) {
+		return fmt.Errorf("timed out waiting for {namespace: %s, resource %v} to be scaled", r.namespace, r.resourceInfo.ref)
+	}
+	return nil
 }
 
 func (r *resScaler) determineTargetReplicas(resourceName string, annotations map[string]string) (int32, error) {
