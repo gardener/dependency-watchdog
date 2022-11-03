@@ -27,19 +27,27 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// replicasCheckPredicate checks if scaling should be done for the current number of replicas
+// replicasCheckPredicate checks if scaling should be done for the current number of replicas.
+// The target replicas for a resource are captured as annotation value. It is however possible that another actor
+// HPA or HVPA changes the replicas of the resource (scales it down or scales it up) causing the target replica annotation
+// value to differ from the spec.replicas for the resource. Since DWD is not a `horizontal-pod-autoscaler` but its intention
+// is only to restore the resource to the last captured replicas when it attempts to scale up the resource which was previously scaled-down to 0 by DWD.
+// If the current replicas > 0 but it is different from the last captured replicas as annotation value then it will skip any further scaling as that would
+// potentially interfere with HPA/HVPA.
 type replicasCheckPredicate func(currentReplicas int32) bool
 
-// scalingCompletePredicate checks if scaling of the resource is complete based on the current and target replica count
+// scalingCompletePredicate checks if scaling of the resource is complete based on the current and target replica count.
+// This is used during the scale up for a resource which was previously scaled down by DWD. If the decision is to scale the resource
+// (a decision influenced by `replicasCheckPredicate`), then this predicate checks if the scaling is complete.
 type scalingCompletePredicate func(currentReplicas, targetReplicas int32) bool
 
-// operation denotes either a scale up or scale down operation.
+// operation denotes either a scale up or scale down action initiated by DWD.
 type operationType uint8
 
 const (
-	// scaleUp represents a scale-up operation for a kubernetes resource.
+	// scaleUp represents a scale-up action for a kubernetes resource.
 	scaleUp operationType = iota // scale-up
-	// scaleDown represents a scale-up operation for a kubernetes resource.
+	// scaleDown represents a scale-up action for a kubernetes resource.
 	scaleDown // scale-down
 )
 
@@ -95,22 +103,22 @@ type operation struct {
 
 func newScaleOperation(opType operationType) operation {
 	var (
-		fn1 replicasCheckPredicate
-		fn2 scalingCompletePredicate
+		replicasCheckFn        replicasCheckPredicate
+		scalingCompleteCheckFn scalingCompletePredicate
 	)
 
 	if opType == scaleUp {
-		fn1 = scaleUpReplicasPredicate
-		fn2 = scaleUpCompletePredicate
-
+		replicasCheckFn = scaleUpReplicasPredicate
+		scalingCompleteCheckFn = scaleUpCompletePredicate
 	} else {
-		fn1 = scaleDownReplicasPredicate
-		fn2 = scaleDownCompletePredicate
+		replicasCheckFn = scaleDownReplicasPredicate
+		scalingCompleteCheckFn = scaleDownCompletePredicate
 	}
+
 	return operation{
 		opType:                       opType,
-		shouldScaleReplicasPredicate: fn1,
-		scalingCompletePredicate:     fn2,
+		shouldScaleReplicasPredicate: replicasCheckFn,
+		scalingCompletePredicate:     scalingCompleteCheckFn,
 	}
 }
 

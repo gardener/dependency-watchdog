@@ -205,6 +205,33 @@ func GetAnnotationsAndReadyReplicasForResource(ctx context.Context, client clien
 	return resObj.GetAnnotations(), int32(readyReplicas), nil
 }
 
+func GetResourceReadyReplicas(ctx context.Context, cli client.Client, namespace string, resourceRef *autoscalingv1.CrossVersionObjectReference) (int32, error) {
+	resObj := unstructured.Unstructured{}
+
+	groupVersion, err := schema.ParseGroupVersion(resourceRef.APIVersion)
+	if err != nil {
+		return 0, err
+	}
+	resObj.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   groupVersion.Group,
+		Version: groupVersion.Version,
+		Kind:    resourceRef.Kind,
+	})
+	err = cli.Get(ctx, types.NamespacedName{Namespace: namespace, Name: resourceRef.Name}, &resObj)
+	if err != nil {
+		return 0, err
+	}
+	readyReplicas, found, err := unstructured.NestedInt64(resObj.Object, "status", "readyReplicas")
+	if !found {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	return int32(readyReplicas), nil
+}
+
 // CreateClientSetFromRestConfig creates a kubernetes.Clientset from rest.Config.
 func CreateClientSetFromRestConfig(config *rest.Config) (*kubernetes.Clientset, error) {
 	clientset, err := kubernetes.NewForConfig(config)

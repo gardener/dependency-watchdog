@@ -17,9 +17,9 @@ package scaler
 import (
 	"context"
 	"fmt"
-	"github.com/go-logr/logr"
 	"strconv"
-	"sync"
+
+	"github.com/go-logr/logr"
 
 	"github.com/gardener/dependency-watchdog/internal/util"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
@@ -32,8 +32,11 @@ import (
 )
 
 const (
+	// ignoreScalingAnnotationKey is the key for an annotation if present on a resource will suspend any scaling action for that resource.
 	ignoreScalingAnnotationKey = "dependency-watchdog.gardener.cloud/ignore-scaling"
-	replicasAnnotationKey      = "dependency-watchdog.gardener.cloud/replicas"
+	// replicasAnnotationKey is the key for an annotation whose value captures the current spec.replicas prior to scale down for that resource.
+	// This is used when DWD attempts to restore the state of the resource it scale down.
+	replicasAnnotationKey = "dependency-watchdog.gardener.cloud/replicas"
 	// defaultScaleUpReplicas is the default value of number of replicas for a scale-up operation by a probe when the external probe transitions from failed to success.
 	defaultScaleUpReplicas int32 = 1
 	// defaultScaleDownReplicas is the default value of number of replicas for a scale-down operation by a probe when the external probe transitions from success to failed.
@@ -45,24 +48,22 @@ type resourceScaler interface {
 }
 
 type resScaler struct {
-	client              client.Client
-	scaler              scalev1.ScaleInterface
-	logger              logr.Logger
-	namespace           string
-	resourceInfo        scalableResourceInfo
-	waitOnResourceInfos []scalableResourceInfo
-	opts                *scalerOptions
+	client       client.Client
+	scaler       scalev1.ScaleInterface
+	logger       logr.Logger
+	namespace    string
+	resourceInfo scalableResourceInfo
+	opts         *scalerOptions
 }
 
-func newResourceScaler(client client.Client, scaler scalev1.ScaleInterface, logger logr.Logger, opts *scalerOptions, namespace string, resourceInfo scalableResourceInfo, waitOnResourceInfos []scalableResourceInfo) resourceScaler {
+func newResourceScaler(client client.Client, scaler scalev1.ScaleInterface, logger logr.Logger, opts *scalerOptions, namespace string, resourceInfo scalableResourceInfo) resourceScaler {
 	return &resScaler{
-		client:              client,
-		scaler:              scaler,
-		logger:              logger,
-		namespace:           namespace,
-		resourceInfo:        resourceInfo,
-		waitOnResourceInfos: waitOnResourceInfos,
-		opts:                opts,
+		client:       client,
+		scaler:       scaler,
+		logger:       logger,
+		namespace:    namespace,
+		resourceInfo: resourceInfo,
+		opts:         opts,
 	}
 }
 
@@ -72,42 +73,46 @@ func (r *resScaler) scale(ctx context.Context) error {
 		resourceAnnot  map[string]string
 		targetReplicas int32
 	)
-	r.logger.V(4).Info("Attempting to scale resource", "resourceInfo", r.resourceInfo)
+	r.logger.V(4).Info("attempting to scale resource", "resourceInfo", r.resourceInfo)
 	// sleep for initial delay
 	if err = util.SleepWithContext(ctx, r.resourceInfo.initialDelay); err != nil {
-		r.logger.Error(err, "Looks like the context has been cancelled. exiting scaling operation", "resourceInfo", r.resourceInfo)
+		r.logger.Error(err, "looks like the context has been cancelled. exiting scaling operation", "resourceInfo", r.resourceInfo)
 		return err
 	}
+
 	if resourceAnnot, err = util.GetResourceAnnotations(ctx, r.client, r.namespace, r.resourceInfo.ref); err != nil {
+		if apierrors.IsNotFound(err) && !r.resourceInfo.shouldExist {
+			r.logger.V(4).Info("resource not found. Ignoring this resource as its existence is marked as optional", "namespace", r.namespace, "resource", r.resourceInfo.ref)
+			return nil
+		}
+		r.logger.Error(err, "error trying to get annotations for resource", "namespace", r.namespace, "resource", r.resourceInfo.ref)
 		return err
 	}
-	if targetReplicas, err = r.determineTargetReplicas(r.resourceInfo.ref.Name, resourceAnnot); err != nil {
-		return err
-	}
+
 	gr, scaleSubRes, err := util.GetScaleResource(ctx, r.client, r.scaler, r.logger, r.resourceInfo.ref, r.resourceInfo.timeout)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			r.logger.Error(err, "Resource does not have a scale subresource. skipping scaling of this resource", "namespace", r.namespace, "resource", r.resourceInfo.ref)
+			r.logger.Error(err, "resource does not have a scale subresource. Scaling of this resource is not possible and scaling of all downstream resources will be skipped. Please check and correct DWD configuration.", "namespace", r.namespace, "resource", r.resourceInfo.ref)
 		}
 		return err
 	}
 
-	shouldScale, err := r.shouldScale(ctx, resourceAnnot, scaleSubRes.Spec.Replicas)
-	if err != nil {
-		return err
-	}
-	if shouldScale {
-		if _, err = r.updateResourceAndScale(ctx, gr, scaleSubRes, targetReplicas); err == nil {
-			r.logger.V(4).Info("Resource has been scaled", "namespace", r.namespace, "resource", r.resourceInfo.ref)
+	if r.shouldScale(resourceAnnot, scaleSubRes.Spec.Replicas) {
+		if err = r.updateResourceAndScale(ctx, gr, scaleSubRes, resourceAnnot); err != nil {
+			return err
+		}
+		if !r.waitTillResourceScaled(ctx, targetReplicas) {
+			return fmt.Errorf("timed out waiting for {namespace: %s, resource %v} to be scaled", r.namespace, r.resourceInfo.ref)
 		}
 	}
+
 	return err
 }
 
-func (r *resScaler) shouldScale(ctx context.Context, resourceAnnot map[string]string, currentReplicas int32) (bool, error) {
+func (r *resScaler) shouldScale(resourceAnnot map[string]string, currentReplicas int32) bool {
 	if ignoreScaling(resourceAnnot) {
 		r.logger.V(4).Info("Scaling ignored due to explicit instruction via annotation", "namespace", r.namespace, "name", r.resourceInfo.ref.Name, "annotation", ignoreScalingAnnotationKey)
-		return false, nil
+		return false
 	}
 
 	// check the current replicas to decide if scaling is needed
@@ -117,76 +122,28 @@ func (r *resScaler) shouldScale(ctx context.Context, resourceAnnot map[string]st
 		} else {
 			r.logger.V(4).Info("The current number of replicas is positive. scale up for this resource is skipped", "namespace", r.namespace, "name", r.resourceInfo.ref.Name, "currentReplicas", currentReplicas)
 		}
-		return false, nil
+		return false
 	}
 
-	// check if all resources this resource should wait on have been scaled, if not then we cannot scale this resource.
-	// Check for currently available replicas and not the desired replicas on the upstream resource dependencies.
-	if len(r.waitOnResourceInfos) > 0 {
-		areUpstreamResourcesScaled := r.waitUntilUpstreamResourcesAreScaled(ctx)
-		if !areUpstreamResourcesScaled {
-			r.logger.V(4).Info("Upstream resources for this resource are not scaled. skipping scaling of resource.", "namespace", r.namespace, "resource", r.resourceInfo.ref)
-			return areUpstreamResourcesScaled, fmt.Errorf("timed out waiting for upstream resources to be scaled for resource: {namespace: %v, resource: %v}", r.namespace, r.resourceInfo.ref)
+	return true
+}
+
+func (r *resScaler) waitTillResourceScaled(ctx context.Context, targetReplicas int32) bool {
+	opDesc := fmt.Sprintf("wait for resource: %s in namespace %s to reach target replicas %d", r.resourceInfo.ref.Name, r.namespace, targetReplicas)
+	return util.RetryUntilPredicate(ctx, opDesc, func() bool {
+		readyReplicas, err := util.GetResourceReadyReplicas(ctx, r.client, r.namespace, r.resourceInfo.ref)
+		if err != nil {
+			return false
 		}
-		return areUpstreamResourcesScaled, nil
-	}
-	return true, nil
-}
-
-func (r *resScaler) waitUntilUpstreamResourcesAreScaled(ctx context.Context) bool {
-	var wg sync.WaitGroup
-	wg.Add(len(r.waitOnResourceInfos))
-	resultC := make(chan bool, len(r.waitOnResourceInfos))
-	for _, resInfo := range r.waitOnResourceInfos {
-		resInfo := resInfo
-		go func() {
-			defer wg.Done()
-			// get the target replicas for the upstream resource info and pass it to resourceMatchDesiredReplicas
-			operation := fmt.Sprintf("wait for upstream resource: %s in namespace %s to reach target replicas", resInfo.ref.Name, r.namespace)
-			resultC <- util.RetryUntilPredicate(ctx, operation, func() bool { return r.resourceMatchDesiredReplicas(ctx, resInfo) }, *r.opts.dependentResourceCheckTimeout, *r.opts.dependentResourceCheckInterval)
-		}()
-	}
-	go func() {
-		defer close(resultC)
-		wg.Wait()
-	}()
-	result := true
-	for res := range resultC {
-		result = result && res
-	}
-	return result
-}
-
-func (r *resScaler) resourceMatchDesiredReplicas(ctx context.Context, resourceInfo scalableResourceInfo) bool {
-	resAnnot, readyReplicas, err := util.GetAnnotationsAndReadyReplicasForResource(ctx, r.client, r.namespace, resourceInfo.ref)
-	if err != nil {
-		if apierrors.IsNotFound(err) && !resourceInfo.shouldExist {
-			r.logger.V(4).Info("Upstream resource not found. Ignoring this resource as its existence is marked as optional", "namespace", r.namespace, "resource", resourceInfo.ref)
+		if r.resourceInfo.operation.scalingCompletePredicate(readyReplicas, targetReplicas) {
+			r.logger.V(4).Info("resource has been scaled to desired replicas", "namespace", r.namespace, "name", r.resourceInfo.ref.Name, "targetReplicas", targetReplicas)
 			return true
 		}
-		r.logger.Error(err, "Error trying to get annotations and ready replicas for resource", "namespace", r.namespace, "resource", resourceInfo.ref)
 		return false
-	}
-
-	if ignoreScaling(resAnnot) {
-		r.logger.V(5).Info("Ignoring upstream resource due to explicit instruction via annotation", "namespace", r.namespace, "name", resourceInfo.ref.Name, "annotation", ignoreScalingAnnotationKey)
-		return true
-	}
-
-	targetReplicas, err := r.determineTargetReplicas(resourceInfo.ref.Name, resAnnot)
-	if err != nil {
-		r.logger.Error(err, "Error trying to determine target replicas for resource", "namespace", r.namespace, "resource", resourceInfo.ref)
-		return false
-	}
-	if resourceInfo.operation.scalingCompletePredicate(readyReplicas, targetReplicas) {
-		r.logger.V(4).Info("Upstream resource has been scaled to desired replicas", "namespace", r.namespace, "name", resourceInfo.ref.Name, "targetReplicas", targetReplicas)
-		return true
-	}
-	r.logger.V(5).Info("Upstream resource has not yet been scaled to desired replicas", "namespace", r.namespace, "name", resourceInfo.ref.Name, "actualReplicas", readyReplicas, "targetReplicas", targetReplicas)
-	return false
+	}, *r.opts.dependentResourceCheckTimeout, *r.opts.dependentResourceCheckInterval)
 }
 
-func (r *resScaler) updateResourceAndScale(ctx context.Context, gr *schema.GroupResource, scaleSubRes *autoscalingv1.Scale, targetReplicas int32) (*autoscalingv1.Scale, error) {
+func (r *resScaler) updateResourceAndScale(ctx context.Context, gr *schema.GroupResource, scaleSubRes *autoscalingv1.Scale, annot map[string]string) error {
 	childCtx, cancelFn := context.WithTimeout(ctx, r.resourceInfo.timeout)
 	defer cancelFn()
 
@@ -197,13 +154,22 @@ func (r *resScaler) updateResourceAndScale(ctx context.Context, gr *schema.Group
 		err := util.PatchResourceAnnotations(ctx, r.client, r.namespace, r.resourceInfo.ref, patchBytes)
 		if err != nil {
 			r.logger.Error(err, "Failed to update annotation to capture the current replicas before scaling it down", "namespace", r.namespace, "objectKey", client.ObjectKeyFromObject(scaleSubRes))
-			return nil, err
+			return err
 		}
+	}
+
+	targetReplicas, err := r.determineTargetReplicas(r.resourceInfo.ref.Name, annot)
+	if err != nil {
+		return err
 	}
 
 	scaleSubRes.Spec.Replicas = targetReplicas
 	r.logger.V(5).Info("Scaling kubernetes resource", "namespace", r.namespace, "objectKey", client.ObjectKeyFromObject(scaleSubRes), "targetReplicas", targetReplicas)
-	return r.scaler.Update(childCtx, *gr, scaleSubRes, metav1.UpdateOptions{})
+	_, err = r.scaler.Update(childCtx, *gr, scaleSubRes, metav1.UpdateOptions{})
+	if err == nil {
+		r.logger.V(4).Info("resource scaling has been triggered successfully", "namespace", r.namespace, "resource", r.resourceInfo.ref)
+	}
+	return err
 }
 
 func (r *resScaler) determineTargetReplicas(resourceName string, annotations map[string]string) (int32, error) {

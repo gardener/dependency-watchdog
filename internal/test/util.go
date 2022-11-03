@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
-// GetStructured reads the file present at the given filePath and returns a structured object based on the type specified in place of T.
+// GetStructured reads the file present at the given filePath and returns a structured object based on the type T.
 func GetStructured[T any](filepath string) (*T, error) {
 	unstructuredObject, err := GetUnstructured(filepath)
 	if err != nil {
@@ -44,20 +44,20 @@ func GetStructured[T any](filepath string) (*T, error) {
 func GetUnstructured(filePath string) (*unstructured.Unstructured, error) {
 	buff, err := ReadFile(filePath)
 	if err != nil {
-		return &unstructured.Unstructured{}, err
+		return nil, err
 	}
 	jsonObject, err := yaml.ToJSON(buff.Bytes())
 	if err != nil {
-		return &unstructured.Unstructured{}, err
+		return nil, err
 	}
 
 	object, err := runtime.Decode(unstructured.UnstructuredJSONScheme, jsonObject)
 	if err != nil {
-		return &unstructured.Unstructured{}, err
+		return nil, err
 	}
 	unstructuredObject, ok := object.(*unstructured.Unstructured)
 	if !ok {
-		return &unstructured.Unstructured{}, fmt.Errorf("unstructured.Unstructured expected")
+		return nil, fmt.Errorf("unstructured.Unstructured expected")
 	}
 	return unstructuredObject, nil
 }

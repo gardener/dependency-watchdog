@@ -17,7 +17,6 @@ package test
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -30,20 +29,18 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	kind "sigs.k8s.io/kind/pkg/cluster"
 )
 
-var (
-	defaultControlPlaneReadyTimeout = time.Duration(0)
-)
-
 const (
-	defaultKindNodeImage   = "kindest/node:v1.23.4"
-	defaultKindClusterName = "kind-test"
-	kindNamePrefix         = "kind-"
-	kubeConfigFileName     = "kubeconfig"
+	defaultKindNodeImage            = "kindest/node:v1.24.7"
+	defaultKindClusterName          = "kind-test"
+	kindNamePrefix                  = "kind-"
+	kubeConfigFileName              = "kubeconfig"
+	defaultControlPlaneReadyTimeout = 5 * time.Minute
 )
 
 // KindCluster provides a convenient interface to interact with a KIND cluster.
@@ -148,7 +145,7 @@ func doCreateCluster(clusterConfig KindConfig, provider *kind.Provider) ([]byte,
 }
 
 func createKubeConfigPath() (string, error) {
-	kindConfigDir, err := ioutil.TempDir("", kindNamePrefix)
+	kindConfigDir, err := os.MkdirTemp("", kindNamePrefix)
 	if err != nil {
 		return "", err
 	}
@@ -267,7 +264,7 @@ func fillDefaultConfigValues(config *KindConfig) error {
 		config.NodeImage = defaultKindNodeImage
 	}
 	if config.ControlPlanReadyTimeout == nil {
-		config.ControlPlanReadyTimeout = &defaultControlPlaneReadyTimeout
+		config.ControlPlanReadyTimeout = pointer.Duration(defaultControlPlaneReadyTimeout)
 	}
 	return nil
 }

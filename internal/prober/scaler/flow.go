@@ -17,6 +17,7 @@ package scaler
 import (
 	"context"
 	"fmt"
+
 	"github.com/go-logr/logr"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
@@ -66,7 +67,7 @@ func (c *creator) createFlow(name string, namespace string, opType operationType
 			dependentTaskIDs := previousTaskIDs
 			taskID := g.Add(flow.Task{
 				Name:         createTaskName(resInfos, level),
-				Fn:           c.createScaleTaskFn(namespace, resInfos, previousLevelResourceInfos),
+				Fn:           c.createScaleTaskFn(namespace, resInfos),
 				Dependencies: dependentTaskIDs,
 			})
 			sf.addScaleStepInfo(taskID, dependentTaskIDs, previousLevelResourceInfos)
@@ -86,10 +87,10 @@ func (c *creator) createFlow(name string, namespace string, opType operationType
 // DependentResourceInfo passed to this function, it indicates that they all are at the same level indicating that these functions
 // should be invoked concurrently. In this case it will construct a flow.Parallel. If there is only one DependentResourceInfo passed
 // then it indicates that at a specific level there is only one DependentResourceInfo that needs to be scaled.
-func (c *creator) createScaleTaskFn(namespace string, resourceInfos []scalableResourceInfo, waitOnResourceInfos []scalableResourceInfo) flow.TaskFn {
+func (c *creator) createScaleTaskFn(namespace string, resourceInfos []scalableResourceInfo) flow.TaskFn {
 	taskFns := make([]flow.TaskFn, 0, len(resourceInfos))
 	for _, resourceInfo := range resourceInfos {
-		taskFn := c.doCreateTaskFn(namespace, resourceInfo, waitOnResourceInfos)
+		taskFn := c.doCreateTaskFn(namespace, resourceInfo)
 		taskFns = append(taskFns, taskFn)
 	}
 	if len(taskFns) == 1 {
@@ -98,10 +99,10 @@ func (c *creator) createScaleTaskFn(namespace string, resourceInfos []scalableRe
 	return flow.Parallel(taskFns...)
 }
 
-func (c *creator) doCreateTaskFn(namespace string, resInfo scalableResourceInfo, waitOnResourceInfos []scalableResourceInfo) flow.TaskFn {
+func (c *creator) doCreateTaskFn(namespace string, resInfo scalableResourceInfo) flow.TaskFn {
 	return func(ctx context.Context) error {
 		operation := fmt.Sprintf("scale-resource-%s.%s", namespace, resInfo.ref.Name)
-		resScaler := newResourceScaler(c.client, c.scaler, c.logger, c.options, namespace, resInfo, waitOnResourceInfos)
+		resScaler := newResourceScaler(c.client, c.scaler, c.logger, c.options, namespace, resInfo)
 		result := util.Retry(ctx,
 			operation,
 			func() (interface{}, error) {
