@@ -88,6 +88,11 @@ func (r *resScaler) scale(ctx context.Context) error {
 		return err
 	}
 
+	if ignoreScaling(resourceAnnot) {
+		r.logger.V(4).Info("Scaling ignored due to explicit instruction via annotation", "namespace", r.namespace, "name", r.resourceInfo.ref.Name, "annotation", ignoreScalingAnnotationKey)
+		return nil
+	}
+
 	gr, scaleSubRes, err := util.GetScaleResource(ctx, r.client, r.scaler, r.logger, r.resourceInfo.ref, r.resourceInfo.timeout)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -96,45 +101,38 @@ func (r *resScaler) scale(ctx context.Context) error {
 		return err
 	}
 
-	if r.shouldScale(resourceAnnot, scaleSubRes.Spec.Replicas) {
-		return r.updateResourceAndScale(ctx, gr, scaleSubRes, resourceAnnot)
-	}
-
-	return nil
-}
-
-func (r *resScaler) shouldScale(resourceAnnot map[string]string, currentReplicas int32) bool {
-	if ignoreScaling(resourceAnnot) {
-		r.logger.V(4).Info("Scaling ignored due to explicit instruction via annotation", "namespace", r.namespace, "name", r.resourceInfo.ref.Name, "annotation", ignoreScalingAnnotationKey)
-		return false
-	}
-
-	// check the current replicas to decide if scaling is needed
-	if !r.resourceInfo.operation.shouldScaleReplicasPredicate(currentReplicas) {
-		if r.resourceInfo.operation.opType == scaleDown {
-			r.logger.V(4).Info("The current number of replicas is zero. scale down for this resource is skipped", "namespace", r.namespace, "name", r.resourceInfo.ref.Name, "currentReplicas", currentReplicas)
-		} else {
-			r.logger.V(4).Info("The current number of replicas is positive. scale up for this resource is skipped", "namespace", r.namespace, "name", r.resourceInfo.ref.Name, "currentReplicas", currentReplicas)
+	if r.resourceInfo.operation.shouldScaleReplicas(scaleSubRes.Spec.Replicas) {
+		if err := r.updateResourceAndScale(ctx, gr, scaleSubRes, resourceAnnot); err != nil {
+			return err
 		}
-		return false
+	} else {
+		r.logger.V(4).Info("skipping scaling for resource. This can happen if the current spec.Replicas > 0 for scaleUp or current spec.Replicas == 0 for scaleDown", "namespace", r.namespace, "name", r.resourceInfo.ref.Name, "operation", r.resourceInfo.operation)
 	}
 
-	return true
+	return r.waitTillMinTargetReplicasReached(ctx)
 }
 
-func (r *resScaler) waitTillResourceScaled(ctx context.Context, targetReplicas int32) bool {
-	opDesc := fmt.Sprintf("wait for resource: %s in namespace %s to reach target replicas %d", r.resourceInfo.ref.Name, r.namespace, targetReplicas)
-	return util.RetryUntilPredicate(ctx, opDesc, func() bool {
+func (r *resScaler) waitTillMinTargetReplicasReached(ctx context.Context) error {
+	var minTargetReplicas int32
+	if r.resourceInfo.operation == scaleUp {
+		minTargetReplicas = 1
+	}
+	opDesc := fmt.Sprintf("wait for resource: %s in namespace %s to reach minimum required target replicas %d", r.resourceInfo.ref.Name, r.namespace, minTargetReplicas)
+	resMinTargetReached := util.RetryUntilPredicate(ctx, opDesc, func() bool {
 		readyReplicas, err := util.GetResourceReadyReplicas(ctx, r.client, r.namespace, r.resourceInfo.ref)
 		if err != nil {
 			return false
 		}
-		if r.resourceInfo.operation.scalingCompletePredicate(readyReplicas, targetReplicas) {
-			r.logger.V(4).Info("resource has been scaled to desired replicas", "namespace", r.namespace, "name", r.resourceInfo.ref.Name, "targetReplicas", targetReplicas)
+		if r.resourceInfo.operation.minTargetReplicasReached(readyReplicas) {
+			r.logger.V(4).Info("resource has been scaled to desired replicas", "namespace", r.namespace, "name", r.resourceInfo.ref.Name, "minTargetReplicas", minTargetReplicas)
 			return true
 		}
 		return false
 	}, *r.opts.resourceCheckTimeout, *r.opts.resourceCheckInterval)
+	if !resMinTargetReached {
+		return fmt.Errorf("timed out waiting for {namespace: %s, resource: %s} to reach minTargetReplicas %d", r.namespace, r.resourceInfo.ref.Name, minTargetReplicas)
+	}
+	return nil
 }
 
 func (r *resScaler) updateResourceAndScale(ctx context.Context, gr *schema.GroupResource, scaleSubRes *autoscalingv1.Scale, annot map[string]string) error {
@@ -143,7 +141,7 @@ func (r *resScaler) updateResourceAndScale(ctx context.Context, gr *schema.Group
 
 	// update the annotation capturing the current spec.replicas as the annotation value if the operation is scale down.
 	// This allows restoration of the resource to the same replica count when a subsequent scale up operation is triggered.
-	if r.resourceInfo.operation.opType == scaleDown {
+	if r.resourceInfo.operation == scaleDown {
 		patchBytes := []byte(fmt.Sprintf("{\"metadata\":{\"annotations\":{\"%s\":\"%s\"}}}", replicasAnnotationKey, strconv.Itoa(int(scaleSubRes.Spec.Replicas))))
 		err := util.PatchResourceAnnotations(ctx, r.client, r.namespace, r.resourceInfo.ref, patchBytes)
 		if err != nil {
@@ -164,14 +162,11 @@ func (r *resScaler) updateResourceAndScale(ctx context.Context, gr *schema.Group
 	}
 	r.logger.V(4).Info("resource scaling has been triggered successfully, waiting for resource scaling to complete", "namespace", r.namespace, "resource", r.resourceInfo.ref)
 
-	if !r.waitTillResourceScaled(ctx, targetReplicas) {
-		return fmt.Errorf("timed out waiting for {namespace: %s, resource %v} to be scaled", r.namespace, r.resourceInfo.ref)
-	}
 	return nil
 }
 
 func (r *resScaler) determineTargetReplicas(resourceName string, annotations map[string]string) (int32, error) {
-	if r.resourceInfo.operation.opType == scaleDown {
+	if r.resourceInfo.operation == scaleDown {
 		return defaultScaleDownReplicas, nil
 	}
 	if replicasStr, ok := annotations[replicasAnnotationKey]; ok {
@@ -181,7 +176,7 @@ func (r *resScaler) determineTargetReplicas(resourceName string, annotations map
 		}
 		return int32(replicas), nil
 	}
-	r.logger.Info("Replicas annotation not present on resource, falling back to default scale-up replicas", "operation", r.resourceInfo.operation.opType, "namespace", r.namespace, "name", resourceName, "annotationKey", replicasAnnotationKey, "default-replicas", defaultScaleUpReplicas)
+	r.logger.Info("Replicas annotation not present on resource, falling back to default scale-up replicas", "operation", r.resourceInfo.operation, "namespace", r.namespace, "name", resourceName, "annotationKey", replicasAnnotationKey, "default-replicas", defaultScaleUpReplicas)
 	return defaultScaleUpReplicas, nil
 }
 

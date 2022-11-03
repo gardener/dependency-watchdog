@@ -33,7 +33,7 @@ const (
 )
 
 type flowCreator interface {
-	createFlow(name string, namespace string, opType operationType) *scaleFlow
+	createFlow(name string, namespace string, opType operation) *scaleFlow
 }
 
 type creator struct {
@@ -54,7 +54,7 @@ func newFlowCreator(client client.Client, scaler scalev1.ScaleInterface, logger 
 	}
 }
 
-func (c *creator) createFlow(name string, namespace string, opType operationType) *scaleFlow {
+func (c *creator) createFlow(name string, namespace string, opType operation) *scaleFlow {
 	resourceInfos := createScalableResourceInfos(opType, c.dependentResourceInfos)
 	levels := sortAndGetUniqueLevels(resourceInfos)
 	orderedResourceInfos := collectResourceInfosByLevel(resourceInfos)

@@ -160,31 +160,3 @@ func TestCreateTaskName(t *testing.T) {
 	taskName := createTaskName(resInfos, level)
 	g.Expect(taskName).To(Equal(expectedTaskName))
 }
-
-func TestScaleUpReplicaMismatch(t *testing.T) {
-	g := NewWithT(t)
-	g.Expect(scaleUpReplicasPredicate(0)).To(BeTrue())
-	g.Expect(scaleUpReplicasPredicate(2)).To(BeFalse())
-	g.Expect(scaleUpReplicasPredicate(1)).To(BeFalse())
-}
-
-func TestScaleDownReplicaMismatch(t *testing.T) {
-	g := NewWithT(t)
-	g.Expect(scaleDownReplicasPredicate(1)).To(BeTrue())
-	g.Expect(scaleDownReplicasPredicate(2)).To(BeTrue())
-	g.Expect(scaleDownReplicasPredicate(0)).To(BeFalse())
-}
-
-func TestScaleUpCompletePredicate(t *testing.T) {
-	g := NewWithT(t)
-	g.Expect(scaleUpCompletePredicate(2, 3)).To(BeFalse())
-	g.Expect(scaleUpCompletePredicate(2, 2)).To(BeTrue())
-	g.Expect(scaleUpCompletePredicate(2, 1)).To(BeTrue())
-}
-
-func TestScaleDownCompletePredicate(t *testing.T) {
-	g := NewWithT(t)
-	g.Expect(scaleDownCompletePredicate(2, 0)).To(BeFalse())
-	g.Expect(scaleDownCompletePredicate(0, 0)).To(BeTrue())
-	g.Expect(scaleDownCompletePredicate(1, 2)).To(BeTrue())
-}

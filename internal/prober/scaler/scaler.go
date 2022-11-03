@@ -27,31 +27,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// replicasCheckPredicate checks if scaling should be done for the current number of replicas.
-// The target replicas for a resource are captured as annotation value. It is however possible that another actor
-// HPA or HVPA changes the replicas of the resource (scales it down or scales it up) causing the target replica annotation
-// value to differ from the spec.replicas for the resource. Since DWD is not a `horizontal-pod-autoscaler` but its intention
-// is only to restore the resource to the last captured replicas when it attempts to scale up the resource which was previously scaled-down to 0 by DWD.
-// If the current replicas > 0 but it is different from the last captured replicas as annotation value then it will skip any further scaling as that would
-// potentially interfere with HPA/HVPA.
-type replicasCheckPredicate func(currentReplicas int32) bool
-
-// scalingCompletePredicate checks if scaling of the resource is complete based on the current and target replica count.
-// This is used during the scale up for a resource which was previously scaled down by DWD. If the decision is to scale the resource
-// (a decision influenced by `replicasCheckPredicate`), then this predicate checks if the scaling is complete.
-type scalingCompletePredicate func(currentReplicas, targetReplicas int32) bool
-
 // operation denotes either a scale up or scale down action initiated by DWD.
-type operationType uint8
+type operation uint8
 
 const (
 	// scaleUp represents a scale-up action for a kubernetes resource.
-	scaleUp operationType = iota // scale-up
+	scaleUp operation = iota // scale-up
 	// scaleDown represents a scale-up action for a kubernetes resource.
 	scaleDown // scale-down
 )
 
-//go:generate stringer -type=operationType -linecomment
+//go:generate stringer -type=operation -linecomment
 
 // Scaler is a facade to provide scaling operations for kubernetes scalable resources.
 type Scaler interface {
@@ -95,30 +81,37 @@ func (ds *scaleFlowRunner) ScaleUp(ctx context.Context) error {
 	return ds.scaleUpFlow.Run(ctx, flow.Opts{})
 }
 
-type operation struct {
-	opType                       operationType
-	shouldScaleReplicasPredicate replicasCheckPredicate
-	scalingCompletePredicate     scalingCompletePredicate
+// getMinTargetReplicas gets the minimum target replicas based on the operation.
+// The target replicas for a resource are captured as annotation value. It is however possible that another actor
+// HPA or HVPA changes the replicas of the resource (scales it down or scales it up) causing the target replica annotation
+// value to differ from the spec.replicas for the resource. DWD is not a `horizontal-pod-autoscaler` but its intention
+// is only to restore the resource to the last captured replicas when it attempts to scale up the resource which was previously scaled-down to 0 by DWD.
+// Therefore, the minimum target can never be the value captured in the annotation, specially for a scaleUp operation.
+func (i operation) getMinTargetReplicas() int32 {
+	if i == scaleUp {
+		return 1
+	}
+	return 0
 }
 
-func newScaleOperation(opType operationType) operation {
-	var (
-		replicasCheckFn        replicasCheckPredicate
-		scalingCompleteCheckFn scalingCompletePredicate
-	)
-
-	if opType == scaleUp {
-		replicasCheckFn = scaleUpReplicasPredicate
-		scalingCompleteCheckFn = scaleUpCompletePredicate
+// shouldScaleReplicas checks if scaling should be done for a resource given the current number of replicas.
+func (i operation) shouldScaleReplicas(currentReplicas int32) bool {
+	if i == scaleUp {
+		return currentReplicas == 0
 	} else {
-		replicasCheckFn = scaleDownReplicasPredicate
-		scalingCompleteCheckFn = scaleDownCompletePredicate
+		return currentReplicas > 0
 	}
+}
 
-	return operation{
-		opType:                       opType,
-		shouldScaleReplicasPredicate: replicasCheckFn,
-		scalingCompletePredicate:     scalingCompleteCheckFn,
+// minTargetReplicasReached checks if scaling of the resource is complete based on the current and minimum target replica count.
+// This is used during the scale up for a resource which was previously scaled down by DWD. If the decision is to scale the resource
+// then this predicate checks if the wait for scaling a resource is complete.
+func (i operation) minTargetReplicasReached(currentReplicas int32) bool {
+	minTargetReplicas := i.getMinTargetReplicas()
+	if i == scaleUp {
+		return currentReplicas >= minTargetReplicas
+	} else {
+		return currentReplicas == minTargetReplicas
 	}
 }
 

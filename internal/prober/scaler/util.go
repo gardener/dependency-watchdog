@@ -25,14 +25,14 @@ import (
 )
 
 // createScalableResourceInfos creates slice of scalableResourceInfo from an operation and slice of papi.DependentResourceInfo.
-func createScalableResourceInfos(opType operationType, dependentResourceInfos []papi.DependentResourceInfo) []scalableResourceInfo {
+func createScalableResourceInfos(op operation, dependentResourceInfos []papi.DependentResourceInfo) []scalableResourceInfo {
 	resourceInfos := make([]scalableResourceInfo, 0, len(dependentResourceInfos))
 	for _, depResInfo := range dependentResourceInfos {
 		var (
 			level                 int
 			initialDelay, timeout time.Duration
 		)
-		if opType == scaleUp {
+		if op == scaleUp {
 			level = depResInfo.ScaleUpInfo.Level
 			initialDelay = depResInfo.ScaleUpInfo.InitialDelay.Duration
 			timeout = depResInfo.ScaleUpInfo.Timeout.Duration
@@ -47,7 +47,7 @@ func createScalableResourceInfos(opType operationType, dependentResourceInfos []
 			level:        level,
 			initialDelay: initialDelay,
 			timeout:      timeout,
-			operation:    newScaleOperation(opType),
+			operation:    op,
 		}
 		resourceInfos = append(resourceInfos, resInfo)
 	}
@@ -96,24 +96,4 @@ func createTaskName(resInfos []scalableResourceInfo, level int) string {
 		resNames = append(resNames, resInfo.ref.Name)
 	}
 	return fmt.Sprintf("scale:level-%d:%s", level, strings.Join(resNames, "#"))
-}
-
-// scaleUpReplicasPredicate scales up if current number of replicas is zero
-func scaleUpReplicasPredicate(currentReplicas int32) bool {
-	return currentReplicas == 0
-}
-
-// scaleDownReplicasPredicate scales down if current number of replicas is positive
-func scaleDownReplicasPredicate(currentReplicas int32) bool {
-	return currentReplicas > 0
-}
-
-// scaleUpCompletePredicate checks if current number of replicas is more than target replicas
-func scaleUpCompletePredicate(currentReplicas, targetReplicas int32) bool {
-	return currentReplicas >= targetReplicas
-}
-
-// scaleDownCompletePredicate checks if current number of replicas is less than target replicas
-func scaleDownCompletePredicate(currentReplicas, targetReplicas int32) bool {
-	return currentReplicas <= targetReplicas
 }
