@@ -21,6 +21,7 @@ import (
 
 	multierr "github.com/hashicorp/go-multierror"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -39,21 +40,23 @@ func (v *Validator) MustNotBeEmpty(key string, value interface{}) bool {
 	switch cv.Kind() {
 	case reflect.String:
 		if strings.TrimSpace(cv.String()) == "" {
-			v.Error = multierr.Append(v.Error, fmt.Errorf("%s must not be empty", key))
+			v.Error = multierr.Append(v.Error, fmt.Errorf("value for key %s must not be empty", key))
 			return false
 		}
 	case reflect.Slice:
 		if cv.Len() == 0 {
-			v.Error = multierr.Append(v.Error, fmt.Errorf("%s must not be empty", key))
+			v.Error = multierr.Append(v.Error, fmt.Errorf("value for key %s must not be empty", key))
 			return false
 		}
 	case reflect.Map:
 		if cv.Len() == 0 {
-			v.Error = multierr.Append(v.Error, fmt.Errorf("%s must not be empty", key))
+			v.Error = multierr.Append(v.Error, fmt.Errorf("value for key %s must not be empty", key))
 			return false
 		}
+	default:
+		v.Error = multierr.Append(v.Error, fmt.Errorf("unsupported type of value for key %s. do not know how to check if it is empty", key))
+		return false
 	}
-
 	return true
 }
 
@@ -67,11 +70,16 @@ func (v *Validator) MustNotBeNil(key string, value interface{}) bool {
 }
 
 // ResourceRefMustBeValid validates the given resourceRef by parsing the apiVersion.
-func (v *Validator) ResourceRefMustBeValid(resourceRef *autoscalingv1.CrossVersionObjectReference) bool {
-	_, err := schema.ParseGroupVersion(resourceRef.APIVersion)
+func (v *Validator) ResourceRefMustBeValid(resourceRef *autoscalingv1.CrossVersionObjectReference, scheme *runtime.Scheme) bool {
+	gv, err := schema.ParseGroupVersion(resourceRef.APIVersion)
 	if err != nil {
 		v.Error = multierr.Append(v.Error, err)
 		return false
 	}
-	return true
+	gvk := schema.GroupVersionKind{
+		Group:   gv.Group,
+		Version: gv.Version,
+		Kind:    resourceRef.Kind,
+	}
+	return scheme.Recognizes(gvk)
 }

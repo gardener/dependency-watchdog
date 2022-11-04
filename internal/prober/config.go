@@ -20,6 +20,7 @@ import (
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"github.com/gardener/dependency-watchdog/internal/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 const (
@@ -45,27 +46,27 @@ const (
 
 // LoadConfig reads the prober configuration from a file, unmarshalls it, fills in the default values and
 // validates the unmarshalled configuration If all validations pass it will return papi.Config else it will return an error.
-func LoadConfig(file string) (*papi.Config, error) {
+func LoadConfig(file string, scheme *runtime.Scheme) (*papi.Config, error) {
 	config, err := util.ReadAndUnmarshall[papi.Config](file)
 	if err != nil {
 		return nil, err
 	}
 	fillDefaultValues(config)
-	err = validate(config)
+	err = validate(config, scheme)
 	if err != nil {
 		return nil, err
 	}
 	return config, nil
 }
 
-func validate(c *papi.Config) error {
+func validate(c *papi.Config, scheme *runtime.Scheme) error {
 	v := new(util.Validator)
 	// Check the mandatory config parameters for which a default will not be set
 	v.MustNotBeEmpty("InternalKubeConfigSecretName", c.InternalKubeConfigSecretName)
 	v.MustNotBeEmpty("ExternalKubeConfigSecretName", c.ExternalKubeConfigSecretName)
 	v.MustNotBeEmpty("ScaleResourceInfos", c.DependentResourceInfos)
 	for _, resInfo := range c.DependentResourceInfos {
-		v.ResourceRefMustBeValid(resInfo.Ref)
+		v.ResourceRefMustBeValid(resInfo.Ref, scheme)
 		v.MustNotBeNil("shouldExist", resInfo.ShouldExist)
 		v.MustNotBeNil("scaleUp", resInfo.ScaleUpInfo)
 		v.MustNotBeNil("scaleDown", resInfo.ScaleDownInfo)

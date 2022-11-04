@@ -95,7 +95,7 @@ func addProbeFlags(fs *flag.FlagSet) {
 
 func startProberControllerMgr(logger logr.Logger) (manager.Manager, error) {
 	proberLogger := logger.WithName("cluster-controller")
-	proberConfig, err := prober.LoadConfig(proberOpts.ConfigFile)
+	proberConfig, err := prober.LoadConfig(proberOpts.ConfigFile, scheme)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse prober config file %s : %w", proberOpts.ConfigFile, err)
 	}
