@@ -15,26 +15,24 @@
 package weeder
 
 import (
-	"fmt"
 	"path/filepath"
 	"testing"
 
+	testutil "github.com/gardener/dependency-watchdog/internal/test"
 	multierr "github.com/hashicorp/go-multierror"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	. "github.com/onsi/gomega"
-
-	"github.com/gardener/dependency-watchdog/internal/util"
 )
 
 const testdataPath = "testdata"
 
 func TestCheckIfDefaultValuesAreSetForAllOptionalMissingValues(t *testing.T) {
 	g := NewWithT(t)
-	util.ValidateIfFileExists(testdataPath, t)
+	testutil.ValidateIfFileExists(testdataPath, t)
 
 	configPath := filepath.Join(testdataPath, "config_missing_optional_values.yaml")
-	util.ValidateIfFileExists(configPath, t)
+	testutil.ValidateIfFileExists(configPath, t)
 	config, err := LoadConfig(configPath)
 
 	g.Expect(err).ToNot(HaveOccurred(), "LoadConfig should not give any error for a valid config file")
@@ -54,12 +52,11 @@ func TestMissingMandatoryFieldsShouldReturnErrorAndNilConfig(t *testing.T) {
 
 	for _, entry := range table {
 		g := NewWithT(t)
-		util.ValidateIfFileExists(testdataPath, t)
+		testutil.ValidateIfFileExists(testdataPath, t)
 		configPath := filepath.Join(testdataPath, entry.fileName)
-		util.ValidateIfFileExists(configPath, t)
+		testutil.ValidateIfFileExists(configPath, t)
 		config, err := LoadConfig(configPath)
 
-		fmt.Println(err)
 		g.Expect(err).To(HaveOccurred(), "LoadConfig should return error for a config with missing mandatory values")
 		g.Expect(config).To(BeNil(), "LoadConfig should return a nil config for a file with missing mandatory values")
 		if merr, ok := err.(*multierr.Error); ok {
@@ -71,10 +68,10 @@ func TestMissingMandatoryFieldsShouldReturnErrorAndNilConfig(t *testing.T) {
 
 func TestValidConfigShouldPassAllValidations(t *testing.T) {
 	g := NewWithT(t)
-	util.ValidateIfFileExists(testdataPath, t)
+	testutil.ValidateIfFileExists(testdataPath, t)
 
 	configPath := filepath.Join(testdataPath, "valid_config.yaml")
-	util.ValidateIfFileExists(configPath, t)
+	testutil.ValidateIfFileExists(configPath, t)
 	config, err := LoadConfig(configPath)
 	g.Expect(err).ToNot(HaveOccurred(), "LoadConfig should not give error for a valid config")
 	g.Expect(config).ToNot(BeNil(), "LoadConfig should got nil config for a valid file")

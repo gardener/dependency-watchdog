@@ -22,6 +22,6 @@ ENVTEST_K8S_VERSION="1.24.2"
 export KUBEBUILDER_ASSETS="$(setup-envtest --os $(go env GOOS) --arch $(go env GOARCH) use $ENVTEST_K8S_VERSION -p path)"
 echo "Running tests using KUBEBUILDER_ASSETS=$KUBEBUILDER_ASSETS"
 export KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT=true
-go test ./...
+go test -v ./... -coverprofile cover.out
 
 
