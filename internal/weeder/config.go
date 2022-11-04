@@ -19,17 +19,19 @@ import (
 
 	wapi "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/gardener/dependency-watchdog/internal/util"
+
 	multierr "github.com/hashicorp/go-multierror"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	// DefaultWatchDuration is the default duration after which the watch expires.
-	DefaultWatchDuration = 5 * time.Minute
+	// defaultWatchDuration is the default duration after which the watch expires.
+	defaultWatchDuration = 5 * time.Minute
 )
 
 // LoadConfig reads the weeder configuration from a file, unmarshalls it, fills in the default values and
-// validates the unmarshalled configuration If all validations pass it will return papi.Config else it will return an error.
+// validates the unmarshalled configuration. If all validations pass it will return papi.Config else it will return an error.
 func LoadConfig(filename string) (*wapi.Config, error) {
 	config, err := util.ReadAndUnmarshall[wapi.Config](filename)
 	if err != nil {
@@ -63,7 +65,7 @@ func validate(c *wapi.Config) error {
 func fillDefaultValues(c *wapi.Config) {
 	if c.WatchDuration == nil {
 		c.WatchDuration = &metav1.Duration{
-			Duration: DefaultWatchDuration,
+			Duration: defaultWatchDuration,
 		}
 	}
 }
