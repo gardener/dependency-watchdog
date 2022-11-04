@@ -16,12 +16,9 @@ package util
 
 import (
 	"context"
-	"errors"
 	"os"
-	"testing"
 	"time"
 
-	"github.com/onsi/gomega"
 	"sigs.k8s.io/yaml"
 )
 
@@ -35,16 +32,6 @@ func SleepWithContext(ctx context.Context, sleepFor time.Duration) error {
 			return nil
 		}
 	}
-}
-
-// ValidateIfFileExists validates the existence of a file
-func ValidateIfFileExists(file string, t *testing.T) {
-	g := gomega.NewWithT(t)
-	var err error
-	if _, err := os.Stat(file); errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("%s does not exist. This should not have happened. Check testdata directory.\n", file)
-	}
-	g.Expect(err).ToNot(gomega.HaveOccurred(), "File at path %v should exist")
 }
 
 // ReadAndUnmarshall reads file and Unmarshall the contents in a generic type

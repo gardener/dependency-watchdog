@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"testing"
 
+	"github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -87,4 +89,14 @@ func FileExistsOrFail(filepath string) {
 	if err != nil {
 		log.Fatalf("Error occured in finding file %s : %v", filepath, err)
 	}
+}
+
+// ValidateIfFileExists validates the existence of a file
+func ValidateIfFileExists(file string, t *testing.T) {
+	g := gomega.NewWithT(t)
+	var err error
+	if _, err := os.Stat(file); errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("%s does not exist. This should not have happened. Check testdata directory.\n", file)
+	}
+	g.Expect(err).ToNot(gomega.HaveOccurred(), "File at path %v should exist")
 }

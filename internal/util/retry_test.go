@@ -16,6 +16,7 @@ package util
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -150,6 +151,41 @@ func TestRetryUntilPredicateWithBackgroundContext(t *testing.T) {
 		wg.Wait()
 	}
 
+}
+
+func TestRetryOnError(t *testing.T) {
+	g := NewWithT(t)
+	counter := 0
+	fn := func() error {
+		counter++
+		if counter < 3 {
+			return errors.New("counter is less than 3. Returning an error")
+		}
+		return nil
+	}
+	RetryOnError(context.Background(), "", fn, 10*time.Millisecond)
+	g.Expect(counter).To(Equal(3))
+}
+
+func TestRetryOnErrorWhenContextIsCancelled(t *testing.T) {
+	g := NewWithT(t)
+	ctx, cancelFn := context.WithCancel(context.Background())
+	counter := 0
+	fn := func() error {
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+			counter++
+		}
+	}
+	go RetryOnError(context.Background(), "", fn, 10*time.Millisecond)
+	time.Sleep(20 * time.Millisecond) //forcing counter to be incremented
+	cancelFn()
+	g.Expect(counter).To(BeNumerically(">", 0))
+	g.Expect(ctx.Err()).ToNot(BeNil())
 }
 
 func appendFail() (string, error) {

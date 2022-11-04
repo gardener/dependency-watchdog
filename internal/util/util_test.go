@@ -16,10 +16,12 @@ package util
 
 import (
 	"context"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
+	papi "github.com/gardener/dependency-watchdog/api/prober"
 	. "github.com/onsi/gomega"
 )
 
@@ -52,4 +54,28 @@ func TestSleepWithContextForNonCancellableContext(t *testing.T) {
 	ctx := context.Background()
 	err := SleepWithContext(ctx, time.Microsecond)
 	g.Expect(err).Should(BeNil())
+}
+
+func TestReadAndUnmarshallNonExistingFile(t *testing.T) {
+	g := NewWithT(t)
+	_, err := ReadAndUnmarshall[papi.Config]("file-that-does-not-exists.yaml")
+	g.Expect(err).ToNot(BeNil())
+}
+
+func TestReadAndUnmarshall(t *testing.T) {
+	g := NewWithT(t)
+	type config struct {
+		Name    string
+		Version string
+		Data    map[string]string
+	}
+	configPath := filepath.Join("testdata", "test-config.yaml")
+	c, err := ReadAndUnmarshall[config](configPath)
+	g.Expect(err).To(BeNil())
+	g.Expect(c.Name).To(Equal("zeus"))
+	g.Expect(c.Version).To(Equal("v1.0"))
+	expectedData := map[string]string{"level": "god-like", "type": "warrior"}
+	for k, v := range c.Data {
+		g.Expect(expectedData).To(HaveKeyWithValue(k, v))
+	}
 }
