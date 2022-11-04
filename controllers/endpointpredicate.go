@@ -24,7 +24,7 @@ import (
 )
 
 // ReadyEndpoints is a predicate to allow events for only ready endpoints. Endpoint is considered ready
-// when there at least a single endpoint subset that has at least one IP address assigned.
+// when there is at least a single endpoint subset that has at least one IP address assigned.
 func ReadyEndpoints(logger logr.Logger) predicate.Predicate {
 	log := logger.WithValues("predicate", "ReadyEndpointsPredicate")
 	isEndpointReady := func(obj runtime.Object) bool {
@@ -33,11 +33,11 @@ func ReadyEndpoints(logger logr.Logger) predicate.Predicate {
 			return false
 		}
 		for _, subset := range ep.Subsets {
-			if len(subset.Addresses) != 0 {
+			if len(subset.Addresses) > 0 {
 				return true
 			}
 		}
-		log.Info("Endpoint does not have any endpoint subset. Skipping pod terminations.", "namespace", ep.Namespace, "endpoint", ep.Name)
+		log.Info("Endpoint does not have any IP address. Skipping processing this endpoint.", "namespace", ep.Namespace, "endpoint", ep.Name)
 		return false
 	}
 
@@ -50,9 +50,7 @@ func ReadyEndpoints(logger logr.Logger) predicate.Predicate {
 			isNewReady := isEndpointReady(event.ObjectNew)
 			isOldReady := isEndpointReady(event.ObjectOld)
 
-			if isNewReady && isOldReady {
-				return false
-			} else if isNewReady {
+			if isNewReady && !isOldReady {
 				return true
 			}
 

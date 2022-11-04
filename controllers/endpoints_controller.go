@@ -39,7 +39,7 @@ type EndpointReconciler struct {
 	MaxConcurrentReconciles int
 }
 
-// +kubebuilder:rbac:resources=endpoints;events,verbs=create;get;update;patch;list;watch
+// +kubebuilder:rbac:resources=endpoints,verbs=get;list;watch
 // +kubebuilder:rbac:resources=pods,verbs=get;list;watch;delete
 
 // Reconcile listens to create/update events for `Endpoints` resources and manages weeder which shoot the dependent pods of the configured services, if necessary

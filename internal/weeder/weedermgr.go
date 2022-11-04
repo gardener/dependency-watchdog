@@ -28,7 +28,7 @@ type Manager interface {
 	// and remove it from the manager.
 	Unregister(key string) bool
 	// UnregisterAll unregisters all weeders from the manager.
-	UnregisterAll() bool
+	UnregisterAll()
 	// GetWeederRegistration returns a weederRegistration which will give access to the context and the cancelFn to the caller.
 	GetWeederRegistration(key string) (Registration, bool)
 }
@@ -102,13 +102,10 @@ func (wm *weederManager) Unregister(key string) bool {
 	return false
 }
 
-func (wm *weederManager) UnregisterAll() bool {
+func (wm *weederManager) UnregisterAll() {
 	for key := range wm.weeders {
-		if !wm.Unregister(key) {
-			return false
-		}
+		_ = wm.Unregister(key)
 	}
-	return true
 }
 
 func (wm *weederManager) GetWeederRegistration(key string) (Registration, bool) {

@@ -50,7 +50,7 @@ func setupMgrTest(t *testing.T) (Manager, func(mgr Manager)) {
 	mgr := NewManager()
 	g.Expect(mgr).ShouldNot(BeNil(), "NewManager should return a non nil manager")
 	return mgr, func(mgr Manager) {
-		g.Expect(mgr.UnregisterAll()).To(BeTrue())
+		mgr.UnregisterAll()
 	}
 }
 

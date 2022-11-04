@@ -27,6 +27,14 @@ import (
 
 const testdataPath = "testdata"
 
+func TestConfigFileNotFound(t *testing.T) {
+	g := NewWithT(t)
+	config, err := LoadConfig(filepath.Join(testdataPath, "notfound.yaml"))
+	g.Expect(err).To(HaveOccurred(), "LoadConfig should give error if config file is not found")
+	g.Expect(config).To(BeNil(), "LoadConfig should return a nil config if config file is not found")
+	g.Expect(err.Error()).To(ContainSubstring("no such file or directory"), "LoadConfig did not load all the dependent resources")
+}
+
 func TestCheckIfDefaultValuesAreSetForAllOptionalMissingValues(t *testing.T) {
 	g := NewWithT(t)
 	testutil.ValidateIfFileExists(testdataPath, t)

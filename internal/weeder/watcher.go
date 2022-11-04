@@ -34,19 +34,19 @@ type podEventHandler func(ctx context.Context, log logr.Logger, crClient client.
 
 // podWatcher watches a pod for status changes
 type podWatcher struct {
+	weeder         *Weeder
 	selector       *metav1.LabelSelector
 	eventHandlerFn podEventHandler
 	k8sWatch       watch.Interface
-	weeder         *Weeder
 	log            logr.Logger
 }
 
 func newPodWatcher(weeder *Weeder, selector *metav1.LabelSelector, eventHandlerFn podEventHandler) *podWatcher {
 	return &podWatcher{
+		weeder:         weeder,
 		selector:       selector,
 		eventHandlerFn: eventHandlerFn,
 		k8sWatch:       nil,
-		weeder:         weeder,
 		log:            weeder.logger,
 	}
 }
@@ -64,11 +64,11 @@ func (pw *podWatcher) watch() {
 	for {
 		select {
 		case <-pw.weeder.ctx.Done():
-			pw.log.V(4).Info("Exiting watch as context has timed-out or has been cancelled", "namespace", pw.weeder.namespace, "selector", pw.selector.String())
+			pw.log.V(4).Info("Exiting watch as context has timed-out or has been cancelled", "namespace", pw.weeder.namespace, "endpoint", pw.weeder.endpoints.Name, "selector", pw.selector.String())
 			return
 		case event, ok := <-pw.k8sWatch.ResultChan():
 			if !ok {
-				pw.log.V(3).Info("Watch has stopped, recreating kubernetes watch", "namespace", pw.weeder.namespace, "service", pw.weeder.endpoints.Name, "selector", pw.selector.String())
+				pw.log.V(3).Info("Watch has stopped, recreating kubernetes watch", "namespace", pw.weeder.namespace, "endpoint", pw.weeder.endpoints.Name, "selector", pw.selector.String())
 				pw.createK8sWatch(pw.weeder.ctx)
 				continue
 			}
@@ -77,7 +77,7 @@ func (pw *podWatcher) watch() {
 			}
 			targetPod := event.Object.(*v1.Pod)
 			if err := pw.eventHandlerFn(pw.weeder.ctx, pw.log, pw.weeder.ctrlClient, targetPod); err != nil {
-				pw.log.Error(err, "Error processing pod ", "namespace", pw.weeder.namespace, "podName", targetPod.Name)
+				pw.log.Error(err, "Error processing pod", "namespace", pw.weeder.namespace, "podName", targetPod.Name)
 			}
 		}
 	}

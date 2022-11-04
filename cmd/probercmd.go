@@ -71,7 +71,7 @@ Flags:
 		TCP address that the controller should bind to for serving health probes
 `,
 		AddFlags: addProbeFlags,
-		Run:      startProberControllerMgr,
+		Run:      startClusterControllerMgr,
 	}
 	proberOpts = proberOptions{}
 	scheme     = runtime.NewScheme()
@@ -93,7 +93,7 @@ func addProbeFlags(fs *flag.FlagSet) {
 	SetSharedOpts(fs, &proberOpts.SharedOpts)
 }
 
-func startProberControllerMgr(logger logr.Logger) (manager.Manager, error) {
+func startClusterControllerMgr(logger logr.Logger) (manager.Manager, error) {
 	proberLogger := logger.WithName("cluster-controller")
 	proberConfig, err := prober.LoadConfig(proberOpts.ConfigFile, scheme)
 	if err != nil {

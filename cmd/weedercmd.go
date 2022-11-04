@@ -33,7 +33,7 @@ var (
 	WeederCmd = &Command{
 		Name:      "weeder",
 		UsageLine: "",
-		ShortDesc: "Restarts CrashLooping pods which are dependant on a service , for quick availability",
+		ShortDesc: "Restarts CrashLooping pods which are dependant on a service , for quick recovery ensuring maximum availability",
 		LongDesc: `Watches for Kubernetes endpoints for a service. If the endpoints transition from being
 unavailable to now being available, it checks all dependent pods for CrashLoopBackOff condition. It attempts to
 restore these dependent pods by deleting them so that they are started again by respective controller. In essence
@@ -64,7 +64,7 @@ Flags:
 		TCP address that the controller should bind to for serving health probes
 `,
 		AddFlags: addWeederFlags,
-		Run:      startWeederControllerMgr,
+		Run:      startEndpointsControllerMgr,
 	}
 	weederOpts = weederOptions{}
 )
@@ -77,7 +77,7 @@ func addWeederFlags(fs *flag.FlagSet) {
 	SetSharedOpts(fs, &weederOpts.SharedOpts)
 }
 
-func startWeederControllerMgr(logger logr.Logger) (manager.Manager, error) {
+func startEndpointsControllerMgr(logger logr.Logger) (manager.Manager, error) {
 	weederLogger := logger.WithName("endpoints-controller")
 	weederConfig, err := weeder.LoadConfig(weederOpts.ConfigFile)
 	if err != nil {
