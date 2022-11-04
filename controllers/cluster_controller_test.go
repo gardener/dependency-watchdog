@@ -24,7 +24,7 @@ import (
 	"time"
 
 	proberpackage "github.com/gardener/dependency-watchdog/internal/prober"
-	"github.com/gardener/dependency-watchdog/internal/test"
+	testenv "github.com/gardener/dependency-watchdog/internal/test"
 	"github.com/gardener/dependency-watchdog/internal/util"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardenerv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
@@ -62,7 +62,7 @@ func setupProberEnv(ctx context.Context, t *testing.T, g *WithT) (client.Client,
 	scheme := buildScheme()
 	crdDirectoryPaths := []string{filepath.Join("testdata", "crd", "prober")}
 
-	controllerTestEnv, err := test.CreateControllerTestEnv(scheme, crdDirectoryPaths)
+	controllerTestEnv, err := testenv.CreateControllerTestEnv(scheme, crdDirectoryPaths)
 	g.Expect(err).To(BeNil())
 
 	testEnv := controllerTestEnv.GetEnv()
@@ -79,7 +79,7 @@ func setupProberEnv(ctx context.Context, t *testing.T, g *WithT) (client.Client,
 
 	probeConfigPath := filepath.Join(testdataPath, "config", "prober-config.yaml")
 	validateIfFileExists(probeConfigPath, g)
-	proberConfig, err := proberpackage.LoadConfig(probeConfigPath)
+	proberConfig, err := proberpackage.LoadConfig(probeConfigPath, scheme)
 	g.Expect(err).To(BeNil())
 
 	clusterReconciler := &ClusterReconciler{

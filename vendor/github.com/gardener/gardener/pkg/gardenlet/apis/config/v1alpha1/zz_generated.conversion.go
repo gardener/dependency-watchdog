@@ -243,13 +243,13 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
-	if err := s.AddGeneratedConversionFunc((*HTTPSServer)(nil), (*config.HTTPSServer)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_HTTPSServer_To_config_HTTPSServer(a.(*HTTPSServer), b.(*config.HTTPSServer), scope)
+	if err := s.AddGeneratedConversionFunc((*KubeconfigValidity)(nil), (*config.KubeconfigValidity)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_KubeconfigValidity_To_config_KubeconfigValidity(a.(*KubeconfigValidity), b.(*config.KubeconfigValidity), scope)
 	}); err != nil {
 		return err
 	}
-	if err := s.AddGeneratedConversionFunc((*config.HTTPSServer)(nil), (*HTTPSServer)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_config_HTTPSServer_To_v1alpha1_HTTPSServer(a.(*config.HTTPSServer), b.(*HTTPSServer), scope)
+	if err := s.AddGeneratedConversionFunc((*config.KubeconfigValidity)(nil), (*KubeconfigValidity)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_config_KubeconfigValidity_To_v1alpha1_KubeconfigValidity(a.(*config.KubeconfigValidity), b.(*KubeconfigValidity), scope)
 	}); err != nil {
 		return err
 	}
@@ -443,6 +443,16 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
+	if err := s.AddGeneratedConversionFunc((*ShootEventLogging)(nil), (*config.ShootEventLogging)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_ShootEventLogging_To_config_ShootEventLogging(a.(*ShootEventLogging), b.(*config.ShootEventLogging), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*config.ShootEventLogging)(nil), (*ShootEventLogging)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_config_ShootEventLogging_To_v1alpha1_ShootEventLogging(a.(*config.ShootEventLogging), b.(*ShootEventLogging), scope)
+	}); err != nil {
+		return err
+	}
 	if err := s.AddGeneratedConversionFunc((*ShootMigrationControllerConfiguration)(nil), (*config.ShootMigrationControllerConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha1_ShootMigrationControllerConfiguration_To_config_ShootMigrationControllerConfiguration(a.(*ShootMigrationControllerConfiguration), b.(*config.ShootMigrationControllerConfiguration), scope)
 	}); err != nil {
@@ -500,16 +510,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddGeneratedConversionFunc((*config.StaleExtensionHealthChecks)(nil), (*StaleExtensionHealthChecks)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_config_StaleExtensionHealthChecks_To_v1alpha1_StaleExtensionHealthChecks(a.(*config.StaleExtensionHealthChecks), b.(*StaleExtensionHealthChecks), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*TLSServer)(nil), (*config.TLSServer)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_TLSServer_To_config_TLSServer(a.(*TLSServer), b.(*config.TLSServer), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*config.TLSServer)(nil), (*TLSServer)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_config_TLSServer_To_v1alpha1_TLSServer(a.(*config.TLSServer), b.(*TLSServer), scope)
 	}); err != nil {
 		return err
 	}
@@ -896,6 +896,7 @@ func autoConvert_v1alpha1_GardenClientConnection_To_config_GardenClientConnectio
 	out.GardenClusterCACert = *(*[]byte)(unsafe.Pointer(&in.GardenClusterCACert))
 	out.BootstrapKubeconfig = (*corev1.SecretReference)(unsafe.Pointer(in.BootstrapKubeconfig))
 	out.KubeconfigSecret = (*corev1.SecretReference)(unsafe.Pointer(in.KubeconfigSecret))
+	out.KubeconfigValidity = (*config.KubeconfigValidity)(unsafe.Pointer(in.KubeconfigValidity))
 	return nil
 }
 
@@ -912,6 +913,7 @@ func autoConvert_config_GardenClientConnection_To_v1alpha1_GardenClientConnectio
 	out.GardenClusterCACert = *(*[]byte)(unsafe.Pointer(&in.GardenClusterCACert))
 	out.BootstrapKubeconfig = (*corev1.SecretReference)(unsafe.Pointer(in.BootstrapKubeconfig))
 	out.KubeconfigSecret = (*corev1.SecretReference)(unsafe.Pointer(in.KubeconfigSecret))
+	out.KubeconfigValidity = (*KubeconfigValidity)(unsafe.Pointer(in.KubeconfigValidity))
 	return nil
 }
 
@@ -921,13 +923,6 @@ func Convert_config_GardenClientConnection_To_v1alpha1_GardenClientConnection(in
 }
 
 func autoConvert_v1alpha1_GardenLoki_To_config_GardenLoki(in *GardenLoki, out *config.GardenLoki, s conversion.Scope) error {
-	if in.Priority != nil {
-		in, out := &in.Priority, &out.Priority
-		*out = new(int32)
-		**out = int32(**in)
-	} else {
-		out.Priority = nil
-	}
 	out.Storage = (*resource.Quantity)(unsafe.Pointer(in.Storage))
 	return nil
 }
@@ -938,13 +933,6 @@ func Convert_v1alpha1_GardenLoki_To_config_GardenLoki(in *GardenLoki, out *confi
 }
 
 func autoConvert_config_GardenLoki_To_v1alpha1_GardenLoki(in *config.GardenLoki, out *GardenLoki, s conversion.Scope) error {
-	if in.Priority != nil {
-		in, out := &in.Priority, &out.Priority
-		*out = new(int)
-		**out = int(**in)
-	} else {
-		out.Priority = nil
-	}
 	out.Storage = (*resource.Quantity)(unsafe.Pointer(in.Storage))
 	return nil
 }
@@ -993,9 +981,11 @@ func autoConvert_v1alpha1_GardenletConfiguration_To_config_GardenletConfiguratio
 	} else {
 		out.LeaderElection = nil
 	}
-	out.LogLevel = (*string)(unsafe.Pointer(in.LogLevel))
-	out.LogFormat = (*string)(unsafe.Pointer(in.LogFormat))
-	out.Server = (*config.ServerConfiguration)(unsafe.Pointer(in.Server))
+	out.LogLevel = in.LogLevel
+	out.LogFormat = in.LogFormat
+	if err := Convert_v1alpha1_ServerConfiguration_To_config_ServerConfiguration(&in.Server, &out.Server, s); err != nil {
+		return err
+	}
 	if in.Debugging != nil {
 		in, out := &in.Debugging, &out.Debugging
 		*out = new(componentbaseconfig.DebuggingConfiguration)
@@ -1015,15 +1005,7 @@ func autoConvert_v1alpha1_GardenletConfiguration_To_config_GardenletConfiguratio
 	} else {
 		out.SeedConfig = nil
 	}
-	if in.Logging != nil {
-		in, out := &in.Logging, &out.Logging
-		*out = new(config.Logging)
-		if err := Convert_v1alpha1_Logging_To_config_Logging(*in, *out, s); err != nil {
-			return err
-		}
-	} else {
-		out.Logging = nil
-	}
+	out.Logging = (*config.Logging)(unsafe.Pointer(in.Logging))
 	out.SNI = (*config.SNI)(unsafe.Pointer(in.SNI))
 	out.ETCDConfig = (*config.ETCDConfig)(unsafe.Pointer(in.ETCDConfig))
 	out.ExposureClassHandlers = *(*[]config.ExposureClassHandler)(unsafe.Pointer(&in.ExposureClassHandlers))
@@ -1075,9 +1057,11 @@ func autoConvert_config_GardenletConfiguration_To_v1alpha1_GardenletConfiguratio
 	} else {
 		out.LeaderElection = nil
 	}
-	out.LogLevel = (*string)(unsafe.Pointer(in.LogLevel))
-	out.LogFormat = (*string)(unsafe.Pointer(in.LogFormat))
-	out.Server = (*ServerConfiguration)(unsafe.Pointer(in.Server))
+	out.LogLevel = in.LogLevel
+	out.LogFormat = in.LogFormat
+	if err := Convert_config_ServerConfiguration_To_v1alpha1_ServerConfiguration(&in.Server, &out.Server, s); err != nil {
+		return err
+	}
 	if in.Debugging != nil {
 		in, out := &in.Debugging, &out.Debugging
 		*out = new(configv1alpha1.DebuggingConfiguration)
@@ -1097,15 +1081,7 @@ func autoConvert_config_GardenletConfiguration_To_v1alpha1_GardenletConfiguratio
 	} else {
 		out.SeedConfig = nil
 	}
-	if in.Logging != nil {
-		in, out := &in.Logging, &out.Logging
-		*out = new(Logging)
-		if err := Convert_config_Logging_To_v1alpha1_Logging(*in, *out, s); err != nil {
-			return err
-		}
-	} else {
-		out.Logging = nil
-	}
+	out.Logging = (*Logging)(unsafe.Pointer(in.Logging))
 	out.SNI = (*SNI)(unsafe.Pointer(in.SNI))
 	out.ETCDConfig = (*ETCDConfig)(unsafe.Pointer(in.ETCDConfig))
 	out.ExposureClassHandlers = *(*[]ExposureClassHandler)(unsafe.Pointer(&in.ExposureClassHandlers))
@@ -1127,9 +1103,9 @@ func autoConvert_v1alpha1_GardenletControllerConfiguration_To_config_GardenletCo
 	out.ControllerInstallationCare = (*config.ControllerInstallationCareControllerConfiguration)(unsafe.Pointer(in.ControllerInstallationCare))
 	out.ControllerInstallationRequired = (*config.ControllerInstallationRequiredControllerConfiguration)(unsafe.Pointer(in.ControllerInstallationRequired))
 	out.Seed = (*config.SeedControllerConfiguration)(unsafe.Pointer(in.Seed))
+	out.SeedCare = (*config.SeedCareControllerConfiguration)(unsafe.Pointer(in.SeedCare))
 	out.Shoot = (*config.ShootControllerConfiguration)(unsafe.Pointer(in.Shoot))
 	out.ShootCare = (*config.ShootCareControllerConfiguration)(unsafe.Pointer(in.ShootCare))
-	out.SeedCare = (*config.SeedCareControllerConfiguration)(unsafe.Pointer(in.SeedCare))
 	out.ShootMigration = (*config.ShootMigrationControllerConfiguration)(unsafe.Pointer(in.ShootMigration))
 	out.ShootStateSync = (*config.ShootStateSyncControllerConfiguration)(unsafe.Pointer(in.ShootStateSync))
 	out.SeedAPIServerNetworkPolicy = (*config.SeedAPIServerNetworkPolicyControllerConfiguration)(unsafe.Pointer(in.SeedAPIServerNetworkPolicy))
@@ -1152,9 +1128,9 @@ func autoConvert_config_GardenletControllerConfiguration_To_v1alpha1_GardenletCo
 	out.ControllerInstallationCare = (*ControllerInstallationCareControllerConfiguration)(unsafe.Pointer(in.ControllerInstallationCare))
 	out.ControllerInstallationRequired = (*ControllerInstallationRequiredControllerConfiguration)(unsafe.Pointer(in.ControllerInstallationRequired))
 	out.Seed = (*SeedControllerConfiguration)(unsafe.Pointer(in.Seed))
+	out.SeedCare = (*SeedCareControllerConfiguration)(unsafe.Pointer(in.SeedCare))
 	out.Shoot = (*ShootControllerConfiguration)(unsafe.Pointer(in.Shoot))
 	out.ShootCare = (*ShootCareControllerConfiguration)(unsafe.Pointer(in.ShootCare))
-	out.SeedCare = (*SeedCareControllerConfiguration)(unsafe.Pointer(in.SeedCare))
 	out.ShootMigration = (*ShootMigrationControllerConfiguration)(unsafe.Pointer(in.ShootMigration))
 	out.ShootStateSync = (*ShootStateSyncControllerConfiguration)(unsafe.Pointer(in.ShootStateSync))
 	out.SeedAPIServerNetworkPolicy = (*SeedAPIServerNetworkPolicyControllerConfiguration)(unsafe.Pointer(in.SeedAPIServerNetworkPolicy))
@@ -1168,30 +1144,28 @@ func Convert_config_GardenletControllerConfiguration_To_v1alpha1_GardenletContro
 	return autoConvert_config_GardenletControllerConfiguration_To_v1alpha1_GardenletControllerConfiguration(in, out, s)
 }
 
-func autoConvert_v1alpha1_HTTPSServer_To_config_HTTPSServer(in *HTTPSServer, out *config.HTTPSServer, s conversion.Scope) error {
-	if err := Convert_v1alpha1_Server_To_config_Server(&in.Server, &out.Server, s); err != nil {
-		return err
-	}
-	out.TLS = (*config.TLSServer)(unsafe.Pointer(in.TLS))
+func autoConvert_v1alpha1_KubeconfigValidity_To_config_KubeconfigValidity(in *KubeconfigValidity, out *config.KubeconfigValidity, s conversion.Scope) error {
+	out.Validity = (*v1.Duration)(unsafe.Pointer(in.Validity))
+	out.AutoRotationJitterPercentageMin = (*int32)(unsafe.Pointer(in.AutoRotationJitterPercentageMin))
+	out.AutoRotationJitterPercentageMax = (*int32)(unsafe.Pointer(in.AutoRotationJitterPercentageMax))
 	return nil
 }
 
-// Convert_v1alpha1_HTTPSServer_To_config_HTTPSServer is an autogenerated conversion function.
-func Convert_v1alpha1_HTTPSServer_To_config_HTTPSServer(in *HTTPSServer, out *config.HTTPSServer, s conversion.Scope) error {
-	return autoConvert_v1alpha1_HTTPSServer_To_config_HTTPSServer(in, out, s)
+// Convert_v1alpha1_KubeconfigValidity_To_config_KubeconfigValidity is an autogenerated conversion function.
+func Convert_v1alpha1_KubeconfigValidity_To_config_KubeconfigValidity(in *KubeconfigValidity, out *config.KubeconfigValidity, s conversion.Scope) error {
+	return autoConvert_v1alpha1_KubeconfigValidity_To_config_KubeconfigValidity(in, out, s)
 }
 
-func autoConvert_config_HTTPSServer_To_v1alpha1_HTTPSServer(in *config.HTTPSServer, out *HTTPSServer, s conversion.Scope) error {
-	if err := Convert_config_Server_To_v1alpha1_Server(&in.Server, &out.Server, s); err != nil {
-		return err
-	}
-	out.TLS = (*TLSServer)(unsafe.Pointer(in.TLS))
+func autoConvert_config_KubeconfigValidity_To_v1alpha1_KubeconfigValidity(in *config.KubeconfigValidity, out *KubeconfigValidity, s conversion.Scope) error {
+	out.Validity = (*v1.Duration)(unsafe.Pointer(in.Validity))
+	out.AutoRotationJitterPercentageMin = (*int32)(unsafe.Pointer(in.AutoRotationJitterPercentageMin))
+	out.AutoRotationJitterPercentageMax = (*int32)(unsafe.Pointer(in.AutoRotationJitterPercentageMax))
 	return nil
 }
 
-// Convert_config_HTTPSServer_To_v1alpha1_HTTPSServer is an autogenerated conversion function.
-func Convert_config_HTTPSServer_To_v1alpha1_HTTPSServer(in *config.HTTPSServer, out *HTTPSServer, s conversion.Scope) error {
-	return autoConvert_config_HTTPSServer_To_v1alpha1_HTTPSServer(in, out, s)
+// Convert_config_KubeconfigValidity_To_v1alpha1_KubeconfigValidity is an autogenerated conversion function.
+func Convert_config_KubeconfigValidity_To_v1alpha1_KubeconfigValidity(in *config.KubeconfigValidity, out *KubeconfigValidity, s conversion.Scope) error {
+	return autoConvert_config_KubeconfigValidity_To_v1alpha1_KubeconfigValidity(in, out, s)
 }
 
 func autoConvert_v1alpha1_LoadBalancerServiceConfig_To_config_LoadBalancerServiceConfig(in *LoadBalancerServiceConfig, out *config.LoadBalancerServiceConfig, s conversion.Scope) error {
@@ -1217,16 +1191,9 @@ func Convert_config_LoadBalancerServiceConfig_To_v1alpha1_LoadBalancerServiceCon
 func autoConvert_v1alpha1_Logging_To_config_Logging(in *Logging, out *config.Logging, s conversion.Scope) error {
 	out.Enabled = (*bool)(unsafe.Pointer(in.Enabled))
 	out.FluentBit = (*config.FluentBit)(unsafe.Pointer(in.FluentBit))
-	if in.Loki != nil {
-		in, out := &in.Loki, &out.Loki
-		*out = new(config.Loki)
-		if err := Convert_v1alpha1_Loki_To_config_Loki(*in, *out, s); err != nil {
-			return err
-		}
-	} else {
-		out.Loki = nil
-	}
+	out.Loki = (*config.Loki)(unsafe.Pointer(in.Loki))
 	out.ShootNodeLogging = (*config.ShootNodeLogging)(unsafe.Pointer(in.ShootNodeLogging))
+	out.ShootEventLogging = (*config.ShootEventLogging)(unsafe.Pointer(in.ShootEventLogging))
 	return nil
 }
 
@@ -1238,16 +1205,9 @@ func Convert_v1alpha1_Logging_To_config_Logging(in *Logging, out *config.Logging
 func autoConvert_config_Logging_To_v1alpha1_Logging(in *config.Logging, out *Logging, s conversion.Scope) error {
 	out.Enabled = (*bool)(unsafe.Pointer(in.Enabled))
 	out.FluentBit = (*FluentBit)(unsafe.Pointer(in.FluentBit))
-	if in.Loki != nil {
-		in, out := &in.Loki, &out.Loki
-		*out = new(Loki)
-		if err := Convert_config_Loki_To_v1alpha1_Loki(*in, *out, s); err != nil {
-			return err
-		}
-	} else {
-		out.Loki = nil
-	}
+	out.Loki = (*Loki)(unsafe.Pointer(in.Loki))
 	out.ShootNodeLogging = (*ShootNodeLogging)(unsafe.Pointer(in.ShootNodeLogging))
+	out.ShootEventLogging = (*ShootEventLogging)(unsafe.Pointer(in.ShootEventLogging))
 	return nil
 }
 
@@ -1258,15 +1218,7 @@ func Convert_config_Logging_To_v1alpha1_Logging(in *config.Logging, out *Logging
 
 func autoConvert_v1alpha1_Loki_To_config_Loki(in *Loki, out *config.Loki, s conversion.Scope) error {
 	out.Enabled = (*bool)(unsafe.Pointer(in.Enabled))
-	if in.Garden != nil {
-		in, out := &in.Garden, &out.Garden
-		*out = new(config.GardenLoki)
-		if err := Convert_v1alpha1_GardenLoki_To_config_GardenLoki(*in, *out, s); err != nil {
-			return err
-		}
-	} else {
-		out.Garden = nil
-	}
+	out.Garden = (*config.GardenLoki)(unsafe.Pointer(in.Garden))
 	return nil
 }
 
@@ -1277,15 +1229,7 @@ func Convert_v1alpha1_Loki_To_config_Loki(in *Loki, out *config.Loki, s conversi
 
 func autoConvert_config_Loki_To_v1alpha1_Loki(in *config.Loki, out *Loki, s conversion.Scope) error {
 	out.Enabled = (*bool)(unsafe.Pointer(in.Enabled))
-	if in.Garden != nil {
-		in, out := &in.Garden, &out.Garden
-		*out = new(GardenLoki)
-		if err := Convert_config_GardenLoki_To_v1alpha1_GardenLoki(*in, *out, s); err != nil {
-			return err
-		}
-	} else {
-		out.Garden = nil
-	}
+	out.Garden = (*GardenLoki)(unsafe.Pointer(in.Garden))
 	return nil
 }
 
@@ -1525,7 +1469,6 @@ func Convert_config_SeedConfig_To_v1alpha1_SeedConfig(in *config.SeedConfig, out
 }
 
 func autoConvert_v1alpha1_SeedControllerConfiguration_To_config_SeedControllerConfiguration(in *SeedControllerConfiguration, out *config.SeedControllerConfiguration, s conversion.Scope) error {
-	out.ConcurrentSyncs = (*int)(unsafe.Pointer(in.ConcurrentSyncs))
 	out.SyncPeriod = (*v1.Duration)(unsafe.Pointer(in.SyncPeriod))
 	out.LeaseResyncSeconds = (*int32)(unsafe.Pointer(in.LeaseResyncSeconds))
 	out.LeaseResyncMissThreshold = (*int32)(unsafe.Pointer(in.LeaseResyncMissThreshold))
@@ -1538,7 +1481,6 @@ func Convert_v1alpha1_SeedControllerConfiguration_To_config_SeedControllerConfig
 }
 
 func autoConvert_config_SeedControllerConfiguration_To_v1alpha1_SeedControllerConfiguration(in *config.SeedControllerConfiguration, out *SeedControllerConfiguration, s conversion.Scope) error {
-	out.ConcurrentSyncs = (*int)(unsafe.Pointer(in.ConcurrentSyncs))
 	out.SyncPeriod = (*v1.Duration)(unsafe.Pointer(in.SyncPeriod))
 	out.LeaseResyncSeconds = (*int32)(unsafe.Pointer(in.LeaseResyncSeconds))
 	out.LeaseResyncMissThreshold = (*int32)(unsafe.Pointer(in.LeaseResyncMissThreshold))
@@ -1573,9 +1515,8 @@ func Convert_config_Server_To_v1alpha1_Server(in *config.Server, out *Server, s 
 }
 
 func autoConvert_v1alpha1_ServerConfiguration_To_config_ServerConfiguration(in *ServerConfiguration, out *config.ServerConfiguration, s conversion.Scope) error {
-	if err := Convert_v1alpha1_HTTPSServer_To_config_HTTPSServer(&in.HTTPS, &out.HTTPS, s); err != nil {
-		return err
-	}
+	out.HealthProbes = (*config.Server)(unsafe.Pointer(in.HealthProbes))
+	out.Metrics = (*config.Server)(unsafe.Pointer(in.Metrics))
 	return nil
 }
 
@@ -1585,9 +1526,8 @@ func Convert_v1alpha1_ServerConfiguration_To_config_ServerConfiguration(in *Serv
 }
 
 func autoConvert_config_ServerConfiguration_To_v1alpha1_ServerConfiguration(in *config.ServerConfiguration, out *ServerConfiguration, s conversion.Scope) error {
-	if err := Convert_config_HTTPSServer_To_v1alpha1_HTTPSServer(&in.HTTPS, &out.HTTPS, s); err != nil {
-		return err
-	}
+	out.HealthProbes = (*Server)(unsafe.Pointer(in.HealthProbes))
+	out.Metrics = (*Server)(unsafe.Pointer(in.Metrics))
 	return nil
 }
 
@@ -1680,6 +1620,26 @@ func Convert_config_ShootControllerConfiguration_To_v1alpha1_ShootControllerConf
 	return autoConvert_config_ShootControllerConfiguration_To_v1alpha1_ShootControllerConfiguration(in, out, s)
 }
 
+func autoConvert_v1alpha1_ShootEventLogging_To_config_ShootEventLogging(in *ShootEventLogging, out *config.ShootEventLogging, s conversion.Scope) error {
+	out.Enabled = (*bool)(unsafe.Pointer(in.Enabled))
+	return nil
+}
+
+// Convert_v1alpha1_ShootEventLogging_To_config_ShootEventLogging is an autogenerated conversion function.
+func Convert_v1alpha1_ShootEventLogging_To_config_ShootEventLogging(in *ShootEventLogging, out *config.ShootEventLogging, s conversion.Scope) error {
+	return autoConvert_v1alpha1_ShootEventLogging_To_config_ShootEventLogging(in, out, s)
+}
+
+func autoConvert_config_ShootEventLogging_To_v1alpha1_ShootEventLogging(in *config.ShootEventLogging, out *ShootEventLogging, s conversion.Scope) error {
+	out.Enabled = (*bool)(unsafe.Pointer(in.Enabled))
+	return nil
+}
+
+// Convert_config_ShootEventLogging_To_v1alpha1_ShootEventLogging is an autogenerated conversion function.
+func Convert_config_ShootEventLogging_To_v1alpha1_ShootEventLogging(in *config.ShootEventLogging, out *ShootEventLogging, s conversion.Scope) error {
+	return autoConvert_config_ShootEventLogging_To_v1alpha1_ShootEventLogging(in, out, s)
+}
+
 func autoConvert_v1alpha1_ShootMigrationControllerConfiguration_To_config_ShootMigrationControllerConfiguration(in *ShootMigrationControllerConfiguration, out *config.ShootMigrationControllerConfiguration, s conversion.Scope) error {
 	out.ConcurrentSyncs = (*int)(unsafe.Pointer(in.ConcurrentSyncs))
 	out.SyncPeriod = (*v1.Duration)(unsafe.Pointer(in.SyncPeriod))
@@ -1707,6 +1667,7 @@ func Convert_config_ShootMigrationControllerConfiguration_To_v1alpha1_ShootMigra
 }
 
 func autoConvert_v1alpha1_ShootMonitoringConfig_To_config_ShootMonitoringConfig(in *ShootMonitoringConfig, out *config.ShootMonitoringConfig, s conversion.Scope) error {
+	out.Enabled = (*bool)(unsafe.Pointer(in.Enabled))
 	out.RemoteWrite = (*config.RemoteWriteMonitoringConfig)(unsafe.Pointer(in.RemoteWrite))
 	out.ExternalLabels = *(*map[string]string)(unsafe.Pointer(&in.ExternalLabels))
 	return nil
@@ -1718,6 +1679,7 @@ func Convert_v1alpha1_ShootMonitoringConfig_To_config_ShootMonitoringConfig(in *
 }
 
 func autoConvert_config_ShootMonitoringConfig_To_v1alpha1_ShootMonitoringConfig(in *config.ShootMonitoringConfig, out *ShootMonitoringConfig, s conversion.Scope) error {
+	out.Enabled = (*bool)(unsafe.Pointer(in.Enabled))
 	out.RemoteWrite = (*RemoteWriteMonitoringConfig)(unsafe.Pointer(in.RemoteWrite))
 	out.ExternalLabels = *(*map[string]string)(unsafe.Pointer(&in.ExternalLabels))
 	return nil
@@ -1770,7 +1732,6 @@ func Convert_config_ShootSecretControllerConfiguration_To_v1alpha1_ShootSecretCo
 
 func autoConvert_v1alpha1_ShootStateSyncControllerConfiguration_To_config_ShootStateSyncControllerConfiguration(in *ShootStateSyncControllerConfiguration, out *config.ShootStateSyncControllerConfiguration, s conversion.Scope) error {
 	out.ConcurrentSyncs = (*int)(unsafe.Pointer(in.ConcurrentSyncs))
-	out.SyncPeriod = (*v1.Duration)(unsafe.Pointer(in.SyncPeriod))
 	return nil
 }
 
@@ -1781,7 +1742,6 @@ func Convert_v1alpha1_ShootStateSyncControllerConfiguration_To_config_ShootState
 
 func autoConvert_config_ShootStateSyncControllerConfiguration_To_v1alpha1_ShootStateSyncControllerConfiguration(in *config.ShootStateSyncControllerConfiguration, out *ShootStateSyncControllerConfiguration, s conversion.Scope) error {
 	out.ConcurrentSyncs = (*int)(unsafe.Pointer(in.ConcurrentSyncs))
-	out.SyncPeriod = (*v1.Duration)(unsafe.Pointer(in.SyncPeriod))
 	return nil
 }
 
@@ -1810,26 +1770,4 @@ func autoConvert_config_StaleExtensionHealthChecks_To_v1alpha1_StaleExtensionHea
 // Convert_config_StaleExtensionHealthChecks_To_v1alpha1_StaleExtensionHealthChecks is an autogenerated conversion function.
 func Convert_config_StaleExtensionHealthChecks_To_v1alpha1_StaleExtensionHealthChecks(in *config.StaleExtensionHealthChecks, out *StaleExtensionHealthChecks, s conversion.Scope) error {
 	return autoConvert_config_StaleExtensionHealthChecks_To_v1alpha1_StaleExtensionHealthChecks(in, out, s)
-}
-
-func autoConvert_v1alpha1_TLSServer_To_config_TLSServer(in *TLSServer, out *config.TLSServer, s conversion.Scope) error {
-	out.ServerCertPath = in.ServerCertPath
-	out.ServerKeyPath = in.ServerKeyPath
-	return nil
-}
-
-// Convert_v1alpha1_TLSServer_To_config_TLSServer is an autogenerated conversion function.
-func Convert_v1alpha1_TLSServer_To_config_TLSServer(in *TLSServer, out *config.TLSServer, s conversion.Scope) error {
-	return autoConvert_v1alpha1_TLSServer_To_config_TLSServer(in, out, s)
-}
-
-func autoConvert_config_TLSServer_To_v1alpha1_TLSServer(in *config.TLSServer, out *TLSServer, s conversion.Scope) error {
-	out.ServerCertPath = in.ServerCertPath
-	out.ServerKeyPath = in.ServerKeyPath
-	return nil
-}
-
-// Convert_config_TLSServer_To_v1alpha1_TLSServer is an autogenerated conversion function.
-func Convert_config_TLSServer_To_v1alpha1_TLSServer(in *config.TLSServer, out *TLSServer, s conversion.Scope) error {
-	return autoConvert_config_TLSServer_To_v1alpha1_TLSServer(in, out, s)
 }
