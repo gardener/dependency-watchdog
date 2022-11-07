@@ -15,8 +15,9 @@
 package scaler
 
 import (
-	"github.com/go-logr/logr"
 	"testing"
+
+	"github.com/go-logr/logr"
 
 	"github.com/gardener/dependency-watchdog/internal/mock/client-go/scale"
 	"github.com/gardener/dependency-watchdog/internal/mock/controller-runtime/client"

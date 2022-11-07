@@ -72,19 +72,19 @@ func (r *resScaler) scale(ctx context.Context) error {
 		err           error
 		resourceAnnot map[string]string
 	)
-	r.logger.V(4).Info("attempting to scale resource", "resourceInfo", r.resourceInfo)
+	r.logger.V(4).Info("Attempting to scale resource", "resourceInfo", r.resourceInfo)
 	// sleep for initial delay
 	if err = util.SleepWithContext(ctx, r.resourceInfo.initialDelay); err != nil {
-		r.logger.Error(err, "looks like the context has been cancelled. exiting scaling operation", "resourceInfo", r.resourceInfo)
+		r.logger.Error(err, "Looks like the context has been cancelled. exiting scaling operation", "resourceInfo", r.resourceInfo)
 		return err
 	}
 
 	if resourceAnnot, err = util.GetResourceAnnotations(ctx, r.client, r.namespace, r.resourceInfo.ref); err != nil {
 		if apierrors.IsNotFound(err) && !r.resourceInfo.shouldExist {
-			r.logger.V(4).Info("resource not found. Ignoring this resource as its existence is marked as optional", "namespace", r.namespace, "resource", r.resourceInfo.ref)
+			r.logger.V(4).Info("Resource not found. Ignoring this resource as its existence is marked as optional", "namespace", r.namespace, "resource", r.resourceInfo.ref)
 			return nil
 		}
-		r.logger.Error(err, "error trying to get annotations for resource", "namespace", r.namespace, "resource", r.resourceInfo.ref)
+		r.logger.Error(err, "Error trying to get annotations for resource", "namespace", r.namespace, "resource", r.resourceInfo.ref)
 		return err
 	}
 
@@ -96,7 +96,7 @@ func (r *resScaler) scale(ctx context.Context) error {
 	gr, scaleSubRes, err := util.GetScaleResource(ctx, r.client, r.scaler, r.logger, r.resourceInfo.ref, r.resourceInfo.timeout)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			r.logger.Error(err, "resource does not have a scale subresource. Scaling of this resource is not possible and scaling of all downstream resources will be skipped. Please check and correct DWD configuration.", "namespace", r.namespace, "resource", r.resourceInfo.ref)
+			r.logger.Error(err, "Resource does not have a scale subresource. Scaling of this resource is not possible and scaling of all downstream resources will be skipped. Please check and correct DWD configuration", "namespace", r.namespace, "resource", r.resourceInfo.ref)
 		}
 		return err
 	}
@@ -106,7 +106,7 @@ func (r *resScaler) scale(ctx context.Context) error {
 			return err
 		}
 	} else {
-		r.logger.V(4).Info("skipping scaling for resource. This can happen if the current spec.Replicas > 0 for scaleUp or current spec.Replicas == 0 for scaleDown", "namespace", r.namespace, "name", r.resourceInfo.ref.Name, "operation", r.resourceInfo.operation)
+		r.logger.V(4).Info("Skipping scaling for resource. This can happen if the current spec.Replicas > 0 for scaleUp or current spec.Replicas == 0 for scaleDown", "namespace", r.namespace, "name", r.resourceInfo.ref.Name, "operation", r.resourceInfo.operation)
 	}
 
 	return r.waitTillMinTargetReplicasReached(ctx)
@@ -124,7 +124,7 @@ func (r *resScaler) waitTillMinTargetReplicasReached(ctx context.Context) error 
 			return false
 		}
 		if r.resourceInfo.operation.minTargetReplicasReached(readyReplicas) {
-			r.logger.V(4).Info("resource has been scaled to desired replicas", "namespace", r.namespace, "name", r.resourceInfo.ref.Name, "minTargetReplicas", minTargetReplicas)
+			r.logger.V(4).Info("Resource has been scaled to desired replicas", "namespace", r.namespace, "name", r.resourceInfo.ref.Name, "minTargetReplicas", minTargetReplicas)
 			return true
 		}
 		return false
@@ -160,7 +160,7 @@ func (r *resScaler) updateResourceAndScale(ctx context.Context, gr *schema.Group
 	if _, err = r.scaler.Update(childCtx, *gr, scaleSubRes, metav1.UpdateOptions{}); err != nil {
 		return err
 	}
-	r.logger.V(4).Info("resource scaling has been triggered successfully, waiting for resource scaling to complete", "namespace", r.namespace, "resource", r.resourceInfo.ref)
+	r.logger.V(4).Info("Resource scaling has been triggered successfully, waiting for resource scaling to complete", "namespace", r.namespace, "resource", r.resourceInfo.ref)
 
 	return nil
 }

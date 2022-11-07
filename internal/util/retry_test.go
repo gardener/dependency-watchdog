@@ -77,6 +77,7 @@ func TestContextCancelledBeforeTaskIsRun(t *testing.T) {
 	var result RetryResult[string]
 	var wg sync.WaitGroup
 	wg.Add(1)
+	cancelFn()
 	go func() {
 		defer wg.Done()
 		result = Retry(ctx, "", appendPass, numAttempts, backoff, AlwaysRetry)
@@ -84,7 +85,6 @@ func TestContextCancelledBeforeTaskIsRun(t *testing.T) {
 		g.Expect(result.Value).Should(Equal(""))
 		g.Expect(len(list)).Should(BeNumerically("<=", numAttempts))
 	}()
-	cancelFn()
 	wg.Wait()
 	emptyList()
 }

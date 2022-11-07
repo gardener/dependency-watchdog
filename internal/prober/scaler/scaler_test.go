@@ -376,6 +376,9 @@ func createDeployment(g *WithT, namespace, name, deploymentImageName string, rep
 
 func checkIfDeploymentReady(namespace, name string, replicas int32) bool {
 	deploy, err := kindTestEnv.GetDeployment(namespace, name)
+	if err != nil {
+		return false
+	}
 	var podList corev1.PodList
 	err = kindTestEnv.GetClient().List(context.Background(), &podList, &client.ListOptions{Namespace: namespace})
 	if err != nil || deploy.Status.ReadyReplicas != replicas {

@@ -110,13 +110,5 @@ func doCreateK8sWatch(ctx context.Context, client kubernetes.Interface, namespac
 }
 
 func canProcessEvent(ev watch.Event) bool {
-	if ev.Type == watch.Added || ev.Type == watch.Modified {
-		switch ev.Object.(type) {
-		case *v1.Pod:
-			return true
-		default:
-			return false
-		}
-	}
-	return false
+	return ev.Type == watch.Added || ev.Type == watch.Modified
 }
