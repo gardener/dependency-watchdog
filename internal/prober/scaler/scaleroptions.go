@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	defaultResourceCheckTimeout  = 20 * time.Millisecond
-	defaultResourceCheckInterval = 5 * time.Millisecond
+	defaultResourceCheckTimeout  = 5 * time.Second
+	defaultResourceCheckInterval = 1 * time.Second
 	defaultScaleResourceBackoff  = 100 * time.Millisecond
 )
 

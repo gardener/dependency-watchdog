@@ -25,8 +25,6 @@ import (
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	scalev1 "k8s.io/client-go/scale"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -57,10 +55,11 @@ type resScaler struct {
 }
 
 func newResourceScaler(client client.Client, scaler scalev1.ScaleInterface, logger logr.Logger, opts *scalerOptions, namespace string, resourceInfo scalableResourceInfo) resourceScaler {
+	resLogger := logger.WithValues("resNamespace", namespace, "kind", resourceInfo.ref.Kind, "apiVersion", resourceInfo.ref.APIVersion, "name", resourceInfo.ref.Name)
 	return &resScaler{
 		client:       client,
 		scaler:       scaler,
-		logger:       logger,
+		logger:       resLogger,
 		namespace:    namespace,
 		resourceInfo: resourceInfo,
 		opts:         opts,
@@ -72,41 +71,44 @@ func (r *resScaler) scale(ctx context.Context) error {
 		err           error
 		resourceAnnot map[string]string
 	)
-	r.logger.V(4).Info("Attempting to scale resource", "resourceInfo", r.resourceInfo)
 	// sleep for initial delay
 	if err = util.SleepWithContext(ctx, r.resourceInfo.initialDelay); err != nil {
-		r.logger.Error(err, "Looks like the context has been cancelled. exiting scaling operation", "resourceInfo", r.resourceInfo)
+		r.logger.Error(err, "Looks like the context has been cancelled. exiting scaling operation")
 		return err
 	}
 
 	if resourceAnnot, err = util.GetResourceAnnotations(ctx, r.client, r.namespace, r.resourceInfo.ref); err != nil {
 		if apierrors.IsNotFound(err) && !r.resourceInfo.shouldExist {
-			r.logger.V(4).Info("Resource not found. Ignoring this resource as its existence is marked as optional", "namespace", r.namespace, "resource", r.resourceInfo.ref)
+			r.logger.Info("Resource not found. Ignoring this resource as its existence is marked as optional")
 			return nil
 		}
-		r.logger.Error(err, "Error trying to get annotations for resource", "namespace", r.namespace, "resource", r.resourceInfo.ref)
+		r.logger.Error(err, "Error trying to get annotations for resource")
 		return err
 	}
 
 	if ignoreScaling(resourceAnnot) {
-		r.logger.V(4).Info("Scaling ignored due to explicit instruction via annotation", "namespace", r.namespace, "name", r.resourceInfo.ref.Name, "annotation", ignoreScalingAnnotationKey)
+		r.logger.Info("Scaling ignored due to explicit instruction via annotation", "annotation", ignoreScalingAnnotationKey)
 		return nil
 	}
 
-	gr, scaleSubRes, err := util.GetScaleResource(ctx, r.client, r.scaler, r.logger, r.resourceInfo.ref, r.resourceInfo.timeout)
+	_, scaleSubRes, err := util.GetScaleResource(ctx, r.client, r.scaler, r.logger, r.resourceInfo.ref, r.resourceInfo.timeout)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			r.logger.Error(err, "Resource does not have a scale subresource. Scaling of this resource is not possible and scaling of all downstream resources will be skipped. Please check and correct DWD configuration", "namespace", r.namespace, "resource", r.resourceInfo.ref)
+			r.logger.Error(err, "Resource does not have a scale subresource. Skipping scaling of dependent resources. Invalid config file")
 		}
 		return err
 	}
 
 	if r.resourceInfo.operation.shouldScaleReplicas(scaleSubRes.Spec.Replicas) {
-		if err := r.updateResourceAndScale(ctx, gr, scaleSubRes, resourceAnnot); err != nil {
+		if err := r.updateResourceAndScale(ctx, scaleSubRes, resourceAnnot); err != nil {
 			return err
 		}
 	} else {
-		r.logger.V(4).Info("Skipping scaling for resource. This can happen if the current spec.Replicas > 0 for scaleUp or current spec.Replicas == 0 for scaleDown", "namespace", r.namespace, "name", r.resourceInfo.ref.Name, "operation", r.resourceInfo.operation)
+		if r.resourceInfo.operation == scaleUp {
+			r.logger.Info("Skipping scale-up for resource as current spec replicas > 0")
+		} else {
+			r.logger.Info("Skipping scale-down for resource as current spec replicas == 0")
+		}
 	}
 
 	return r.waitTillMinTargetReplicasReached(ctx)
@@ -117,14 +119,14 @@ func (r *resScaler) waitTillMinTargetReplicasReached(ctx context.Context) error 
 	if r.resourceInfo.operation == scaleUp {
 		minTargetReplicas = 1
 	}
-	opDesc := fmt.Sprintf("wait for resource: %s in namespace %s to reach minimum required target replicas %d", r.resourceInfo.ref.Name, r.namespace, minTargetReplicas)
-	resMinTargetReached := util.RetryUntilPredicate(ctx, opDesc, func() bool {
+	opDesc := fmt.Sprintf("wait for resource to reach minimum required target replicas %d", minTargetReplicas)
+	resMinTargetReached := util.RetryUntilPredicate(ctx, r.logger, opDesc, func() bool {
 		readyReplicas, err := util.GetResourceReadyReplicas(ctx, r.client, r.namespace, r.resourceInfo.ref)
 		if err != nil {
 			return false
 		}
 		if r.resourceInfo.operation.minTargetReplicasReached(readyReplicas) {
-			r.logger.V(4).Info("Resource has been scaled to desired replicas", "namespace", r.namespace, "name", r.resourceInfo.ref.Name, "minTargetReplicas", minTargetReplicas)
+			r.logger.Info("Resource has reached desired replicas", "minTargetReplicas", minTargetReplicas)
 			return true
 		}
 		return false
@@ -135,7 +137,7 @@ func (r *resScaler) waitTillMinTargetReplicasReached(ctx context.Context) error 
 	return nil
 }
 
-func (r *resScaler) updateResourceAndScale(ctx context.Context, gr *schema.GroupResource, scaleSubRes *autoscalingv1.Scale, annot map[string]string) error {
+func (r *resScaler) updateResourceAndScale(ctx context.Context, scaleSubRes *autoscalingv1.Scale, annot map[string]string) error {
 	childCtx, cancelFn := context.WithTimeout(ctx, r.resourceInfo.timeout)
 	defer cancelFn()
 
@@ -145,38 +147,47 @@ func (r *resScaler) updateResourceAndScale(ctx context.Context, gr *schema.Group
 		patchBytes := []byte(fmt.Sprintf("{\"metadata\":{\"annotations\":{\"%s\":\"%s\"}}}", replicasAnnotationKey, strconv.Itoa(int(scaleSubRes.Spec.Replicas))))
 		err := util.PatchResourceAnnotations(ctx, r.client, r.namespace, r.resourceInfo.ref, patchBytes)
 		if err != nil {
-			r.logger.Error(err, "Failed to update annotation to capture the current replicas before scaling it down", "namespace", r.namespace, "objectKey", client.ObjectKeyFromObject(scaleSubRes))
+			r.logger.Error(err, "Failed to update annotation to capture the current replicas before scaling it down")
 			return err
 		}
 	}
 
-	targetReplicas, err := r.determineTargetReplicas(r.resourceInfo.ref.Name, annot)
+	targetReplicas, err := r.determineTargetReplicas(annot)
+	if err != nil {
+		return err
+	}
+
+	// need the updated scale subresource
+	gr, scaleSubRes, err := util.GetScaleResource(ctx, r.client, r.scaler, r.logger, r.resourceInfo.ref, r.resourceInfo.timeout)
 	if err != nil {
 		return err
 	}
 
 	scaleSubRes.Spec.Replicas = targetReplicas
-	r.logger.V(5).Info("Scaling kubernetes resource", "namespace", r.namespace, "objectKey", client.ObjectKeyFromObject(scaleSubRes), "targetReplicas", targetReplicas)
+	if r.resourceInfo.operation == scaleUp {
+		r.logger.Info("Scaling up kubernetes resource", "level", r.resourceInfo.level, "targetReplicas", targetReplicas)
+	} else {
+		r.logger.Info("Scaling down kubernetes resource", "level", r.resourceInfo.level, "targetReplicas", targetReplicas)
+	}
 	if _, err = r.scaler.Update(childCtx, *gr, scaleSubRes, metav1.UpdateOptions{}); err != nil {
 		return err
 	}
-	r.logger.V(4).Info("Resource scaling has been triggered successfully, waiting for resource scaling to complete", "namespace", r.namespace, "resource", r.resourceInfo.ref)
-
+	r.logger.Info("waiting for resource readiness")
 	return nil
 }
 
-func (r *resScaler) determineTargetReplicas(resourceName string, annotations map[string]string) (int32, error) {
+func (r *resScaler) determineTargetReplicas(annotations map[string]string) (int32, error) {
 	if r.resourceInfo.operation == scaleDown {
 		return defaultScaleDownReplicas, nil
 	}
 	if replicasStr, ok := annotations[replicasAnnotationKey]; ok {
 		replicas, err := strconv.Atoi(replicasStr)
 		if err != nil {
-			return 0, fmt.Errorf("unexpected and invalid replicasStr set as value for annotation: %s for resource: %v, %w", replicasAnnotationKey, types.NamespacedName{Namespace: r.namespace, Name: resourceName}, err)
+			return 0, fmt.Errorf("unexpected and invalid replicasStr set as value for annotation: %s for resource, Err: %w", replicasAnnotationKey, err)
 		}
 		return int32(replicas), nil
 	}
-	r.logger.Info("Replicas annotation not present on resource, falling back to default scale-up replicas", "operation", r.resourceInfo.operation, "namespace", r.namespace, "name", resourceName, "annotationKey", replicasAnnotationKey, "default-replicas", defaultScaleUpReplicas)
+	r.logger.Info("Replicas annotation not found, falling back to default scale-up replicas", "operation", r.resourceInfo.operation, "annotationKey", replicasAnnotationKey, "default-replicas", defaultScaleUpReplicas)
 	return defaultScaleUpReplicas, nil
 }
 

@@ -16,6 +16,7 @@ package scaler
 import (
 	"context"
 	"fmt"
+
 	"reflect"
 	"testing"
 	"time"
@@ -24,18 +25,18 @@ import (
 	kind "github.com/gardener/dependency-watchdog/internal/test"
 	"github.com/gardener/dependency-watchdog/internal/util"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var (
 	kindTestEnv      kind.KindCluster
-	scalerTestLogger = log.FromContext(context.Background()).WithName("scalerTestLogger")
+	scalerTestLogger = logr.Discard()
 )
 
 const (
@@ -56,16 +57,18 @@ func TestScalerSuite(t *testing.T) {
 		title string
 		run   func(t *testing.T)
 	}{
-		{"test updateResourceAndScale times out", testUpdateResourceAndScaleTimesOut},
+		{"test getting scale subresource times out", testGettingScaleSubResourceTimesOut},
 		{"test scaling when kind of a resource is invalid", testScalingWhenKindOfResourceIsInvalid},
 		{"test waitTillMinTargetReplicasReached returns an error", testWaitTillMinTargetReplicasReachedReturnsError},
 		{"test scaling when mandatory resource(shouldExist is true in resourceInfo) is not found", testScalingWhenMandatoryResourceNotFound},
 		{"test scaling when optional resource(shouldExist is false in resourceInfo) is not found", testScalingWhenOptionalResourceNotFound},
-		{"test scale down then scale up", testScaleDownThenScaleUp},
+		{"test scale down then scale up when ignore scaling annotation is not present", testScaleDownThenScaleUpWhenIgnoreScalingAnnotationIsNotPresent},
+		{"test scale down then scale up when ignore scaling annotation is present", testScaleDownThenScaleUpWhenIgnoreScalingAnnotationIsPresent},
 		{"test scale up should not happen if current replica count is positive", testResourceShouldNotScaleUpIfCurrentReplicaCountIsPositive},
-		{"test scale up when annotation have invalid values", testScaleUpShouldReturnErrorWhenReplicasAnnotationsHasInvalidValue},
+		{"test scale up when replica annotation has invalid value", testScaleUpShouldReturnErrorWhenReplicasAnnotationsHasInvalidValue},
 	}
 	for _, test := range tests {
+		test := test
 		t.Run(test.title, func(t *testing.T) {
 			test.run(t)
 		})
@@ -74,7 +77,49 @@ func TestScalerSuite(t *testing.T) {
 	}
 }
 
-func testScaleDownThenScaleUp(t *testing.T) {
+func testScaleDownThenScaleUpWhenIgnoreScalingAnnotationIsNotPresent(t *testing.T) {
+	g := NewWithT(t)
+	probeCfg := createProbeConfig(nil)
+	ds := createDefaultScaler(g, probeCfg)
+
+	table := []struct {
+		mcmReplicas                 int32
+		kcmReplicas                 int32
+		caReplicas                  int32
+		expectedScaledUpMCMReplicas int32
+		expectedScaledUpKCMReplicas int32
+		expectedScaledUpCAReplicas  int32
+	}{
+		{0, 0, 0, 1, 1, 1},
+		{1, 1, 1, 1, 1, 1},
+		{2, 2, 2, 2, 2, 2},
+		{0, 1, 2, 1, 1, 2},
+	}
+
+	for _, entry := range table {
+		createDeployment(g, namespace, mcmObjectRef.Name, deploymentImageName, entry.mcmReplicas, nil)
+		createDeployment(g, namespace, caObjectRef.Name, deploymentImageName, entry.caReplicas, nil)
+		createDeployment(g, namespace, kcmObjectRef.Name, deploymentImageName, entry.kcmReplicas, nil)
+
+		err := ds.ScaleDown(context.Background())
+		g.Expect(err).To(BeNil())
+		checkScaleSuccess(g, scaleDown, namespace, caObjectRef.Name, expectedSpecReplicasAfterSuccessfulScaleDownTest)
+		checkScaleSuccess(g, scaleDown, namespace, mcmObjectRef.Name, expectedSpecReplicasAfterSuccessfulScaleDownTest)
+		checkScaleSuccess(g, scaleDown, namespace, kcmObjectRef.Name, expectedSpecReplicasAfterSuccessfulScaleDownTest)
+
+		err = ds.ScaleUp(context.Background())
+		g.Expect(err).To(BeNil())
+		checkScaleSuccess(g, scaleUp, namespace, mcmObjectRef.Name, entry.expectedScaledUpMCMReplicas)
+		checkScaleSuccess(g, scaleUp, namespace, caObjectRef.Name, entry.expectedScaledUpCAReplicas)
+		checkScaleSuccess(g, scaleUp, namespace, kcmObjectRef.Name, entry.expectedScaledUpKCMReplicas)
+
+		err = kindTestEnv.DeleteAllDeployments(namespace)
+		g.Expect(err).To(BeNil())
+	}
+	t.Log("scale down then scale up test finished")
+}
+
+func testScaleDownThenScaleUpWhenIgnoreScalingAnnotationIsPresent(t *testing.T) {
 	g := NewWithT(t)
 	probeCfg := createProbeConfig(nil)
 	ds := createDefaultScaler(g, probeCfg)
@@ -90,11 +135,7 @@ func testScaleDownThenScaleUp(t *testing.T) {
 		expectedScaledUpCAReplicas  int32
 		annotationsOnKCM            map[string]string
 	}{
-		{0, 0, 0, 1, 1, 1, nil},
-		{1, 1, 1, 1, 1, 1, nil},
-		{2, 2, 2, 2, 2, 2, nil},
 		{2, 2, 2, 2, 2, 2, validIgnoreScalingAnnotationMap},
-		{0, 1, 2, 1, 1, 2, nil},
 		{0, 2, 2, 1, 2, 2, validIgnoreScalingAnnotationMap},
 		{2, 1, 1, 2, 1, 1, validIgnoreScalingAnnotationMap},
 		{2, 0, 2, 2, 0, 2, validIgnoreScalingAnnotationMap},
@@ -129,6 +170,7 @@ func testScaleDownThenScaleUp(t *testing.T) {
 		err = kindTestEnv.DeleteAllDeployments(namespace)
 		g.Expect(err).To(BeNil())
 	}
+	t.Log("scale down then scale up when ignore scaling annotation is present test finished")
 }
 
 func testScalingWhenMandatoryResourceNotFound(t *testing.T) {
@@ -161,6 +203,7 @@ func testScalingWhenMandatoryResourceNotFound(t *testing.T) {
 		err = kindTestEnv.DeleteAllDeployments(namespace)
 		g.Expect(err).To(BeNil())
 	}
+	t.Log("scaling when mandatory resource not found test finished")
 }
 
 func testScalingWhenOptionalResourceNotFound(t *testing.T) {
@@ -190,9 +233,10 @@ func testScalingWhenOptionalResourceNotFound(t *testing.T) {
 		err = kindTestEnv.DeleteAllDeployments(namespace)
 		g.Expect(err).To(BeNil())
 	}
+	t.Log("scaling when optional resource not found test finished")
 }
 
-func testUpdateResourceAndScaleTimesOut(t *testing.T) {
+func testGettingScaleSubResourceTimesOut(t *testing.T) {
 	g := NewWithT(t)
 	timeout := time.Nanosecond
 	probeCfg := createProbeConfig(&timeout)
@@ -227,6 +271,7 @@ func testUpdateResourceAndScaleTimesOut(t *testing.T) {
 		err = kindTestEnv.DeleteAllDeployments(namespace)
 		g.Expect(err).To(BeNil())
 	}
+	t.Log("updateResourceAndScale times out test finished")
 }
 
 func testScalingWhenKindOfResourceIsInvalid(t *testing.T) {
@@ -267,6 +312,7 @@ func testScalingWhenKindOfResourceIsInvalid(t *testing.T) {
 		err = kindTestEnv.DeleteAllDeployments(namespace)
 		g.Expect(err).To(BeNil())
 	}
+	t.Log("scaling when res has invalid kind test finished")
 }
 
 func testWaitTillMinTargetReplicasReachedReturnsError(t *testing.T) {
@@ -286,7 +332,7 @@ func testWaitTillMinTargetReplicasReachedReturnsError(t *testing.T) {
 		errorString               string
 	}{
 		{0, 0, 0, 0, 0, 1, ds.ScaleUp, scaleUp, fmt.Sprintf("timed out waiting for {namespace: %s, resource: %s} to reach minTargetReplicas", namespace, caObjectRef.Name)},
-		{2, 2, 2, expectedSpecReplicasAfterSuccessfulScaleDownTest, expectedSpecReplicasAfterSuccessfulScaleDownTest, 2, ds.ScaleDown, scaleDown, fmt.Sprintf("timed out waiting for {namespace: %s, resource: %s} to reach minTargetReplicas", namespace, kcmObjectRef.Name)},
+		{2, 2, 2, expectedSpecReplicasAfterSuccessfulScaleDownTest, expectedSpecReplicasAfterSuccessfulScaleDownTest, 2, ds.ScaleDown, scaleDown, fmt.Sprint("timed out waiting")}, // mcm or kcm can return error hence short string is used
 	}
 
 	for _, entry := range table {
@@ -304,6 +350,7 @@ func testWaitTillMinTargetReplicasReachedReturnsError(t *testing.T) {
 		err = kindTestEnv.DeleteAllDeployments(namespace)
 		g.Expect(err).To(BeNil())
 	}
+	t.Log("WaitTillMinTargetReplicasReached returns error test finished")
 }
 
 func testResourceShouldNotScaleUpIfCurrentReplicaCountIsPositive(t *testing.T) {
@@ -322,6 +369,7 @@ func testResourceShouldNotScaleUpIfCurrentReplicaCountIsPositive(t *testing.T) {
 
 	err = kindTestEnv.DeleteAllDeployments(namespace)
 	g.Expect(err).To(BeNil())
+	t.Log("Resource should not scale up if current replica count is positive test finished")
 }
 
 func testScaleUpShouldReturnErrorWhenReplicasAnnotationsHasInvalidValue(t *testing.T) {
@@ -340,6 +388,7 @@ func testScaleUpShouldReturnErrorWhenReplicasAnnotationsHasInvalidValue(t *testi
 
 	err = kindTestEnv.DeleteAllDeployments(namespace)
 	g.Expect(err).To(BeNil())
+	t.Log("Res should not scale up if replica annotation is incorrect test finished")
 }
 
 // utility methods to be used by tests
@@ -347,7 +396,7 @@ func testScaleUpShouldReturnErrorWhenReplicasAnnotationsHasInvalidValue(t *testi
 
 func setUpScalerEnvTests(g *WithT) func(g *WithT) {
 	var err error
-	kindTestEnv, err = kind.CreateKindCluster(kind.KindConfig{Name: "test"})
+	kindTestEnv, err = kind.CreateKindCluster(kind.KindConfig{Name: "scaler-test"})
 	g.Expect(err).To(BeNil())
 	return func(g *WithT) {
 		err := kindTestEnv.Delete()

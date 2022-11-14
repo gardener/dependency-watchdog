@@ -21,11 +21,9 @@ import (
 
 	v12 "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/go-logr/logr"
+	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	. "github.com/onsi/gomega"
 )
 
 const (
@@ -59,7 +57,7 @@ func TestRegisterNewWeederAndIsNotClosed(t *testing.T) {
 	mgr, tearDownTest := setupMgrTest(t)
 	defer tearDownTest(mgr)
 
-	w := NewWeeder(context.Background(), namespace, testWeederConfig, nil, nil, testEp, logr.New(log.NullLogSink{}))
+	w := NewWeeder(context.Background(), namespace, testWeederConfig, nil, nil, testEp, logr.Discard())
 	g.Expect(w).ShouldNot(BeNil(), "NewWeeder should have returned a non nil weeder")
 	g.Expect(mgr.Register(*w)).To(BeTrue(), "mgr.Register should register a new weeder")
 
@@ -76,13 +74,13 @@ func TestRegisterWeederWithSameKeyShouldReplaceOldEntry(t *testing.T) {
 	mgr, tearDownTest := setupMgrTest(t)
 	defer tearDownTest(mgr)
 
-	w1 := NewWeeder(context.Background(), namespace, testWeederConfig, nil, nil, testEp, logr.New(log.NullLogSink{}))
+	w1 := NewWeeder(context.Background(), namespace, testWeederConfig, nil, nil, testEp, logr.Discard())
 	g.Expect(mgr.Register(*w1)).To(BeTrue(), "mgr.Register should register the first weeder")
 	key := createKey(*w1)
 	foundWeederRegistration1, _ := mgr.GetWeederRegistration(key)
 	g.Expect(foundWeederRegistration1.IsClosed()).To(BeFalse(), "First Registered weeder should be alive")
 
-	w2 := NewWeeder(context.Background(), namespace, testWeederConfig, nil, nil, testEp, logr.New(log.NullLogSink{}))
+	w2 := NewWeeder(context.Background(), namespace, testWeederConfig, nil, nil, testEp, logr.Discard())
 	g.Expect(mgr.Register(*w2)).To(BeTrue(), "mgr.Register should register the second weeder")
 	foundWeederRegistration2, _ := mgr.GetWeederRegistration(key)
 
@@ -97,7 +95,7 @@ func TestUnregisterExistingWeederShouldCloseItAndRemoveItFromManager(t *testing.
 	mgr, tearDownTest := setupMgrTest(t)
 	defer tearDownTest(mgr)
 
-	w := NewWeeder(context.Background(), namespace, testWeederConfig, nil, nil, testEp, logr.New(log.NullLogSink{}))
+	w := NewWeeder(context.Background(), namespace, testWeederConfig, nil, nil, testEp, logr.Discard())
 	g.Expect(mgr.Register(*w)).To(BeTrue(), "mgr.Register should register the first weeder")
 	key := createKey(*w)
 	foundWeederRegistration, _ := mgr.GetWeederRegistration(key)

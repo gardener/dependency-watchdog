@@ -49,14 +49,14 @@ type Scaler interface {
 
 // NewScaler creates an instance of Scaler.
 func NewScaler(namespace string, config *papi.Config, client client.Client, scalerGetter scalev1.ScalesGetter, logger logr.Logger, options ...scalerOption) Scaler {
-	logger = logger.WithName("scaleFlowRunner")
+	//logger = logger.WithName("scaleFlowRunner")
 	opts := buildScalerOptions(options...)
 
 	fc := newFlowCreator(client, scalerGetter.Scales(namespace), logger, opts, config.DependentResourceInfos)
 	scaleUpFlow := fc.createFlow(fmt.Sprintf("scale-up-%s", namespace), namespace, scaleUp)
-	logger.V(5).Info("Created scaleUpFlow", "flowStepInfos", scaleUpFlow.flowStepInfos)
+	logger.V(1).Info("Created scaleUpFlow", "flowStepInfos", scaleUpFlow.flowStepInfos)
 	scaleDownFlow := fc.createFlow(fmt.Sprintf("scale-down-%s", namespace), namespace, scaleDown)
-	logger.V(5).Info("Created scaleDownFlow", "flowStepInfos", scaleDownFlow.flowStepInfos)
+	logger.V(1).Info("Created scaleDownFlow", "flowStepInfos", scaleDownFlow.flowStepInfos)
 
 	return &scaleFlowRunner{
 		namespace:     namespace,

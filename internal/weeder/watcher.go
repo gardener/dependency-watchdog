@@ -64,7 +64,7 @@ func (pw *podWatcher) watch() {
 	for {
 		select {
 		case <-pw.weeder.ctx.Done():
-			pw.log.V(4).Info("Exiting watch as context has timed-out or has been cancelled", "namespace", pw.weeder.namespace, "endpoint", pw.weeder.endpoints.Name, "selector", pw.selector.String())
+			pw.log.Info("Exiting watch as context has timed-out or has been cancelled", "namespace", pw.weeder.namespace, "endpoint", pw.weeder.endpoints.Name, "selector", pw.selector.String())
 			return
 		case event, ok := <-pw.k8sWatch.ResultChan():
 			if !ok {
@@ -85,7 +85,7 @@ func (pw *podWatcher) watch() {
 
 func (pw *podWatcher) createK8sWatch(ctx context.Context) {
 	operation := fmt.Sprintf("Creating kubernetes watch for namespace %s, service %s with selector %s", pw.weeder.namespace, pw.weeder.endpoints.Name, pw.selector)
-	util.RetryOnError(ctx, operation, func() error {
+	util.RetryOnError(ctx, pw.log, operation, func() error {
 		w, err := doCreateK8sWatch(ctx, pw.weeder.watchClient, pw.weeder.namespace, pw.selector)
 		if err != nil {
 			return err

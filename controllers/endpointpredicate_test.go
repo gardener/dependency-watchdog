@@ -24,7 +24,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 func turnReady(ep *v1.Endpoints) {
@@ -44,7 +43,7 @@ func turnReady(ep *v1.Endpoints) {
 
 func TestReadyEndpoints(t *testing.T) {
 	g := NewWithT(t)
-	predicate := ReadyEndpoints(logr.New(log.NullLogSink{}))
+	predicate := ReadyEndpoints(logr.Discard())
 
 	readyEp := &v1.Endpoints{}
 	turnReady(readyEp)

@@ -21,20 +21,24 @@ import (
 	"time"
 
 	"github.com/gardener/dependency-watchdog/internal/test"
+
+	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
+
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var (
-	secretPath     = filepath.Join("testdata", "secret.yaml")
-	kubeConfigPath = filepath.Join("testdata", "kubeconfig.yaml")
-	envTest        test.ControllerTestEnv
-	sk8sClient     client.Client
-	sctx           = context.Background()
-	secret         *corev1.Secret
-	clientCreator  ShootClientCreator
+	secretPath            = filepath.Join("testdata", "secret.yaml")
+	kubeConfigPath        = filepath.Join("testdata", "kubeconfig.yaml")
+	envTest               test.ControllerTestEnv
+	sk8sClient            client.Client
+	sctx                  = context.Background()
+	secret                *corev1.Secret
+	clientCreator         ShootClientCreator
+	shootClientTestLogger = logr.Discard()
 )
 
 func TestSuite(t *testing.T) {
@@ -62,7 +66,7 @@ func TestSuite(t *testing.T) {
 func testSecretNotFound(t *testing.T) {
 	g := NewWithT(t)
 	setupShootClientTest(t)
-	k8sInterface, err := clientCreator.CreateClient(sctx, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, time.Second)
+	k8sInterface, err := clientCreator.CreateClient(sctx, shootClientTestLogger, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, time.Second)
 	g.Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	g.Expect(k8sInterface).To(BeNil())
 }
@@ -73,7 +77,7 @@ func testConfigNotFound(t *testing.T) {
 	defer teardown()
 	err := sk8sClient.Create(sctx, secret)
 	g.Expect(err).To(BeNil())
-	shootClient, err := clientCreator.CreateClient(sctx, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, time.Second)
+	shootClient, err := clientCreator.CreateClient(sctx, shootClientTestLogger, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, time.Second)
 	g.Expect(err).ToNot(BeNil())
 	g.Expect(apierrors.IsNotFound(err)).To(BeFalse())
 	g.Expect(shootClient).To(BeNil())
@@ -93,7 +97,7 @@ func testCreateShootClient(t *testing.T) {
 	err = sk8sClient.Create(sctx, secret)
 	g.Expect(err).To(BeNil())
 
-	shootClient, err := clientCreator.CreateClient(sctx, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, time.Second)
+	shootClient, err := clientCreator.CreateClient(sctx, shootClientTestLogger, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, time.Second)
 	g.Expect(err).To(BeNil())
 	g.Expect(shootClient).ToNot(BeNil())
 }

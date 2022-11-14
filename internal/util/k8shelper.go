@@ -36,17 +36,14 @@ import (
 	"k8s.io/client-go/scale"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
-
-var logger = log.Log.WithName("util")
 
 const (
 	kubeConfigSecretKey = "kubeconfig"
 )
 
 // GetKubeConfigFromSecret extracts kubeconfig from a k8s secret with name secretName in namespace
-func GetKubeConfigFromSecret(ctx context.Context, namespace, secretName string, client client.Client) ([]byte, error) {
+func GetKubeConfigFromSecret(ctx context.Context, namespace, secretName string, client client.Client, logger logr.Logger) ([]byte, error) {
 	secretKey := types.NamespacedName{
 		Namespace: namespace,
 		Name:      secretName,
@@ -54,14 +51,14 @@ func GetKubeConfigFromSecret(ctx context.Context, namespace, secretName string, 
 	secret := corev1.Secret{}
 	err := client.Get(ctx, secretKey, &secret)
 	if err != nil {
-		logger.Error(err, "Failed to retrieve secret, will not be able to create shoot client", "namespace", namespace, "secretName", secretName)
+		logger.Error(err, "Failed to retrieve secret, will not be able to create shoot client", "secretName", secretName)
 		return nil, err
 	}
 	// Extract the kubeconfig from the secret
 	kubeConfig, ok := secret.Data[kubeConfigSecretKey]
 	if !ok {
-		logger.Error(err, "Secret does not have kube-config", "namespace", namespace, "secretName", secretName)
-		return nil, fmt.Errorf("expected key: %s in {namespace: %s, secret: %s} is missing", kubeConfigSecretKey, secretName, namespace)
+		logger.Error(err, "Secret does not have kube-config", "secretName", secretName)
+		return nil, fmt.Errorf("expected key: %s in secret: %s is missing", kubeConfigSecretKey, namespace)
 	}
 	return kubeConfig, nil
 }
@@ -142,7 +139,7 @@ func getGroupResource(client client.Client, logger logr.Logger, resourceRef *aut
 	}
 	mapping, err := client.RESTMapper().RESTMapping(gk, gv.Version)
 	if err != nil {
-		logger.Error(err, "Failed to get RESTMapping for resource", "resourceRef", resourceRef)
+		logger.Error(err, "Failed to get RESTMapping for resource")
 		return schema.GroupResource{}, err
 	}
 	return mapping.Resource.GroupResource(), nil
@@ -158,7 +155,7 @@ func GetResourceAnnotations(ctx context.Context, client client.Client, namespace
 	}
 	err := client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: resourceRef.Name}, partialObjMeta)
 	if err != nil {
-		return nil, fmt.Errorf("error getting annotations for resource %s. Err: %w", resourceRef, err)
+		return nil, fmt.Errorf("error getting annotations for resource. Err: %w", err)
 	}
 	return partialObjMeta.Annotations, nil
 }
@@ -175,7 +172,7 @@ func PatchResourceAnnotations(ctx context.Context, cl client.Client, namespace s
 			Namespace: namespace,
 		},
 	}
-	return cl.Patch(ctx, partialObjMeta, client.RawPatch(types.StrategicMergePatchType, patchBytes))
+	return cl.Patch(ctx, partialObjMeta, client.RawPatch(types.MergePatchType, patchBytes))
 }
 
 // GetResourceReadyReplicas gets spec.replicas for any resource identified via resourceRef withing the given namespace.

@@ -22,20 +22,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
 )
 
 var (
-	list        []string
-	numAttempts = 3
-	backoff     = 10 * time.Millisecond
-	interval    = 2 * time.Millisecond
-	timeout     = 10 * time.Millisecond
+	list            []string
+	numAttempts     = 3
+	backoff         = 10 * time.Millisecond
+	interval        = 2 * time.Millisecond
+	timeout         = 10 * time.Millisecond
+	retryTestLogger = logr.Discard()
 )
 
 func TestNoErrorIfTaskEventuallySucceeds(t *testing.T) {
 	g := NewWithT(t)
-	result := Retry(context.Background(), "", passEventually(), numAttempts, backoff, AlwaysRetry)
+	result := Retry(context.Background(), retryTestLogger, "", passEventually(), numAttempts, backoff, AlwaysRetry)
 	g.Expect(result.Err).Should(BeNil())
 	g.Expect(result.Value).Should(Equal("appendPass"))
 	g.Expect(len(list)).Should(Equal(3))
@@ -46,7 +48,7 @@ func TestNoErrorIfTaskEventuallySucceeds(t *testing.T) {
 
 func TestErrorIfExceedsAttempts(t *testing.T) {
 	g := NewWithT(t)
-	result := Retry(context.Background(), "", appendFail, numAttempts, backoff, AlwaysRetry)
+	result := Retry(context.Background(), retryTestLogger, "", appendFail, numAttempts, backoff, AlwaysRetry)
 	g.Expect(len(list)).Should(Equal(numAttempts))
 	g.Expect(result.Err.Error()).Should(Equal("appendFail"))
 	g.Expect(result.Value).Should(Equal("appendFail"))
@@ -63,7 +65,7 @@ func TestCanRetryReturnsFalse(t *testing.T) {
 		}
 		return false
 	}
-	result := Retry(context.Background(), "", passEventually(), numAttempts, backoff, runOnceFn)
+	result := Retry(context.Background(), retryTestLogger, "", passEventually(), numAttempts, backoff, runOnceFn)
 	g.Expect(len(list)).Should(Equal(2))
 	g.Expect(list[0:2]).Should(ConsistOf("appendFail", "appendFail"))
 	g.Expect(result.Err.Error()).Should(Equal("appendFail"))
@@ -80,7 +82,7 @@ func TestContextCancelledBeforeTaskIsRun(t *testing.T) {
 	cancelFn()
 	go func() {
 		defer wg.Done()
-		result = Retry(ctx, "", appendPass, numAttempts, backoff, AlwaysRetry)
+		result = Retry(ctx, retryTestLogger, "", appendPass, numAttempts, backoff, AlwaysRetry)
 		g.Expect(result.Err).Should(Equal(ctx.Err()))
 		g.Expect(result.Value).Should(Equal(""))
 		g.Expect(len(list)).Should(BeNumerically("<=", numAttempts))
@@ -98,7 +100,7 @@ func TestContextCancelledBeforeBackoffBegins(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		result = Retry(ctx, "", func() (string, error) {
+		result = Retry(ctx, retryTestLogger, "", func() (string, error) {
 			list = append(list, "appendFail")
 			cancelFn()
 			return "", fmt.Errorf("appendFail")
@@ -119,7 +121,7 @@ func TestRetryUntilPredicateForContextCancelled(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		result := RetryUntilPredicate(ctx, "", func() bool { return false }, timeout, interval)
+		result := RetryUntilPredicate(ctx, retryTestLogger, "", func() bool { return false }, timeout, interval)
 		g.Expect(result).Should(BeFalse())
 	}()
 	cancelFn()
@@ -145,7 +147,7 @@ func TestRetryUntilPredicateWithBackgroundContext(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			result := RetryUntilPredicate(context.Background(), "", entry.predicateFn, timeout, interval)
+			result := RetryUntilPredicate(context.Background(), retryTestLogger, "", entry.predicateFn, timeout, interval)
 			g.Expect(result).Should(Equal(entry.expectedResult))
 		}()
 		wg.Wait()
@@ -163,7 +165,7 @@ func TestRetryOnError(t *testing.T) {
 		}
 		return nil
 	}
-	RetryOnError(context.Background(), "", fn, 10*time.Millisecond)
+	RetryOnError(context.Background(), retryTestLogger, "", fn, 10*time.Millisecond)
 	g.Expect(counter).To(Equal(3))
 }
 
@@ -181,7 +183,7 @@ func TestRetryOnErrorWhenContextIsCancelled(t *testing.T) {
 			counter++
 		}
 	}
-	go RetryOnError(context.Background(), "", fn, 10*time.Millisecond)
+	go RetryOnError(context.Background(), retryTestLogger, "", fn, 10*time.Millisecond)
 	time.Sleep(20 * time.Millisecond) //forcing counter to be incremented
 	cancelFn()
 	g.Expect(counter).To(BeNumerically(">", 0))

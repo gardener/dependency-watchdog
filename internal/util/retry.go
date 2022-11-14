@@ -17,6 +17,8 @@ package util
 import (
 	"context"
 	"time"
+
+	"github.com/go-logr/logr"
 )
 
 // RetryResult captures the result of a retriable operation.
@@ -31,7 +33,7 @@ type RetryResult[T any] struct {
 // 3. `numAttempts` have exhausted.
 // 4. `ctx` (context) has either been cancelled or it has expired.
 // The result is captured eventually in `RetryResult`.
-func Retry[T any](ctx context.Context, operation string, fn func() (T, error), numAttempts int, backOff time.Duration, canRetry func(error) bool) RetryResult[T] {
+func Retry[T any](ctx context.Context, logger logr.Logger, operation string, fn func() (T, error), numAttempts int, backOff time.Duration, canRetry func(error) bool) RetryResult[T] {
 	var result T
 	var err error
 	for i := 1; i <= numAttempts; i++ {
@@ -54,7 +56,7 @@ func Retry[T any](ctx context.Context, operation string, fn func() (T, error), n
 			logger.Error(ctx.Err(), "Context has been cancelled, stopping retry", "operation", operation)
 			return RetryResult[T]{Err: ctx.Err()}
 		case <-time.After(backOff):
-			logger.V(4).Info("Will attempt to retry operation", "operation", operation, "currentAttempt", i, "error", err)
+			logger.Info("Will attempt to retry operation", "operation", operation, "currentAttempt", i, "error", err)
 		}
 	}
 	return RetryResult[T]{Value: result, Err: err}
@@ -65,15 +67,15 @@ func Retry[T any](ctx context.Context, operation string, fn func() (T, error), n
 // 2. `timeout` expires.
 // 3. `ctx` (context) is cancelled or expires.
 // Returns true if the invocation of the `predicateFn` was successful and false otherwise.
-func RetryUntilPredicate(ctx context.Context, operation string, predicateFn func() bool, timeout time.Duration, interval time.Duration) bool {
+func RetryUntilPredicate(ctx context.Context, logger logr.Logger, operation string, predicateFn func() bool, timeout time.Duration, interval time.Duration) bool {
 	timer := time.NewTimer(timeout)
 	for {
 		select {
 		case <-ctx.Done():
-			logger.V(4).Info("Context has been cancelled, exiting retrying operation", "operation", operation)
+			logger.Info("Context has been cancelled, exiting retrying operation", "operation", operation)
 			return false
 		case <-timer.C:
-			logger.V(4).Info("Timed out waiting for predicateFn to be true", "operation", operation)
+			logger.Info("Timed out waiting for predicateFn to be true", "operation", operation)
 			return false
 		default:
 			if predicateFn() {
@@ -87,11 +89,11 @@ func RetryUntilPredicate(ctx context.Context, operation string, predicateFn func
 // RetryOnError retries invoking a function till either the invocation of the function does not return an error or the
 // context has timed-out or has been cancelled. The consumers should ensure that the context passed to it
 // has a proper finite timeout set as there is no other timeout taken as a function argument.
-func RetryOnError(ctx context.Context, operation string, retriableFn func() error, interval time.Duration) {
+func RetryOnError(ctx context.Context, logger logr.Logger, operation string, retriableFn func() error, interval time.Duration) {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.V(4).Info("Context has either timed-out or has been cancelled", "operation", operation)
+			logger.Info("Context has either timed-out or has been cancelled", "operation", operation)
 			return
 		default:
 			err := retriableFn()

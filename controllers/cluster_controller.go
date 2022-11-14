@@ -19,10 +19,8 @@ package controllers
 import (
 	"context"
 	"fmt"
-
-	"github.com/gardener/dependency-watchdog/internal/prober/scaler"
-
 	papi "github.com/gardener/dependency-watchdog/api/prober"
+	"github.com/gardener/dependency-watchdog/internal/prober/scaler"
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
@@ -64,8 +62,9 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 	// If the cluster is not found then any existing probes if present will be unregistered
 	if notFound {
-		log.V(4).Info("Cluster not found, any existing probes will be removed if present")
-		r.ProberMgr.Unregister(req.Name)
+		if r.ProberMgr.Unregister(req.Name) {
+			log.Info("Cluster not found, existing prober will be removed")
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -76,27 +75,29 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	// If shoot is marked for deletion then any existing probes will be unregistered
 	if shoot.DeletionTimestamp != nil {
-		log.V(4).Info("Cluster has been marked for deletion, any existing probes will be removed if present")
-		r.ProberMgr.Unregister(req.Name)
+		if r.ProberMgr.Unregister(req.Name) {
+			log.Info("Cluster has been marked for deletion, existing prober will be removed")
+		}
 		return ctrl.Result{}, nil
 	}
 
 	// if hibernation is enabled then we will remove any existing prober. Any resource scaling that is required in case of hibernation will now be handled as part of worker reconciliation in extension controllers.
 	if gardencorev1beta1helper.HibernationIsEnabled(shoot) {
-		log.V(4).Info("Cluster hibernation is enabled, prober will be removed if present")
-		r.ProberMgr.Unregister(req.Name)
+		if r.ProberMgr.Unregister(req.Name) {
+			log.Info("Cluster hibernation is enabled, existing prober will be removed")
+		}
 		return ctrl.Result{}, nil
 	}
 
 	// if control plane migration has started for a shoot, then any existing probe should be removed as it is no longer needed.
 	if shoot.Status.LastOperation != nil && shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeMigrate {
-		log.V(4).Info("Cluster migration is enabled, prober will be removed if present")
-		r.ProberMgr.Unregister(req.Name)
+		if r.ProberMgr.Unregister(req.Name) {
+			log.Info("Cluster migration is enabled, existing prober will be removed")
+		}
 		return ctrl.Result{}, nil
 	}
 
 	if canStartProber(shoot) {
-		log.V(1).Info("Starting a new probe for cluster if not present")
 		r.startProber(ctx, log, req.Name)
 	}
 	return ctrl.Result{}, nil
@@ -139,11 +140,11 @@ func canStartProber(shoot *v1beta1.Shoot) bool {
 func (r *ClusterReconciler) startProber(ctx context.Context, logger logr.Logger, key string) {
 	_, ok := r.ProberMgr.GetProber(key)
 	if !ok {
-		shootLogger := logger.WithName(key)
-		deploymentScaler := scaler.NewScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter, shootLogger)
+		deploymentScaler := scaler.NewScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter, logger)
 		shootClientCreator := prober.NewShootClientCreator(r.Client)
-		p := prober.NewProber(ctx, key, r.ProbeConfig, r.Client, deploymentScaler, shootClientCreator, shootLogger)
+		p := prober.NewProber(ctx, key, r.ProbeConfig, r.Client, deploymentScaler, shootClientCreator, logger)
 		r.ProberMgr.Register(*p)
+		logger.Info("Starting a new prober")
 		go p.Run()
 	}
 }

@@ -192,7 +192,7 @@ func createClusterAndCheckProber(g *WithT, crClient client.Client, reconciler *C
 	cluster *gardenerv1alpha1.Cluster, checkProber func(g *WithT, reconciler *ClusterReconciler, cluster *gardenerv1alpha1.Cluster)) {
 	err := crClient.Create(context.Background(), cluster)
 	g.Expect(err).To(BeNil())
-	time.Sleep(2 * time.Second)
+	time.Sleep(2 * time.Second) // giving some time for controller to take action
 	if checkProber != nil {
 		checkProber(g, reconciler, cluster)
 	}

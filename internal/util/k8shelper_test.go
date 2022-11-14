@@ -21,7 +21,10 @@ import (
 	"testing"
 	"time"
 
+	testutil "github.com/gardener/dependency-watchdog/internal/test"
+	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
+
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -31,8 +34,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	testutil "github.com/gardener/dependency-watchdog/internal/test"
 )
 
 const (
@@ -40,12 +41,13 @@ const (
 )
 
 var (
-	secretPath     = filepath.Join("testdata", "secret.yaml")
-	kubeConfigPath = filepath.Join("testdata", "kubeconfig.yaml")
-	deploymentPath = filepath.Join("testdata", "deployment.yaml")
-	k8sClient      client.Client
-	kindCluster    testutil.KindCluster
-	restConfig     *rest.Config
+	secretPath          = filepath.Join("testdata", "secret.yaml")
+	kubeConfigPath      = filepath.Join("testdata", "kubeconfig.yaml")
+	deploymentPath      = filepath.Join("testdata", "deployment.yaml")
+	k8sClient           client.Client
+	kindCluster         testutil.KindCluster
+	restConfig          *rest.Config
+	k8sHelperTestLogger = logr.Discard()
 )
 
 type testCleanup func(*WithT)
@@ -106,7 +108,7 @@ func testSecretNotFound(t *testing.T) {
 	ctx := context.Background()
 	sec, cleanup := getSecretFromFile(ctx, g)
 	defer cleanup(g)
-	kubeConfig, err := GetKubeConfigFromSecret(ctx, sec.ObjectMeta.Namespace, sec.ObjectMeta.Name, k8sClient)
+	kubeConfig, err := GetKubeConfigFromSecret(ctx, sec.ObjectMeta.Namespace, sec.ObjectMeta.Name, k8sClient, k8sHelperTestLogger)
 	g.Expect(apierrors.IsNotFound(err)).Should(BeTrue())
 	g.Expect(kubeConfig).Should(BeNil())
 }
@@ -119,7 +121,7 @@ func testExtractKubeConfigFromSecret(t *testing.T) {
 	kubeConfigBytes := createKubeConfigSecret(ctx, g, sec, &kubeConfigPath)
 
 	// test and assertions
-	actualKubeConfigBytes, err := GetKubeConfigFromSecret(ctx, sec.ObjectMeta.Namespace, sec.ObjectMeta.Name, k8sClient)
+	actualKubeConfigBytes, err := GetKubeConfigFromSecret(ctx, sec.ObjectMeta.Namespace, sec.ObjectMeta.Name, k8sClient, k8sHelperTestLogger)
 	g.Expect(err).Should(BeNil())
 	g.Expect(actualKubeConfigBytes).Should(Equal(kubeConfigBytes))
 }
@@ -132,7 +134,7 @@ func testExtractKubeConfigFromSecretWithNoKubeConfig(t *testing.T) {
 	createKubeConfigSecret(ctx, g, sec, nil)
 
 	// test and assertions
-	_, err := GetKubeConfigFromSecret(ctx, sec.ObjectMeta.Namespace, sec.ObjectMeta.Name, k8sClient)
+	_, err := GetKubeConfigFromSecret(ctx, sec.ObjectMeta.Namespace, sec.ObjectMeta.Name, k8sClient, k8sHelperTestLogger)
 	g.Expect(err).ToNot(BeNil())
 }
 
@@ -184,7 +186,7 @@ func testGetScaleResource(t *testing.T) {
 	}
 
 	scaler := scalesGetter.Scales(deployment.Namespace)
-	groupResource, scaleRes, err := GetScaleResource(ctx, k8sClient, scaler, logger, resourceRef, 20*time.Second)
+	groupResource, scaleRes, err := GetScaleResource(ctx, k8sClient, scaler, k8sHelperTestLogger, resourceRef, 20*time.Second)
 	g.Expect(err).To(BeNil())
 
 	g.Expect(groupResource.Group).To(Equal(resourceGroup))
@@ -207,7 +209,7 @@ func testGetScaleResourceForUnsupportedGKV(t *testing.T) {
 	}
 
 	scaler := scalesGetter.Scales("default")
-	_, _, err = GetScaleResource(ctx, k8sClient, scaler, logger, resourceRef, 20*time.Second)
+	_, _, err = GetScaleResource(ctx, k8sClient, scaler, k8sHelperTestLogger, resourceRef, 20*time.Second)
 	g.Expect(err).ToNot(BeNil())
 }
 

@@ -20,13 +20,13 @@ import (
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const namespace = "default"
 
-var pmLogger = log.Log.WithName("test")
+var pmLogger = logr.Discard()
 
 func setupMgrTest(t *testing.T) (Manager, func(mgr Manager)) {
 	g := NewWithT(t)

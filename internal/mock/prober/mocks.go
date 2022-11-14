@@ -9,6 +9,7 @@ import (
 	reflect "reflect"
 	time "time"
 
+	logr "github.com/go-logr/logr"
 	gomock "github.com/golang/mock/gomock"
 	kubernetes "k8s.io/client-go/kubernetes"
 )
@@ -37,16 +38,16 @@ func (m *MockShootClientCreator) EXPECT() *MockShootClientCreatorMockRecorder {
 }
 
 // CreateClient mocks base method.
-func (m *MockShootClientCreator) CreateClient(arg0 context.Context, arg1, arg2 string, arg3 time.Duration) (kubernetes.Interface, error) {
+func (m *MockShootClientCreator) CreateClient(arg0 context.Context, arg1 logr.Logger, arg2, arg3 string, arg4 time.Duration) (kubernetes.Interface, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateClient", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "CreateClient", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(kubernetes.Interface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateClient indicates an expected call of CreateClient.
-func (mr *MockShootClientCreatorMockRecorder) CreateClient(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockShootClientCreatorMockRecorder) CreateClient(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateClient", reflect.TypeOf((*MockShootClientCreator)(nil).CreateClient), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateClient", reflect.TypeOf((*MockShootClientCreator)(nil).CreateClient), arg0, arg1, arg2, arg3, arg4)
 }

@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/gardener/dependency-watchdog/internal/util"
+	"github.com/go-logr/logr"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,7 +30,7 @@ import (
 // ShootClientCreator provides a facade to create kubernetes client targeting a shoot.
 type ShootClientCreator interface {
 	// CreateClient creates a new clientSet to connect to the Kube ApiServer running in the passed-in shoot control namespace.
-	CreateClient(ctx context.Context, namespace string, secretName string, connectionTimeout time.Duration) (kubernetes.Interface, error)
+	CreateClient(ctx context.Context, logger logr.Logger, namespace string, secretName string, connectionTimeout time.Duration) (kubernetes.Interface, error)
 }
 
 // NewShootClientCreator creates an instance of ShootClientCreator.
@@ -40,11 +42,11 @@ type shootclientCreator struct {
 	client.Client
 }
 
-func (s *shootclientCreator) CreateClient(ctx context.Context, namespace string, secretName string, connectionTimeout time.Duration) (kubernetes.Interface, error) {
+func (s *shootclientCreator) CreateClient(ctx context.Context, logger logr.Logger, namespace string, secretName string, connectionTimeout time.Duration) (kubernetes.Interface, error) {
 	operation := fmt.Sprintf("get-secret-%s-for-namespace-%s", secretName, namespace)
-	retryResult := util.Retry(ctx,
+	retryResult := util.Retry(ctx, logger,
 		operation,
-		func() ([]byte, error) { return util.GetKubeConfigFromSecret(ctx, namespace, secretName, s.Client) },
+		func() ([]byte, error) { return util.GetKubeConfigFromSecret(ctx, namespace, secretName, s.Client, logger) },
 		defaultGetSecretMaxAttempts,
 		defaultGetSecretBackoff,
 		canRetrySecretGet)

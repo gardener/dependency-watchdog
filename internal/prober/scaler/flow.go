@@ -101,9 +101,14 @@ func (c *creator) createScaleTaskFn(namespace string, resourceInfos []scalableRe
 
 func (c *creator) doCreateTaskFn(namespace string, resInfo scalableResourceInfo) flow.TaskFn {
 	return func(ctx context.Context) error {
-		operation := fmt.Sprintf("scale-resource-%s.%s", namespace, resInfo.ref.Name)
+		var operation string
+		if resInfo.operation == scaleUp {
+			operation = fmt.Sprintf("scaleUp-resource-%s.%s", namespace, resInfo.ref.Name)
+		} else {
+			operation = fmt.Sprintf("scaleDown-resource-%s.%s", namespace, resInfo.ref.Name)
+		}
 		resScaler := newResourceScaler(c.client, c.scaler, c.logger, c.options, namespace, resInfo)
-		result := util.Retry(ctx,
+		result := util.Retry(ctx, c.logger,
 			operation,
 			func() (interface{}, error) {
 				err := resScaler.scale(ctx)
