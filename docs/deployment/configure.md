@@ -58,6 +58,7 @@ Each dependent resource info has the following properties:
 | scaleUp | prober.ScaleInfo | No | | Captures the configuration to scale up this resource. Detailed below. |
 | scaleDown | prober.ScaleInfo | No | | Captures the configuration to scale down this resource. Detailed below. |
 
+> NOTE: Since each dependent resource is a target for scale up/down, therefore it is mandatory that the resource reference points a kubernetes resource which has a `scale` subresource.
 
 ### ScaleInfo
 
