@@ -2,8 +2,8 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   labels:
-    app: dependency-watchdog-weeder
-  name: dependency-watchdog-weeder-config
+    app: dependency-watchdog-weed
+  name: dependency-watchdog-weed-config
 data:
   dep-config.yaml: |
     watchDuration: 5m0s
