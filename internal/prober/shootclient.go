@@ -46,7 +46,9 @@ func (s *shootclientCreator) CreateClient(ctx context.Context, logger logr.Logge
 	operation := fmt.Sprintf("get-secret-%s-for-namespace-%s", secretName, namespace)
 	retryResult := util.Retry(ctx, logger,
 		operation,
-		func() ([]byte, error) { return util.GetKubeConfigFromSecret(ctx, namespace, secretName, s.Client, logger) },
+		func() ([]byte, error) {
+			return util.GetKubeConfigFromSecret(ctx, namespace, secretName, s.Client, logger)
+		},
 		defaultGetSecretMaxAttempts,
 		defaultGetSecretBackoff,
 		canRetrySecretGet)

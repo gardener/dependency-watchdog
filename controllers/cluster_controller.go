@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"github.com/gardener/dependency-watchdog/internal/prober/scaler"
 	"github.com/go-logr/logr"

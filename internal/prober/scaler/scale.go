@@ -55,7 +55,7 @@ type resScaler struct {
 }
 
 func newResourceScaler(client client.Client, scaler scalev1.ScaleInterface, logger logr.Logger, opts *scalerOptions, namespace string, resourceInfo scalableResourceInfo) resourceScaler {
-	resLogger := logger.WithValues("resNamespace", namespace, "kind", resourceInfo.ref.Kind, "apiVersion", resourceInfo.ref.APIVersion, "name", resourceInfo.ref.Name)
+	resLogger := logger.WithValues("resNamespace", namespace, "kind", resourceInfo.ref.Kind, "apiVersion", resourceInfo.ref.APIVersion, "name", resourceInfo.ref.Name, "level", resourceInfo.level)
 	return &resScaler{
 		client:       client,
 		scaler:       scaler,
@@ -165,14 +165,14 @@ func (r *resScaler) updateResourceAndScale(ctx context.Context, scaleSubRes *aut
 
 	scaleSubRes.Spec.Replicas = targetReplicas
 	if r.resourceInfo.operation == scaleUp {
-		r.logger.Info("Scaling up kubernetes resource", "level", r.resourceInfo.level, "targetReplicas", targetReplicas)
+		r.logger.Info("Scaling up kubernetes resource", "targetReplicas", targetReplicas)
 	} else {
-		r.logger.Info("Scaling down kubernetes resource", "level", r.resourceInfo.level, "targetReplicas", targetReplicas)
+		r.logger.Info("Scaling down kubernetes resource", "targetReplicas", targetReplicas)
 	}
 	if _, err = r.scaler.Update(childCtx, *gr, scaleSubRes, metav1.UpdateOptions{}); err != nil {
 		return err
 	}
-	r.logger.Info("waiting for resource readiness")
+	r.logger.Info("Waiting for resource readiness")
 	return nil
 }
 

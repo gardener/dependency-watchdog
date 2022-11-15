@@ -24,7 +24,7 @@ We use the `Testing` package provided by the standard library in golang for writ
 ## Writing Tests
 
 ### Common for All Kinds
-- For naming the individual tests (`TestXxx` and `testXxx` methods) and helper methods, make sure that the name describes the implementation of the method. For eg: `testScalingWhenKCMDeploymentNotFound` tests the behaviour of the `scaler` when KCM deployment is not present.
+- For naming the individual tests (`TestXxx` and `testXxx` methods) and helper methods, make sure that the name describes the implementation of the method. For eg: `testScalingWhenMandatoryResourceNotFound` tests the behaviour of the `scaler` when a mandatory resource (KCM deployment) is not present.
 - Maintain proper logging in tests. Use `t.log()` method to add appropriate messages wherever necessary to describe the flow of the test. See [this](../../controllers/endpoints_controller_test.go) for examples.
 - Make use of the `testdata` directory for storing arbitrary sample data needed by tests (YAML manifests, etc.). See [this](../../controllers) package for examples.
   - From https://pkg.go.dev/cmd/go/internal/test:

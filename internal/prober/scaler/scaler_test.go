@@ -332,7 +332,7 @@ func testWaitTillMinTargetReplicasReachedReturnsError(t *testing.T) {
 		errorString               string
 	}{
 		{0, 0, 0, 0, 0, 1, ds.ScaleUp, scaleUp, fmt.Sprintf("timed out waiting for {namespace: %s, resource: %s} to reach minTargetReplicas", namespace, caObjectRef.Name)},
-		{2, 2, 2, expectedSpecReplicasAfterSuccessfulScaleDownTest, expectedSpecReplicasAfterSuccessfulScaleDownTest, 2, ds.ScaleDown, scaleDown, fmt.Sprint("timed out waiting")}, // mcm or kcm can return error hence short string is used
+		{2, 2, 2, expectedSpecReplicasAfterSuccessfulScaleDownTest, expectedSpecReplicasAfterSuccessfulScaleDownTest, 2, ds.ScaleDown, scaleDown, "timed out waiting"}, // mcm or kcm can return error hence short string is used
 	}
 
 	for _, entry := range table {
