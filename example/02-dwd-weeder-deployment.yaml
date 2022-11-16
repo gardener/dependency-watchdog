@@ -1,12 +1,12 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: dependency-watchdog-weed
+  name: dependency-watchdog-weeder
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: dependency-watchdog-weed
+      app: dependency-watchdog-weeder
   strategy:
     rollingUpdate:
       maxSurge: 25%
@@ -15,7 +15,7 @@ spec:
   template:
     metadata:
       labels:
-        app: dependency-watchdog-weed
+        app: dependency-watchdog-weeder
     spec:
       containers:
         - command:
@@ -51,10 +51,10 @@ spec:
       restartPolicy: Always
       schedulerName: default-scheduler
       securityContext: {}
-      serviceAccountName: dependency-watchdog-weed
+      serviceAccountName: dependency-watchdog-weeder
       terminationGracePeriodSeconds: 5
       volumes:
         - configMap:
             defaultMode: 420
-            name: dependency-watchdog-weed-config # config map containing the weeder config.
+            name: dependency-watchdog-weeder-config # config map containing the weeder config.
           name: config

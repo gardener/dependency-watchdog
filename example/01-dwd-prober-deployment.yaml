@@ -1,12 +1,12 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: dependency-watchdog-probe
+  name: dependency-watchdog-prober
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: dependency-watchdog-probe
+      app: dependency-watchdog-prober
   strategy:
     rollingUpdate:
       maxSurge: 25%
@@ -15,7 +15,7 @@ spec:
   template:
     metadata:
       labels:
-        app: dependency-watchdog-probe
+        app: dependency-watchdog-prober
     spec:
       containers:
         - command:
@@ -51,10 +51,10 @@ spec:
       restartPolicy: Always
       schedulerName: default-scheduler
       securityContext: {}
-      serviceAccountName: dependency-watchdog-probe
+      serviceAccountName: dependency-watchdog-prober
       terminationGracePeriodSeconds: 5
       volumes:
         - configMap:
             defaultMode: 420
-            name: dependency-watchdog-probe-config # config map containing the prober config.
+            name: dependency-watchdog-prober-config # config map containing the prober config.
           name: config
