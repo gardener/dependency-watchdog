@@ -274,8 +274,6 @@ func testNoCLBFPodDeletionWhenEndpointNotReady(ctx context.Context, _ context.Ca
 	g.Expect(err).To(BeNil())
 	g.Expect(currentPod.DeletionTimestamp).To(BeNil())
 
-	g.Expect(reconciler.Client.Get(ctx, client.ObjectKeyFromObject(ep), ep)).To(Succeed())
-	turnEndpointToReady(ctx, g, reconciler.Client, ep)
 }
 
 func testNoCLBFPodDeletionOnContextCancellation(ctx context.Context, cancelFn context.CancelFunc, g *WithT, reconciler *EndpointReconciler) {
@@ -417,17 +415,5 @@ func turnEndpointToNotReady(ctx context.Context, g *WithT, client client.Client,
 			NodeName: pointer.String("node-1"),
 		},
 	}
-	g.Expect(client.Update(ctx, epClone)).To(Succeed())
-}
-
-func turnEndpointToReady(ctx context.Context, g *WithT, client client.Client, ep *v1.Endpoints) {
-	epClone := ep.DeepCopy()
-	epClone.Subsets[0].Addresses = []v1.EndpointAddress{
-		{
-			IP:       "10.1.0.0",
-			NodeName: pointer.String("node-1"),
-		},
-	}
-
 	g.Expect(client.Update(ctx, epClone)).To(Succeed())
 }

@@ -24,7 +24,7 @@ spec:
             - --config-file=/etc/dependency-watchdog/config/dep-config.yaml # location of the weeder config.
             - --kube-api-qps=20.0 # Optional parameter. Default Value is 5.0. Maximum QPS (queries per second) allowed from the client to the API server
             - --kube-api-burst=100 # Optional parameter.Default Value is 10. Maximum burst to throttle the calls to the API server
-            - --zap-log-level=INFO # Optional parameter. Default Value is INFO.
+            - --zap-log-level=DEBUG # Optional parameter. Default Value is INFO.
             - --concurrent-reconciles=1 # Optional parameter. Default value is 1. Maximum number of concurrent reconciles
             # Leader election and other related flags can be checked out inside "weeder.go" in the "cmd" package
           image: <dwd image name>
