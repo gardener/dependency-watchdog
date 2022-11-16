@@ -34,9 +34,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -48,16 +48,6 @@ const (
 	testdataPath                  = "testdata"
 	maxConcurrentReconcilesProber = 1
 )
-
-func buildScheme() *runtime.Scheme {
-	scheme := runtime.NewScheme()
-	localSchemeBuilder := runtime.NewSchemeBuilder(
-		clientgoscheme.AddToScheme,
-		gardenerv1alpha1.AddToScheme,
-	)
-	utilruntime.Must(localSchemeBuilder.AddToScheme(scheme))
-	return scheme
-}
 
 func setupProberEnv(ctx context.Context, t *testing.T, g *WithT) (client.Client, *envtest.Environment, *ClusterReconciler, manager.Manager) {
 	t.Log("setting up the test Env for Prober")
@@ -115,7 +105,7 @@ func TestClusterControllerSuite(t *testing.T) {
 		title string
 		run   func(t *testing.T)
 	}{
-		{"tests with common environment", testProberCommonEnvTest},
+		{"tests with common environment", testProberSharedEnvTest},
 		{"tests with dedicated environment for each test", testProberDedicatedEnvTest},
 	}
 	for _, test := range tests {
@@ -125,6 +115,7 @@ func TestClusterControllerSuite(t *testing.T) {
 	}
 }
 
+// testProberDedicatedEnvTest creates a new envTest at the start of each subtest and destroys it at the end of each subtest.
 func testProberDedicatedEnvTest(t *testing.T) {
 	g := NewWithT(t)
 	tests := []struct {
@@ -156,7 +147,8 @@ func testReconciliationAfterAPIServerIsDown(ctx context.Context, t *testing.T, t
 	g.Expect(err).To(BeNil())
 }
 
-func testProberCommonEnvTest(t *testing.T) {
+// testProberSharedEnvTest creates an envTest just once and that is then shared by all the subtests. Shared envTest is destroyed once all subtests have run.
+func testProberSharedEnvTest(t *testing.T) {
 	g := NewWithT(t)
 	ctx, cancelFn := context.WithCancel(context.Background())
 	crClient, testEnv, reconciler, _ := setupProberEnv(ctx, t, g)
@@ -385,6 +377,16 @@ func validateIfFileExists(file string, g *WithT) {
 		log.Fatalf("%s does not exist. This should not have happened. Check testdata directory.\n", file)
 	}
 	g.Expect(err).ToNot(HaveOccurred(), "File at path %v should exist")
+}
+
+func buildScheme() *runtime.Scheme {
+	scheme := runtime.NewScheme()
+	localSchemeBuilder := runtime.NewSchemeBuilder(
+		clientgoscheme.AddToScheme,
+		gardenerv1alpha1.AddToScheme,
+	)
+	utilruntime.Must(localSchemeBuilder.AddToScheme(scheme))
+	return scheme
 }
 
 func createClusterResource() (*gardenerv1alpha1.Cluster, *gardencorev1beta1.Shoot) {

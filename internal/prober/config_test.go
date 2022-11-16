@@ -31,20 +31,12 @@ import (
 
 const testdataPath = "testdata"
 
-var scheme runtime.Scheme
-
-func beforeAll(g *WithT) {
-	scheme := runtime.NewScheme()
-	g.Expect(appsv1.AddToScheme(scheme)).To(BeNil())
-	g.Expect(corev1.AddToScheme(scheme)).To(BeNil())
-}
-
 func TestProberConfigSuite(t *testing.T) {
 	g := NewWithT(t)
 
 	tests := []struct {
 		title string
-		run   func(t *testing.T)
+		run   func(t *testing.T, s *runtime.Scheme)
 	}{
 		{"test default values for all missing/optional fields", testCheckIfDefaultValuesAreSetForAllOptionalMissingValues},
 		{"missing mandatory fields should error out", testMissingConfigValuesShouldReturnErrorAndNilConfig},
@@ -53,19 +45,24 @@ func TestProberConfigSuite(t *testing.T) {
 		{"valid configuration yaml", testValidConfigShouldPassAllValidations},
 	}
 
-	beforeAll(g)
+	scheme := runtime.NewScheme()
+	g.Expect(appsv1.AddToScheme(scheme)).To(BeNil())
+	g.Expect(corev1.AddToScheme(scheme)).To(BeNil())
+
 	for _, entry := range tests {
-		t.Run(entry.title, entry.run)
+		t.Run(entry.title, func(t *testing.T) {
+			entry.run(t, scheme)
+		})
 	}
 }
 
-func testCheckIfDefaultValuesAreSetForAllOptionalMissingValues(t *testing.T) {
+func testCheckIfDefaultValuesAreSetForAllOptionalMissingValues(t *testing.T, s *runtime.Scheme) {
 	g := NewWithT(t)
 	testutil.ValidateIfFileExists(testdataPath, t)
 
 	configPath := filepath.Join(testdataPath, "config_missing_optional_values.yaml")
 	testutil.ValidateIfFileExists(configPath, t)
-	config, err := LoadConfig(configPath, &scheme)
+	config, err := LoadConfig(configPath, s)
 
 	g.Expect(err).ToNot(HaveOccurred(), "LoadConfig should not give any error for a valid config file")
 	g.Expect(config).ToNot(BeNil(), "LoadConfig should not return nil for a valid config file")
@@ -84,7 +81,7 @@ func testCheckIfDefaultValuesAreSetForAllOptionalMissingValues(t *testing.T) {
 	t.Log("All missing values are set")
 }
 
-func testMissingConfigValuesShouldReturnErrorAndNilConfig(t *testing.T) {
+func testMissingConfigValuesShouldReturnErrorAndNilConfig(t *testing.T, s *runtime.Scheme) {
 	table := []struct {
 		fileName         string
 		expectedErrCount int
@@ -98,7 +95,7 @@ func testMissingConfigValuesShouldReturnErrorAndNilConfig(t *testing.T) {
 		testutil.ValidateIfFileExists(testdataPath, t)
 		configPath := filepath.Join(testdataPath, entry.fileName)
 		testutil.ValidateIfFileExists(configPath, t)
-		config, err := LoadConfig(configPath, &scheme)
+		config, err := LoadConfig(configPath, s)
 
 		g.Expect(err).To(HaveOccurred(), "LoadConfig should return error for a config with missing mandatory values")
 		g.Expect(config).To(BeNil(), "LoadConfig should return a nil config for a file with missing mandatory values")
@@ -109,33 +106,33 @@ func testMissingConfigValuesShouldReturnErrorAndNilConfig(t *testing.T) {
 	t.Log("All the missing mandatory values are identified")
 }
 
-func testConfigFileNotFound(t *testing.T) {
+func testConfigFileNotFound(t *testing.T, s *runtime.Scheme) {
 	g := NewWithT(t)
-	config, err := LoadConfig(filepath.Join(testdataPath, "notfound.yaml"), &scheme)
+	config, err := LoadConfig(filepath.Join(testdataPath, "notfound.yaml"), s)
 	g.Expect(err).To(HaveOccurred(), "LoadConfig should give error if config file is not found")
 	g.Expect(config).To(BeNil(), "LoadConfig should return a nil config if config file is not found")
 	g.Expect(err.Error()).To(ContainSubstring("no such file or directory"), "LoadConfig did not load all the dependent resources")
 }
 
-func testErrorInUnMarshallingYaml(t *testing.T) {
+func testErrorInUnMarshallingYaml(t *testing.T, s *runtime.Scheme) {
 	g := NewWithT(t)
 	testutil.ValidateIfFileExists(testdataPath, t)
 
 	configPath := filepath.Join(testdataPath, "invalidsyntax.yaml")
 	testutil.ValidateIfFileExists(configPath, t)
-	config, err := LoadConfig(configPath, &scheme)
+	config, err := LoadConfig(configPath, s)
 	g.Expect(err).To(HaveOccurred(), "LoadConfig should not give error for a valid config")
 	g.Expect(config).To(BeNil(), "LoadConfig should got nil config for a valid file")
 	g.Expect(err.Error()).To(ContainSubstring("cannot unmarshal string into Go struct field DependentResourceInfo.dependentResourceInfos.scaleUp"), "Wrong error recieved")
 }
 
-func testValidConfigShouldPassAllValidations(t *testing.T) {
+func testValidConfigShouldPassAllValidations(t *testing.T, s *runtime.Scheme) {
 	g := NewWithT(t)
 	testutil.ValidateIfFileExists(testdataPath, t)
 
 	configPath := filepath.Join(testdataPath, "valid_config.yaml")
 	testutil.ValidateIfFileExists(configPath, t)
-	config, err := LoadConfig(configPath, &scheme)
+	config, err := LoadConfig(configPath, s)
 	g.Expect(err).ToNot(HaveOccurred(), "LoadConfig should not give error for a valid config")
 	g.Expect(config).ToNot(BeNil(), "LoadConfig should got nil config for a valid file")
 	g.Expect(len(config.DependentResourceInfos)).To(Equal(3), "LoadConfig did not load all the dependent resources")

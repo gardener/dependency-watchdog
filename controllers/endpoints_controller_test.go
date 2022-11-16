@@ -23,6 +23,7 @@ import (
 	"time"
 
 	testenv "github.com/gardener/dependency-watchdog/internal/test"
+	"k8s.io/client-go/kubernetes/scheme"
 
 	internalutils "github.com/gardener/dependency-watchdog/internal/util"
 	v1 "k8s.io/api/core/v1"
@@ -85,9 +86,9 @@ var (
 
 func setupWeederEnv(ctx context.Context, t *testing.T, g *WithT, apiServerFlags map[string]string, withManager bool) (client.Client, *envtest.Environment, *EndpointReconciler, *runtime.Scheme, *rest.Config) {
 	t.Log("setting up the test Env for Weeder")
-	scheme := buildScheme()
 
-	controllerTestEnv, err := testenv.CreateControllerTestEnv(scheme, nil)
+	s := scheme.Scheme
+	controllerTestEnv, err := testenv.CreateDefaultControllerTestEnv(s)
 	g.Expect(err).To(BeNil())
 
 	testEnv := controllerTestEnv.GetEnv()
@@ -117,10 +118,10 @@ func setupWeederEnv(ctx context.Context, t *testing.T, g *WithT, apiServerFlags 
 	}
 
 	if withManager {
-		go startMgr(ctx, t, g, scheme, cfg, epReconciler)
+		go startMgr(ctx, t, g, s, cfg, epReconciler)
 	}
 
-	return crClient, testEnv, epReconciler, scheme, cfg
+	return crClient, testEnv, epReconciler, s, cfg
 }
 
 func TestEndpointsControllerSuite(t *testing.T) {
@@ -148,7 +149,7 @@ func testWeederCommonEnvTest(t *testing.T) {
 		title string
 		run   func(ctx context.Context, t *testing.T, g *WithT, cancelFn context.CancelFunc, reconciler *EndpointReconciler, scheme *runtime.Scheme, config *rest.Config)
 	}{
-		{"Single Crashlooping pod , single healthy pod with matching labels expect only Crashlooping pod to be deleted", testOnlyCLBFpodDeletion},
+		{"Single Crashlooping pod , single healthy pod with matching labels expect only Crashlooping pod to be deleted", testOnlyCLBFPodDeletion},
 		{"Single healthy pod, turned to CrashLoopBackoff , should be deleted", testPodTurningCLBFDeletion},
 		{"Single CrashLooping pod with non-matching labels present, shouldn't be deleted", testCLBFPodWithWrongLabelsDeletion},
 		{"Single healthy pod with matching labels turning to CrashLoopBackoff after watchDuration, shouldn't be deleted", testPodTurningCLBFAfterWatchDuration},
@@ -193,7 +194,7 @@ func testWeederDedicatedEnvTest(t *testing.T) {
 // case 5: deletion of CLBF pod shouldn't happen if endpoint is not ready (means the serving pod is not present/not ready)
 // case 6: cancelling the context should mean no deletion of CLBF pod happens
 // case 7: watch cancelled by API server, should lead to create of new watch (#dedicated env test)
-func testOnlyCLBFpodDeletion(ctx context.Context, t *testing.T, g *WithT, cancelFn context.CancelFunc, reconciler *EndpointReconciler, scheme *runtime.Scheme, config *rest.Config) {
+func testOnlyCLBFPodDeletion(ctx context.Context, t *testing.T, g *WithT, cancelFn context.CancelFunc, reconciler *EndpointReconciler, scheme *runtime.Scheme, config *rest.Config) {
 	pC := newPod(crashingPod, "node-0", correctLabels)
 	pH := newPod(healthyPod, "node-0", correctLabels)
 

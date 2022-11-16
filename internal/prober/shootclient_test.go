@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/gardener/dependency-watchdog/internal/test"
+	"k8s.io/client-go/kubernetes/scheme"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
@@ -54,7 +55,7 @@ func TestSuite(t *testing.T) {
 		{"kubeconfig not found", testConfigNotFound},
 		{"shootclient should be created", testCreateShootClient},
 	}
-	envTest, err = test.CreateDefaultControllerTestEnv()
+	envTest, err = test.CreateDefaultControllerTestEnv(scheme.Scheme)
 	g.Expect(err).To(BeNil())
 	sk8sClient = envTest.GetClient()
 	for _, test := range tests {

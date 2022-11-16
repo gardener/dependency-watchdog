@@ -20,7 +20,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -45,8 +44,8 @@ type controllerTestEnv struct {
 }
 
 // CreateDefaultControllerTestEnv creates a controller-runtime testEnv and provides access to the convenience interface to interact with it.
-func CreateDefaultControllerTestEnv() (ControllerTestEnv, error) {
-	return CreateControllerTestEnv(scheme.Scheme, nil)
+func CreateDefaultControllerTestEnv(scheme *runtime.Scheme) (ControllerTestEnv, error) {
+	return CreateControllerTestEnv(scheme, nil)
 }
 
 // CreateControllerTestEnv creates a controller-runtime testEnv using the provided scheme and crdDirectoryPaths and provides access to the convenience interface to interact with it.
