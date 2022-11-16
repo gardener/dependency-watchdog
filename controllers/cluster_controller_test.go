@@ -19,12 +19,13 @@ package controllers
 import (
 	"context"
 	"errors"
-	"k8s.io/utils/pointer"
 	"log"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"k8s.io/utils/pointer"
 
 	proberpackage "github.com/gardener/dependency-watchdog/internal/prober"
 	testenv "github.com/gardener/dependency-watchdog/internal/test"
