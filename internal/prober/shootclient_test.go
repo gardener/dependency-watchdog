@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gardener/dependency-watchdog/internal/test"
+	testenv "github.com/gardener/dependency-watchdog/internal/test"
 	"k8s.io/client-go/kubernetes/scheme"
 
 	"github.com/go-logr/logr"
@@ -36,7 +36,7 @@ import (
 var (
 	secretPath            = filepath.Join("testdata", "secret.yaml")
 	kubeConfigPath        = filepath.Join("testdata", "kubeconfig.yaml")
-	envTest               test.ControllerTestEnv
+	envTest               testenv.ControllerTestEnv
 	sk8sClient            client.Client
 	sctx                  = context.Background()
 	secret                *corev1.Secret
@@ -55,12 +55,12 @@ func TestSuite(t *testing.T) {
 		{"kubeconfig not found", testConfigNotFound},
 		{"shootclient should be created", testCreateShootClient},
 	}
-	envTest, err = test.CreateDefaultControllerTestEnv(scheme.Scheme)
+	envTest, err = testenv.CreateDefaultControllerTestEnv(scheme.Scheme)
 	g.Expect(err).To(BeNil())
 	sk8sClient = envTest.GetClient()
-	for _, test := range tests {
-		t.Run(test.title, func(t *testing.T) {
-			test.run(t)
+	for _, entry := range tests {
+		t.Run(entry.title, func(t *testing.T) {
+			entry.run(t)
 		})
 	}
 	envTest.Delete()
@@ -91,7 +91,7 @@ func testCreateShootClient(t *testing.T) {
 	g := NewWithT(t)
 	teardown := setupShootClientTest(t)
 	defer teardown()
-	kubeconfig, err := test.ReadFile(kubeConfigPath)
+	kubeconfig, err := testenv.ReadFile(kubeConfigPath)
 	g.Expect(err).To(BeNil())
 	g.Expect(kubeconfig).ToNot(BeNil())
 	secret.Data = map[string][]byte{
@@ -108,8 +108,8 @@ func testCreateShootClient(t *testing.T) {
 func setupShootClientTest(t *testing.T) func() {
 	var err error
 	g := NewWithT(t)
-	test.FileExistsOrFail(secretPath)
-	secret, err = test.GetStructured[corev1.Secret](secretPath)
+	testenv.FileExistsOrFail(secretPath)
+	secret, err = testenv.GetStructured[corev1.Secret](secretPath)
 	g.Expect(err).To(BeNil())
 	g.Expect(secret).ToNot(BeNil())
 	clientCreator = NewShootClientCreator(sk8sClient)
