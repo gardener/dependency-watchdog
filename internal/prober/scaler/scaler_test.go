@@ -11,12 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+//go:build kind_tests
+
 package scaler
 
 import (
 	"context"
 	"fmt"
-
 	"reflect"
 	"testing"
 	"time"
@@ -51,7 +53,7 @@ const (
 
 func TestScalerSuite(t *testing.T) {
 	g := NewWithT(t)
-	tearDownScalerTests := setUpScalerEnvTests(g)
+	tearDownScalerTests := setUpScalerTests(g)
 	defer tearDownScalerTests(g)
 	tests := []struct {
 		title string
@@ -394,7 +396,7 @@ func testScaleUpShouldReturnErrorWhenReplicasAnnotationsHasInvalidValue(t *testi
 // utility methods to be used by tests
 // ------------------------------------------------------------------------------------------------------------------
 
-func setUpScalerEnvTests(g *WithT) func(g *WithT) {
+func setUpScalerTests(g *WithT) func(g *WithT) {
 	var err error
 	kindTestEnv, err = kind.CreateKindCluster(kind.KindConfig{Name: "scaler-test"})
 	g.Expect(err).To(BeNil())

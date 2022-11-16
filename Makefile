@@ -62,6 +62,10 @@ format:
 test: $(SETUP_ENVTEST)
 	@./hack/test.sh
 
+.PHONY: kind-tests
+kind-tests:
+	@./hack/kind-test.sh
+
 .PHONY: install-envtest
 install-envtest: $(SETUP_ENVTEST)
 	$(shell $(ENVTEST) --os $(go env GOOS) --arch $(go env GOARCH) --use-env use $(ENVTEST_K8S_VERSION) -p path)
