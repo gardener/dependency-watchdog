@@ -151,15 +151,15 @@ func TestUnchangedExternalErrorCountForIgnorableErrors(t *testing.T) {
 			config = createConfig(1, 2, metav1.Duration{Duration: 5 * time.Millisecond}, metav1.Duration{Duration: time.Microsecond}, 0.2)
 			runCounter := 0
 
-			msc.EXPECT().CreateClient(gomock.Any(), pLogger, gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).MinTimes(2).MaxTimes(4)
-			mki.EXPECT().Discovery().Return(mdi).AnyTimes().Times(4).MinTimes(2).MaxTimes(4)
+			msc.EXPECT().CreateClient(gomock.Any(), pLogger, gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).AnyTimes()
+			mki.EXPECT().Discovery().Return(mdi).AnyTimes()
 			mdi.EXPECT().ServerVersion().DoAndReturn(func() (*version.Info, error) {
 				runCounter++
 				if runCounter%2 == 1 {
 					return nil, nil
 				}
 				return nil, probeStatusEntry.err
-			}).MinTimes(2).MaxTimes(4)
+			}).AnyTimes()
 
 			runProberAndCheckStatus(t, 8*time.Millisecond, probeStatusEntry)
 		})
