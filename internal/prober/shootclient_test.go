@@ -19,6 +19,7 @@ package prober
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -48,35 +49,37 @@ func TestSuite(t *testing.T) {
 	var err error
 	g := NewWithT(t)
 	tests := []struct {
-		title string
-		run   func(t *testing.T)
+		name        string
+		description string
+		run         func(t *testing.T, namespace string)
 	}{
-		{"secret not found", testSecretNotFound},
-		{"kubeconfig not found", testConfigNotFound},
-		{"shootclient should be created", testCreateShootClient},
+		{"testSecretNotFound", "secret not found", testSecretNotFound},
+		{"testConfigNotFound", "kubeconfig not found", testConfigNotFound},
+		{"testCreateShootClient", "shootclient should be created", testCreateShootClient},
 	}
 	envTest, err = testenv.CreateDefaultControllerTestEnv(scheme.Scheme)
 	g.Expect(err).To(BeNil())
 	sk8sClient = envTest.GetClient()
-	for _, entry := range tests {
-		t.Run(entry.title, func(t *testing.T) {
-			entry.run(t)
+	for _, test := range tests {
+		ns := testenv.CreateTestNamespace(context.Background(), g, sk8sClient, strings.ToLower(test.name))
+		t.Run(test.description, func(t *testing.T) {
+			test.run(t, ns)
 		})
 	}
 	envTest.Delete()
 }
 
-func testSecretNotFound(t *testing.T) {
+func testSecretNotFound(t *testing.T, namespace string) {
 	g := NewWithT(t)
-	setupShootClientTest(t)
+	setupShootClientTest(t, namespace)
 	k8sInterface, err := clientCreator.CreateClient(sctx, shootClientTestLogger, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, time.Second)
 	g.Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	g.Expect(k8sInterface).To(BeNil())
 }
 
-func testConfigNotFound(t *testing.T) {
+func testConfigNotFound(t *testing.T, namespace string) {
 	g := NewWithT(t)
-	teardown := setupShootClientTest(t)
+	teardown := setupShootClientTest(t, namespace)
 	defer teardown()
 	err := sk8sClient.Create(sctx, secret)
 	g.Expect(err).To(BeNil())
@@ -87,9 +90,9 @@ func testConfigNotFound(t *testing.T) {
 
 }
 
-func testCreateShootClient(t *testing.T) {
+func testCreateShootClient(t *testing.T, namespace string) {
 	g := NewWithT(t)
-	teardown := setupShootClientTest(t)
+	teardown := setupShootClientTest(t, namespace)
 	defer teardown()
 	kubeconfig, err := testenv.ReadFile(kubeConfigPath)
 	g.Expect(err).To(BeNil())
@@ -105,11 +108,12 @@ func testCreateShootClient(t *testing.T) {
 	g.Expect(shootClient).ToNot(BeNil())
 }
 
-func setupShootClientTest(t *testing.T) func() {
+func setupShootClientTest(t *testing.T, namespace string) func() {
 	var err error
 	g := NewWithT(t)
 	testenv.FileExistsOrFail(secretPath)
 	secret, err = testenv.GetStructured[corev1.Secret](secretPath)
+	secret.ObjectMeta.Namespace = namespace
 	g.Expect(err).To(BeNil())
 	g.Expect(secret).ToNot(BeNil())
 	clientCreator = NewShootClientCreator(sk8sClient)

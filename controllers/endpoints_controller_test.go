@@ -140,7 +140,7 @@ func testWeederSharedEnvTest(t *testing.T) {
 
 	for _, test := range tests {
 		childCtx, chileCancelFn := context.WithCancel(ctx)
-		ns := createTestNamespace(childCtx, g, reconciler.Client, strings.ToLower(test.name))
+		ns := testenv.CreateTestNamespace(childCtx, g, reconciler.Client, strings.ToLower(test.name))
 		t.Run(test.description, func(t *testing.T) {
 			test.run(childCtx, chileCancelFn, g, reconciler, ns)
 		})
@@ -163,7 +163,7 @@ func testWeederDedicatedEnvTest(t *testing.T) {
 	for _, test := range tests {
 		ctx, cancelFn := context.WithCancel(context.Background())
 		testEnv, reconciler := setupWeederEnv(ctx, g, test.apiServerFlags)
-		ns := createTestNamespace(ctx, g, reconciler.Client, strings.ToLower(test.name))
+		ns := testenv.CreateTestNamespace(ctx, g, reconciler.Client, strings.ToLower(test.name))
 		t.Run(test.description, func(t *testing.T) {
 			test.run(ctx, cancelFn, g, reconciler, ns)
 		})
@@ -452,14 +452,4 @@ func turnEndpointToNotReady(ctx context.Context, g *WithT, client client.Client,
 		},
 	}
 	g.Expect(client.Update(ctx, epClone)).To(Succeed())
-}
-
-func createTestNamespace(ctx context.Context, g *WithT, cli client.Client, namePrefix string) string {
-	ns := v1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: namePrefix + "-",
-		},
-	}
-	g.Expect(cli.Create(ctx, &ns)).To(BeNil())
-	return ns.Name
 }

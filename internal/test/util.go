@@ -16,16 +16,21 @@ package test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"os"
 	"testing"
 
-	"github.com/onsi/gomega"
+	. "github.com/onsi/gomega"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/yaml"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // GetStructured reads the file present at the given filePath and returns a structured object based on the type T.
@@ -66,14 +71,14 @@ func GetUnstructured(filePath string) (*unstructured.Unstructured, error) {
 
 // ReadFile reads the file present at the given filePath and returns a byte Buffer containing its contents.
 func ReadFile(filePath string) (*bytes.Buffer, error) {
-	file, err := os.Open(filePath)
+	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = file.Close() }()
+	defer func() { _ = f.Close() }()
 
 	buff := new(bytes.Buffer)
-	_, err = buff.ReadFrom(file)
+	_, err = buff.ReadFrom(f)
 	if err != nil {
 		return nil, err
 	}
@@ -93,10 +98,21 @@ func FileExistsOrFail(filepath string) {
 
 // ValidateIfFileExists validates the existence of a file
 func ValidateIfFileExists(file string, t *testing.T) {
-	g := gomega.NewWithT(t)
+	g := NewWithT(t)
 	var err error
 	if _, err := os.Stat(file); errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("%s does not exist. This should not have happened. Check testdata directory.\n", file)
 	}
-	g.Expect(err).ToNot(gomega.HaveOccurred(), "File at path %v should exist")
+	g.Expect(err).ToNot(HaveOccurred(), "File at path %v should exist")
+}
+
+// CreateTestNamespace creates a namespace with the given namePrefix
+func CreateTestNamespace(ctx context.Context, g *WithT, cli client.Client, namePrefix string) string {
+	ns := corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: namePrefix + "-",
+		},
+	}
+	g.Expect(cli.Create(ctx, &ns)).To(BeNil())
+	return ns.Name
 }
