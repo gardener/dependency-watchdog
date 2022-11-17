@@ -57,6 +57,8 @@ For every change following make targets are recommended to run.
 # build the code changes
 > make build
 # ensure that all required checks pass
+> make verify # this will check formatting, linting and will run unit tests
+# if you do not wish to run tests then you can use the following make target.
 > make check
 ```
 All tests should be run and the test coverage should ideally not reduce. 
@@ -67,6 +69,7 @@ Before raising a pull request ensure that if you are introducing any new file th
 > make add-license-headers
 # This will add license headers to any file which does not already have it.
 ```
+> NOTE: Also have a look at the Makefile as it has other targets that are not mentioned here.
 
 ## Raising a Pull Request
 

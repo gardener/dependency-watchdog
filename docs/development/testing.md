@@ -61,9 +61,13 @@ These are the points to be followed while writing tests that use `Vanilla Kind C
 
 ## Run Tests
 
-To run all the tests, use the following Makefile target
+To run unit tests, use the following Makefile target
 ```shell
 make test
+```
+To run KIND cluster based tests, use the following Makefile target
+```shell
+make kind-tests # these tests will be slower as it brings up a vanilla KIND cluster
 ```
 To view coverage after running the tests, run :
 ```shell
