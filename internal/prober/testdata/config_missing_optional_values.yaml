@@ -1,0 +1,30 @@
+internalKubeConfigSecretName: "dws-interal-probe-secret"
+externalKubeConfigSecretName: "dwd-external-probe-secret"
+dependentResourceInfos:
+  - ref:
+      kind: "Deployment"
+      name: "kube-controller-manager"
+      apiVersion: "apps/v1"
+    shouldExist: true
+    scaleUp:
+      level: 0
+    scaleDown:
+      level: 1
+  - ref:
+      kind: "Deployment"
+      name: "machine-controller-manager"
+      apiVersion: "apps/v1"
+    shouldExist: true
+    scaleUp:
+      level: 1
+    scaleDown:
+      level: 0
+  - ref:
+      kind: "Deployment"
+      name: "cluster-autoscaler"
+      apiVersion: "apps/v1"
+    shouldExist: false
+    scaleUp:
+      level: 0
+    scaleDown:
+      level: 1

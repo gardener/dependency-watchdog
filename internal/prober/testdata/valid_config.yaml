@@ -1,0 +1,37 @@
+internalKubeConfigSecretName: "dws-interal-probe-secret"
+externalKubeConfigSecretName: "dwd-external-probe-secret"
+probeInterval: 30s
+initialDelay: 5s
+successThreshold: 1
+failureThreshold: 3
+internalProbeFailureBackoffDuration: 30s
+backOffJitterFactor: 0.2
+dependentResourceInfos:
+  - ref:
+      kind: "Deployment"
+      name: "kube-controller-manager"
+      apiVersion: "apps/v1"
+    shouldExist: true
+    scaleUp:
+      level: 0
+    scaleDown:
+      level: 1
+  - ref:
+      kind: "Deployment"
+      name: "machine-controller-manager"
+      apiVersion: "apps/v1"
+    shouldExist: true
+    scaleUp:
+      level: 1
+      initialDelay: 30s
+    scaleDown:
+      level: 0
+  - ref:
+      kind: "Deployment"
+      name: "cluster-autoscaler"
+      apiVersion: "apps/v1"
+    shouldExist: false
+    scaleUp:
+      level: 2
+    scaleDown:
+      level: 0

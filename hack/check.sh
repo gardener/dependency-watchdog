@@ -32,9 +32,17 @@ echo "> Check"
 echo "Executing golangci-lint"
 golangci-lint run $GOLANGCI_LINT_CONFIG_FILE --timeout 10m $@
 
+
+echo "Executing gomegacheck"
+# shellcheck disable=SC2068
+gomegacheck ${@:2}
+
+echo "Executing logcheck"
+# shellcheck disable=SC2068
+logcheck ${@:2}
+
 echo "Executing gofmt/goimports"
 folders=()
-# shellcheck disable=SC2068
 for f in $@; do
   folders+=( "$(echo $f | sed 's/\.\.\.//')" )
 done

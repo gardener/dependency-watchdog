@@ -1,0 +1,33 @@
+internalKubeConfigSecretName: ""
+externalKubeConfigSecretName: ""
+probeInterval: 20s
+initialDelay: 5s
+successThreshold: 1
+failureThreshold: 3
+internalProbeFailureBackoffDuration: 30s
+backOffJitterFactor: 0.2
+dependentResourceInfos:
+  - ref:
+      kind: "Deployment"
+      name: "kube-controller-manager"
+      apiVersion: "apps/v/1"
+  - ref:
+      kind: "Deployment"
+      name: "machine-controller-manager"
+      apiVersion: "apps/v1"
+    scaleUp:
+      level: 1
+      initialDelay: 10s
+      timeout: 60s
+    scaleDown:
+      level: 0
+      initialDelay: 15s
+      timeout: 45s
+  - ref:
+      kind: "Deployment"
+      name: "cluster-autoscaler"
+      apiVersion: "apps/v1"
+    scaleUp:
+      level: 0
+      initialDelay: 10s
+      timeout: 60s

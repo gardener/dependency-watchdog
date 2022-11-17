@@ -20,8 +20,6 @@ import "github.com/gardener/gardener/pkg/extensions"
 type Cluster = extensions.Cluster
 
 var (
-	// NewGardenDecoder returns a new Garden API decoder.
-	NewGardenDecoder = extensions.NewGardenDecoder
 	// GetCluster tries to read Gardener's Cluster extension resource in the given namespace.
 	GetCluster = extensions.GetCluster
 	// CloudProfileFromCluster returns the CloudProfile resource inside the Cluster resource.
@@ -32,4 +30,10 @@ var (
 	ShootFromCluster = extensions.ShootFromCluster
 	// GetShoot tries to read Gardener's Cluster extension resource in the given namespace and return the embedded Shoot resource.
 	GetShoot = extensions.GetShoot
+	// GetOwnerNameAndID reads the owner DNS name and ID from the owner DNSRecord extension resource in the given namespace.
+	GetOwnerNameAndID = extensions.GetOwnerNameAndID
+	// GenericTokenKubeconfigSecretNameFromCluster reads the generic-token-kubeconfig.secret.gardener.cloud/name annotation
+	// and returns its value. If the annotation is not present then it falls back to the deprecated
+	// SecretNameGenericTokenKubeconfig.
+	GenericTokenKubeconfigSecretNameFromCluster = extensions.GenericTokenKubeconfigSecretNameFromCluster
 )

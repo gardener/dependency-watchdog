@@ -16,15 +16,9 @@ package extensions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
-
-	"github.com/sirupsen/logrus"
-	autoscalingv1 "k8s.io/api/autoscaling/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
 	gardencorev1alpha1helper "github.com/gardener/gardener/pkg/apis/core/v1alpha1/helper"
@@ -38,6 +32,13 @@ import (
 	"github.com/gardener/gardener/pkg/utils/kubernetes/health"
 	unstructuredutils "github.com/gardener/gardener/pkg/utils/kubernetes/unstructured"
 	"github.com/gardener/gardener/pkg/utils/retry"
+
+	"github.com/go-logr/logr"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // TimeNow returns the current time. Exposed for testing.
@@ -49,7 +50,7 @@ var TimeNow = time.Now
 func WaitUntilExtensionObjectReady(
 	ctx context.Context,
 	c client.Client,
-	logger logrus.FieldLogger,
+	log logr.Logger,
 	obj extensionsv1alpha1.Object,
 	kind string,
 	interval time.Duration,
@@ -57,18 +58,7 @@ func WaitUntilExtensionObjectReady(
 	timeout time.Duration,
 	postReadyFunc func() error,
 ) error {
-	return WaitUntilObjectReadyWithHealthFunction(
-		ctx,
-		c,
-		logger,
-		health.CheckExtensionObject,
-		obj,
-		kind,
-		interval,
-		severeThreshold,
-		timeout,
-		postReadyFunc,
-	)
+	return WaitUntilObjectReadyWithHealthFunction(ctx, c, log, health.CheckExtensionObject, obj, kind, interval, severeThreshold, timeout, postReadyFunc)
 }
 
 // WaitUntilObjectReadyWithHealthFunction waits until the given object has become ready. It takes the health check
@@ -78,7 +68,7 @@ func WaitUntilExtensionObjectReady(
 func WaitUntilObjectReadyWithHealthFunction(
 	ctx context.Context,
 	c client.Client,
-	logger logrus.FieldLogger,
+	log logr.Logger,
 	healthFunc health.Func,
 	obj client.Object,
 	kind string,
@@ -104,17 +94,9 @@ func WaitUntilObjectReadyWithHealthFunction(
 		healthFunc = health.And(health.ObjectHasAnnotationWithValue(v1beta1constants.GardenerTimestamp, expectedTimestamp), healthFunc)
 	}
 
-	resetObj, err := kutil.CreateResetObjectFunc(obj, c.Scheme())
-	if err != nil {
-		return err
-	}
-
 	if err := retry.UntilTimeout(ctx, interval, timeout, func(ctx context.Context) (bool, error) {
 		retryCountUntilSevere++
 
-		resetObj()
-		obj.SetName(name)
-		obj.SetNamespace(namespace)
 		if err := c.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
 			if apierrors.IsNotFound(err) {
 				return retry.MinorError(err)
@@ -124,7 +106,8 @@ func WaitUntilObjectReadyWithHealthFunction(
 
 		if err := healthFunc(obj); err != nil {
 			lastObservedError = err
-			logger.WithError(err).Errorf("%s did not get ready yet", extensionKey(kind, namespace, name))
+			log.Error(err, "Object did not get ready yet")
+
 			if retry.IsRetriable(err) {
 				return retry.MinorOrSevereError(retryCountUntilSevere, int(severeThreshold.Nanoseconds()/interval.Nanoseconds()), err)
 			}
@@ -133,6 +116,7 @@ func WaitUntilObjectReadyWithHealthFunction(
 
 		if postReadyFunc != nil {
 			if err := postReadyFunc(); err != nil {
+				lastObservedError = err
 				return retry.SevereError(err)
 			}
 		}
@@ -141,9 +125,9 @@ func WaitUntilObjectReadyWithHealthFunction(
 	}); err != nil {
 		message := fmt.Sprintf("Error while waiting for %s to become ready", extensionKey(kind, namespace, name))
 		if lastObservedError != nil {
-			return fmt.Errorf("%s: %w", message, lastObservedError)
+			return gardencorev1beta1helper.NewErrorWithCodes(fmt.Errorf("%s: %w", message, lastObservedError), gardencorev1beta1helper.DeprecatedDetermineErrorCodes(lastObservedError)...)
 		}
-		return fmt.Errorf("%s: %w", message, err)
+		return gardencorev1beta1helper.NewErrorWithCodes(fmt.Errorf("%s: %w", message, err), gardencorev1beta1helper.DeprecatedDetermineErrorCodes(err)...)
 	}
 
 	return nil
@@ -168,7 +152,7 @@ func DeleteExtensionObject(
 	return client.IgnoreNotFound(c.Delete(ctx, obj, deleteOpts...))
 }
 
-// DeleteExtensionObjects lists all extension objects and loops over them. It executes the given <predicateFunc> for
+// DeleteExtensionObjects lists all extension objects and loops over them. It executes the given predicateFunc for
 // each of them, and if it evaluates to true then the object will be deleted.
 func DeleteExtensionObjects(
 	ctx context.Context,
@@ -179,12 +163,7 @@ func DeleteExtensionObjects(
 	deleteOpts ...client.DeleteOption,
 ) error {
 	fns, err := applyFuncToExtensionObjects(ctx, c, listObj, namespace, predicateFunc, func(ctx context.Context, obj extensionsv1alpha1.Object) error {
-		return DeleteExtensionObject(
-			ctx,
-			c,
-			obj,
-			deleteOpts...,
-		)
+		return DeleteExtensionObject(ctx, c, obj, deleteOpts...)
 	})
 	if err != nil {
 		return err
@@ -194,12 +173,13 @@ func DeleteExtensionObjects(
 }
 
 // WaitUntilExtensionObjectsDeleted lists all extension objects and loops over them. It executes the given
-// <predicateFunc> for each of them, and if it evaluates to true and the object is already marked for deletion,
-// then it waits for the object to be deleted.
+// predicateFunc for each of them, and if it evaluates to true, then it waits for the object to be deleted.
+// If the component needs to wait for a given subset of all extension objects to be deleted (e.g. after deleting
+// unwanted objects), it should pass a predicateFunc that filters objects to wait for by name.
 func WaitUntilExtensionObjectsDeleted(
 	ctx context.Context,
 	c client.Client,
-	logger logrus.FieldLogger,
+	log logr.Logger,
 	listObj client.ObjectList,
 	kind string,
 	namespace string,
@@ -207,32 +187,9 @@ func WaitUntilExtensionObjectsDeleted(
 	timeout time.Duration,
 	predicateFunc func(obj extensionsv1alpha1.Object) bool,
 ) error {
-	fns, err := applyFuncToExtensionObjects(
-		ctx,
-		c,
-		listObj,
-		namespace,
-		func(obj extensionsv1alpha1.Object) bool {
-			if obj.GetDeletionTimestamp() == nil {
-				return false
-			}
-			if predicateFunc != nil && !predicateFunc(obj) {
-				return false
-			}
-			return true
-		},
-		func(ctx context.Context, obj extensionsv1alpha1.Object) error {
-			return WaitUntilExtensionObjectDeleted(
-				ctx,
-				c,
-				logger,
-				obj,
-				kind,
-				interval,
-				timeout,
-			)
-		},
-	)
+	fns, err := applyFuncToExtensionObjects(ctx, c, listObj, namespace, predicateFunc, func(ctx context.Context, obj extensionsv1alpha1.Object) error {
+		return WaitUntilExtensionObjectDeleted(ctx, c, log, obj, kind, interval, timeout)
+	})
 	if err != nil {
 		return err
 	}
@@ -246,7 +203,7 @@ func WaitUntilExtensionObjectsDeleted(
 func WaitUntilExtensionObjectDeleted(
 	ctx context.Context,
 	c client.Client,
-	logger logrus.FieldLogger,
+	log logr.Logger,
 	obj extensionsv1alpha1.Object,
 	kind string,
 	interval time.Duration,
@@ -259,15 +216,7 @@ func WaitUntilExtensionObjectDeleted(
 		namespace = obj.GetNamespace()
 	)
 
-	resetObj, err := kutil.CreateResetObjectFunc(obj, c.Scheme())
-	if err != nil {
-		return err
-	}
-
 	if err := retry.UntilTimeout(ctx, interval, timeout, func(ctx context.Context) (bool, error) {
-		resetObj()
-		obj.SetName(name)
-		obj.SetNamespace(namespace)
 		if err := c.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
 			if apierrors.IsNotFound(err) {
 				return retry.Ok()
@@ -276,8 +225,8 @@ func WaitUntilExtensionObjectDeleted(
 		}
 
 		if lastErr := obj.GetExtensionStatus().GetLastError(); lastErr != nil {
-			logger.Errorf("%s did not get deleted yet, lastError is: %s", extensionKey(kind, namespace, name), lastErr.Description)
-			lastObservedError = gardencorev1beta1helper.NewErrorWithCodes(lastErr.Description, lastErr.Codes...)
+			log.Error(fmt.Errorf(lastErr.Description), "Object did not get deleted yet")
+			lastObservedError = gardencorev1beta1helper.NewErrorWithCodes(errors.New(lastErr.Description), lastErr.Codes...)
 		}
 
 		var message = fmt.Sprintf("%s is still present", extensionKey(kind, namespace, name))
@@ -288,9 +237,9 @@ func WaitUntilExtensionObjectDeleted(
 	}); err != nil {
 		message := fmt.Sprintf("Failed to delete %s", extensionKey(kind, namespace, name))
 		if lastObservedError != nil {
-			return fmt.Errorf("%s: %w", message, lastObservedError)
+			return gardencorev1beta1helper.NewErrorWithCodes(fmt.Errorf("%s: %w", message, lastObservedError), gardencorev1beta1helper.DeprecatedDetermineErrorCodes(lastObservedError)...)
 		}
-		return fmt.Errorf("%s: %w", message, err)
+		return gardencorev1beta1helper.NewErrorWithCodes(fmt.Errorf("%s: %w", message, err), gardencorev1beta1helper.DeprecatedDetermineErrorCodes(err)...)
 	}
 
 	return nil
@@ -337,7 +286,7 @@ func RestoreExtensionObjectState(
 			extensionStatus.SetResources(extensionResourceState.Resources)
 
 			if err := c.Status().Patch(ctx, extensionObj, patch); err != nil {
-				return err
+				return gardencorev1beta1helper.NewErrorWithCodes(err, gardencorev1beta1helper.DeprecatedDetermineErrorCodes(err)...)
 			}
 
 			for _, r := range extensionResourceState.Resources {
@@ -352,10 +301,10 @@ func RestoreExtensionObjectState(
 			if resourceData != nil {
 				obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&resourceData.Data)
 				if err != nil {
-					return err
+					return gardencorev1beta1helper.DeprecatedDetermineError(err)
 				}
 				if err := unstructuredutils.CreateOrPatchObjectByRef(ctx, c, &resourceRef, extensionObj.GetNamespace(), obj); err != nil {
-					return err
+					return gardencorev1beta1helper.DeprecatedDetermineError(err)
 				}
 			}
 		}
@@ -388,7 +337,7 @@ func MigrateExtensionObjects(
 		return err
 	}
 
-	return flow.Parallel(fns...)(ctx)
+	return gardencorev1beta1helper.DeprecatedDetermineError(flow.Parallel(fns...)(ctx))
 }
 
 // WaitUntilExtensionObjectMigrated waits until the migrate operation for the extension object is successful.
@@ -398,23 +347,11 @@ func WaitUntilExtensionObjectMigrated(
 	ctx context.Context,
 	c client.Client,
 	obj extensionsv1alpha1.Object,
+	kind string,
 	interval time.Duration,
 	timeout time.Duration,
 ) error {
-	var (
-		name      = obj.GetName()
-		namespace = obj.GetNamespace()
-	)
-
-	resetObj, err := kutil.CreateResetObjectFunc(obj, c.Scheme())
-	if err != nil {
-		return err
-	}
-
-	return retry.UntilTimeout(ctx, interval, timeout, func(ctx context.Context) (done bool, err error) {
-		resetObj()
-		obj.SetName(name)
-		obj.SetNamespace(namespace)
+	if err := retry.UntilTimeout(ctx, interval, timeout, func(ctx context.Context) (done bool, err error) {
 		if err := c.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
 			if client.IgnoreNotFound(err) == nil {
 				return retry.Ok()
@@ -430,12 +367,11 @@ func WaitUntilExtensionObjectMigrated(
 			}
 		}
 
-		var extensionType string
-		if extensionSpec := obj.GetExtensionSpec(); extensionSpec != nil {
-			extensionType = extensionSpec.GetExtensionType()
-		}
-		return retry.MinorError(fmt.Errorf("lastOperation for %s with name %s and type %s is not Migrate=Succeeded", obj.GetObjectKind().GroupVersionKind().Kind, name, extensionType))
-	})
+		return retry.MinorError(fmt.Errorf("error while waiting for %s to be successfully migrated", extensionKey(kind, obj.GetNamespace(), obj.GetName())))
+	}); err != nil {
+		return gardencorev1beta1helper.DeprecatedDetermineError(err)
+	}
+	return nil
 }
 
 // WaitUntilExtensionObjectsMigrated lists all extension objects of a given kind and waits until they are migrated.
@@ -443,24 +379,19 @@ func WaitUntilExtensionObjectsMigrated(
 	ctx context.Context,
 	c client.Client,
 	listObj client.ObjectList,
+	kind string,
 	namespace string,
 	interval time.Duration,
 	timeout time.Duration,
 ) error {
 	fns, err := applyFuncToExtensionObjects(ctx, c, listObj, namespace, nil, func(ctx context.Context, obj extensionsv1alpha1.Object) error {
-		return WaitUntilExtensionObjectMigrated(
-			ctx,
-			c,
-			obj,
-			interval,
-			timeout,
-		)
+		return WaitUntilExtensionObjectMigrated(ctx, c, obj, kind, interval, timeout)
 	})
 	if err != nil {
 		return err
 	}
 
-	return flow.Parallel(fns...)(ctx)
+	return gardencorev1beta1helper.DeprecatedDetermineError(flow.Parallel(fns...)(ctx))
 }
 
 // AnnotateObjectWithOperation annotates the object with the provided operation annotation value.

@@ -54,11 +54,11 @@ func (v withValue) MutateDeleteOptions(opts *DeleteOptions) {
 
 // MergeFuncs can be used modify the default merge functions for ApplyOptions:
 //
-// Apply(ctx, "chart", "my-ns", "my-release", MergeFuncs{
-// 		corev1.SchemeGroupVersion.WithKind("Service").GroupKind(): func(newObj, oldObj *unstructured.Unstructured) {
-// 			newObj.SetAnnotations(map[string]string{"foo":"bar"})
-// 		}
-// })
+//	Apply(ctx, "chart", "my-ns", "my-release", MergeFuncs{
+//			corev1.SchemeGroupVersion.WithKind("Service").GroupKind(): func(newObj, oldObj *unstructured.Unstructured) {
+//				newObj.SetAnnotations(map[string]string{"foo":"bar"})
+//			}
+//	})
 type MergeFuncs map[schema.GroupKind]MergeFunc
 
 // MutateApplyOptions applies this configuration to the given apply options.
@@ -108,6 +108,7 @@ type DeleteOptions struct {
 // TolerateErrorFunc is a function for which err is tolerated.
 type TolerateErrorFunc func(err error) bool
 
+// MutateDeleteOptions applies this configuration to the given delete options.
 func (t TolerateErrorFunc) MutateDeleteOptions(opts *DeleteOptions) {
 	if opts.TolerateErrorFuncs == nil {
 		opts.TolerateErrorFuncs = []TolerateErrorFunc{}
@@ -116,6 +117,7 @@ func (t TolerateErrorFunc) MutateDeleteOptions(opts *DeleteOptions) {
 	opts.TolerateErrorFuncs = append(opts.TolerateErrorFuncs, t)
 }
 
+// MutateDeleteManifestOptions applies this configuration to the given delete manifest options.
 func (t TolerateErrorFunc) MutateDeleteManifestOptions(opts *DeleteManifestOptions) {
 	if opts.TolerateErrorFuncs == nil {
 		opts.TolerateErrorFuncs = []TolerateErrorFunc{}

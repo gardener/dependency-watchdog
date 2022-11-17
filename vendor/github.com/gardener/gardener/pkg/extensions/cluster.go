@@ -16,26 +16,20 @@ package extensions
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/gardener/gardener/pkg/apis/core"
-	gardencoreinstall "github.com/gardener/gardener/pkg/apis/core/install"
+	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/controllerutils"
 	kutil "github.com/gardener/gardener/pkg/utils/kubernetes"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-var gardenScheme *runtime.Scheme
-
-func init() {
-	gardenScheme = runtime.NewScheme()
-	gardencoreinstall.Install(gardenScheme)
-}
 
 // SyncClusterResourceToSeed creates or updates the `extensions.gardener.cloud/v1alpha1.Cluster` resource in the seed
 // cluster by adding the shoot, seed, and cloudprofile specification.
@@ -114,23 +108,21 @@ type Cluster struct {
 }
 
 // GetCluster tries to read Gardener's Cluster extension resource in the given namespace.
-func GetCluster(ctx context.Context, c client.Client, namespace string) (*Cluster, error) {
+func GetCluster(ctx context.Context, c client.Reader, namespace string) (*Cluster, error) {
 	cluster := &extensionsv1alpha1.Cluster{}
 	if err := c.Get(ctx, kutil.Key(namespace), cluster); err != nil {
 		return nil, err
 	}
 
-	decoder := NewGardenDecoder()
-
-	cloudProfile, err := CloudProfileFromCluster(decoder, cluster)
+	cloudProfile, err := CloudProfileFromCluster(cluster)
 	if err != nil {
 		return nil, err
 	}
-	seed, err := SeedFromCluster(decoder, cluster)
+	seed, err := SeedFromCluster(cluster)
 	if err != nil {
 		return nil, err
 	}
-	shoot, err := ShootFromCluster(decoder, cluster)
+	shoot, err := ShootFromCluster(cluster)
 	if err != nil {
 		return nil, err
 	}
@@ -139,19 +131,16 @@ func GetCluster(ctx context.Context, c client.Client, namespace string) (*Cluste
 }
 
 // CloudProfileFromCluster returns the CloudProfile resource inside the Cluster resource.
-func CloudProfileFromCluster(decoder runtime.Decoder, cluster *extensionsv1alpha1.Cluster) (*gardencorev1beta1.CloudProfile, error) {
+func CloudProfileFromCluster(cluster *extensionsv1alpha1.Cluster) (*gardencorev1beta1.CloudProfile, error) {
 	var (
-		cloudProfileInternal = &core.CloudProfile{}
-		cloudProfile         = &gardencorev1beta1.CloudProfile{}
+		decoder      = kubernetes.GardenCodec.UniversalDeserializer()
+		cloudProfile = &gardencorev1beta1.CloudProfile{}
 	)
 
 	if cluster.Spec.CloudProfile.Raw == nil {
 		return nil, nil
 	}
-	if _, _, err := decoder.Decode(cluster.Spec.CloudProfile.Raw, nil, cloudProfileInternal); err != nil {
-		return nil, err
-	}
-	if err := gardenScheme.Convert(cloudProfileInternal, cloudProfile, nil); err != nil {
+	if _, _, err := decoder.Decode(cluster.Spec.CloudProfile.Raw, nil, cloudProfile); err != nil {
 		return nil, err
 	}
 
@@ -159,19 +148,16 @@ func CloudProfileFromCluster(decoder runtime.Decoder, cluster *extensionsv1alpha
 }
 
 // SeedFromCluster returns the Seed resource inside the Cluster resource.
-func SeedFromCluster(decoder runtime.Decoder, cluster *extensionsv1alpha1.Cluster) (*gardencorev1beta1.Seed, error) {
+func SeedFromCluster(cluster *extensionsv1alpha1.Cluster) (*gardencorev1beta1.Seed, error) {
 	var (
-		seedInternal = &core.Seed{}
-		seed         = &gardencorev1beta1.Seed{}
+		decoder = kubernetes.GardenCodec.UniversalDeserializer()
+		seed    = &gardencorev1beta1.Seed{}
 	)
 
 	if cluster.Spec.Seed.Raw == nil {
 		return nil, nil
 	}
-	if _, _, err := decoder.Decode(cluster.Spec.Seed.Raw, nil, seedInternal); err != nil {
-		return nil, err
-	}
-	if err := gardenScheme.Convert(seedInternal, seed, nil); err != nil {
+	if _, _, err := decoder.Decode(cluster.Spec.Seed.Raw, nil, seed); err != nil {
 		return nil, err
 	}
 
@@ -179,36 +165,73 @@ func SeedFromCluster(decoder runtime.Decoder, cluster *extensionsv1alpha1.Cluste
 }
 
 // ShootFromCluster returns the Shoot resource inside the Cluster resource.
-func ShootFromCluster(decoder runtime.Decoder, cluster *extensionsv1alpha1.Cluster) (*gardencorev1beta1.Shoot, error) {
+func ShootFromCluster(cluster *extensionsv1alpha1.Cluster) (*gardencorev1beta1.Shoot, error) {
 	var (
-		shootInternal = &core.Shoot{}
-		shoot         = &gardencorev1beta1.Shoot{}
+		decoder = kubernetes.GardenCodec.UniversalDeserializer()
+		shoot   = &gardencorev1beta1.Shoot{}
 	)
 
 	if cluster.Spec.Shoot.Raw == nil {
 		return nil, nil
 	}
-	if _, _, err := decoder.Decode(cluster.Spec.Shoot.Raw, nil, shootInternal); err != nil {
-		return nil, err
-	}
-	if err := gardenScheme.Convert(shootInternal, shoot, nil); err != nil {
+	if _, _, err := decoder.Decode(cluster.Spec.Shoot.Raw, nil, shoot); err != nil {
 		return nil, err
 	}
 
 	return shoot, nil
 }
 
+// GenericTokenKubeconfigSecretNameFromCluster reads the generic-token-kubeconfig.secret.gardener.cloud/name annotation
+// and returns its value. If the annotation is not present then it falls back to the deprecated
+// SecretNameGenericTokenKubeconfig.
+func GenericTokenKubeconfigSecretNameFromCluster(cluster *Cluster) string {
+	if v, ok := cluster.ObjectMeta.Annotations[v1beta1constants.AnnotationKeyGenericTokenKubeconfigSecretName]; ok {
+		return v
+	}
+	return v1beta1constants.SecretNameGenericTokenKubeconfig
+}
+
+// GetShootStateForCluster retrieves the ShootState and the Shoot resources for a given Cluster name by first fetching
+// the *extensionsv1alpha1.Cluster object in the seed, extracting the Shoot resource from it and then fetching the
+// *gardencorev1alpha1.ShootState resource from the garden.
+func GetShootStateForCluster(
+	ctx context.Context,
+	gardenClient client.Client,
+	seedClient client.Client,
+	clusterName string,
+) (
+	*gardencorev1alpha1.ShootState,
+	*gardencorev1beta1.Shoot,
+	error,
+) {
+	cluster := &extensionsv1alpha1.Cluster{}
+	if err := seedClient.Get(ctx, kutil.Key(clusterName), cluster); err != nil {
+		return nil, nil, err
+	}
+
+	shoot, err := ShootFromCluster(cluster)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if shoot == nil {
+		return nil, nil, fmt.Errorf("cluster resource %s doesn't contain shoot resource in raw format", cluster.Name)
+	}
+
+	shootState := &gardencorev1alpha1.ShootState{}
+	if err := gardenClient.Get(ctx, kutil.Key(shoot.Namespace, shoot.Name), shootState); err != nil {
+		return nil, nil, err
+	}
+
+	return shootState, shoot, nil
+}
+
 // GetShoot tries to read Gardener's Cluster extension resource in the given namespace and return the embedded Shoot resource.
-func GetShoot(ctx context.Context, c client.Client, namespace string) (*gardencorev1beta1.Shoot, error) {
+func GetShoot(ctx context.Context, c client.Reader, namespace string) (*gardencorev1beta1.Shoot, error) {
 	cluster := &extensionsv1alpha1.Cluster{}
 	if err := c.Get(ctx, kutil.Key(namespace), cluster); err != nil {
 		return nil, err
 	}
 
-	return ShootFromCluster(NewGardenDecoder(), cluster)
-}
-
-// NewGardenDecoder returns a new Garden API decoder.
-func NewGardenDecoder() runtime.Decoder {
-	return serializer.NewCodecFactory(gardenScheme).UniversalDecoder()
+	return ShootFromCluster(cluster)
 }

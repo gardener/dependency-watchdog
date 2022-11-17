@@ -1,0 +1,16 @@
+# missing 'podSelectors' field
+watchDuration: 1m20s
+servicesAndDependantSelectors:
+  etcd-main-client:
+  kube-apiserver:
+    podSelectors:
+      - matchExpressions:
+          - key: gardener.cloud/role
+            operator: In
+            values:
+              - controlplane
+          - key: role
+            operator: NotIn
+            values:
+              - main
+              - apiserver

@@ -1,31 +1,27 @@
-# Copyright (c) 2021 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 # This make file is supposed to be included in the top-level make file.
 
 TOOLS_DIR := hack/tools
-TOOLS_BIN_DIR              := $(TOOLS_DIR)/bin
-GOLANGCI_LINT              := $(TOOLS_BIN_DIR)/golangci-lint
-GO_VULN_CHECK              := $(TOOLS_BIN_DIR)/govulncheck
-GOIMPORTS                  := $(TOOLS_BIN_DIR)/goimports
-GINKGO                     := $(TOOLS_BIN_DIR)/ginkgo
+TOOLS_BIN_DIR     := $(TOOLS_DIR)/bin
+GOLANGCI_LINT     := $(TOOLS_BIN_DIR)/golangci-lint
+GO_VULN_CHECK     := $(TOOLS_BIN_DIR)/govulncheck
+GOIMPORTS         := $(TOOLS_BIN_DIR)/goimports
+GOMEGACHECK       := $(TOOLS_BIN_DIR)/gomegacheck.so # plugin binary
+LOGCHECK          := $(TOOLS_BIN_DIR)/logcheck.so # plugin binary
+GO_ADD_LICENSE    := $(TOOLS_BIN_DIR)/addlicense
+GO_IMPORT_BOSS    := $(TOOLS_BIN_DIR)/import-boss
+GO_STRESS         := $(TOOLS_BIN_DIR)/stress
+SETUP_ENVTEST     := $(TOOLS_BIN_DIR)/setup-envtest
 
 #default tool versions
 GOLANGCI_LINT_VERSION ?= v1.48.0
 GO_VULN_CHECK_VERSION ?= latest
 GOIMPORTS_VERSION ?= latest
-GINKGO_VERSION ?= v1.16.4
+GOMEGACHECK_VERSION ?= latest
+LOGCHECK_VERSION ?= latest
+GO_ADD_LICENSE_VERSION ?= latest
+GO_IMPORT_BOSS_VERSION ?= latest
+GO_STRESS_VERSION ?= latest
+SETUP_ENVTEST_VERSION ?= latest
 
 # add ./hack/tools/bin to the PATH
 export TOOLS_BIN_DIR := $(TOOLS_BIN_DIR)
@@ -42,5 +38,20 @@ $(GOLANGCI_LINT):
 $(GOIMPORTS):
 	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION)
 
-$(GINKGO):
-	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/onsi/ginkgo/ginkgo@$(GINKGO_VERSION)
+$(GOMEGACHECK):
+	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/gardener/gardener/hack/tools/gomegacheck@$(GOMEGACHECK_VERSION)
+
+$(LOGCHECK):
+	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/gardener/gardener/hack/tools/logcheck@$(LOGCHECK_VERSION)
+
+$(GO_ADD_LICENSE):
+    GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/google/addlicense@$(GO_ADD_LICENSE_VERSION)
+
+$(GO_IMPORT_BOSS):
+	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install k8s.io/code-generator/cmd/import-boss@$(GO_IMPORT_BOSS_VERSION)
+
+$(GO_STRESS):
+	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install golang.org/x/tools/cmd/stress@$(GO_STRESS_VERSION)
+
+$(SETUP_ENVTEST):
+	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@$(SETUP_ENVTEST_VERSION)

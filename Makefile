@@ -11,6 +11,7 @@ BIN_DIR             := bin
 # Tools
 TOOLS_DIR := hack/tools
 include hack/tools.mk
+ENVTEST   := $(TOOLS_BIN_DIR)/setup-envtest
 
 .PHONY: revendor
 revendor:
@@ -49,16 +50,37 @@ clean:
 	@rm -rf $(TOOLS_BIN_DIR)
 
 .PHONY: check
-check: $(GOIMPORTS) $(GOLANGCI_LINT)
-	@./hack/check.sh --golangci-lint-config=./.golangci.yaml ./cmd/... ./pkg/...
+check: $(GOIMPORTS) $(GOLANGCI_LINT) $(GOMEGACHECK) $(LOGCHECK) $(GO_IMPORT_BOSS)
+	@./hack/check.sh --golangci-lint-config=./.golangci.yaml ./controllers/... ./internal/...
+	@./hack/check-imports.sh ./api/... ./cmd/... ./controllers/... ./internal/...
 
 .PHONY: format
 format:
-	@./hack/format.sh ./cmd ./pkg
+	@./hack/format.sh ./controllers ./internal
 
 .PHONY: test
-test: $(GINKGO)
-	@.ci/test
+test: $(SETUP_ENVTEST)
+	@./hack/test.sh
+
+.PHONY: kind-tests
+kind-tests:
+	@./hack/kind-test.sh
+
+.PHONY: install-envtest
+install-envtest: $(SETUP_ENVTEST)
+	$(shell $(ENVTEST) --os $(go env GOOS) --arch $(go env GOARCH) --use-env use $(ENVTEST_K8S_VERSION) -p path)
 
 .PHONY: verify
 verify: check format test
+
+.PHONY: add-license-headers
+add-license-headers: $(GO_ADD_LICENSE)
+	@./hack/addlicenseheaders.sh
+
+# Taken this trick from https://pawamoy.github.io/posts/pass-makefile-args-as-typed-in-command-line/
+args = $(foreach a,$($(subst -,_,$1)_args),$(if $(value $a),$a="$($a)"))
+stress_args = test-package test-func tool-params
+
+.PHONY: stress
+stress: $(GO_STRESS)
+	@./hack/stress-test.sh $@ $(call args,$@)

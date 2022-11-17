@@ -17,23 +17,11 @@ package kubernetes
 import (
 	"context"
 
-	"github.com/gardener/gardener/pkg/chartrenderer"
-	gardencoreclientset "github.com/gardener/gardener/pkg/client/core/clientset/versioned"
-	gardencorescheme "github.com/gardener/gardener/pkg/client/core/clientset/versioned/scheme"
-	gardenextensionsscheme "github.com/gardener/gardener/pkg/client/extensions/clientset/versioned/scheme"
-	gardenoperationsclientset "github.com/gardener/gardener/pkg/client/operations/clientset/versioned"
-	gardenoperationsscheme "github.com/gardener/gardener/pkg/client/operations/clientset/versioned/scheme"
-	gardenseedmanagementclientset "github.com/gardener/gardener/pkg/client/seedmanagement/clientset/versioned"
-	gardenseedmanagementscheme "github.com/gardener/gardener/pkg/client/seedmanagement/clientset/versioned/scheme"
-	gardensettingsscheme "github.com/gardener/gardener/pkg/client/settings/clientset/versioned/scheme"
-
 	druidv1alpha1 "github.com/gardener/etcd-druid/api/v1alpha1"
-	dnsv1alpha1 "github.com/gardener/external-dns-management/pkg/apis/dns/v1alpha1"
-	resourcesscheme "github.com/gardener/gardener-resource-manager/api/resources/v1alpha1"
 	hvpav1alpha1 "github.com/gardener/hvpa-controller/api/v1alpha1"
+	volumesnapshotv1beta1 "github.com/kubernetes-csi/external-snapshotter/v2/pkg/apis/volumesnapshot/v1beta1"
 	istionetworkingv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istionetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
-	apiextensionsclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apiextensionsscheme "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -42,14 +30,22 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/version"
-	autoscalingscheme "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1beta2"
+	vpaautoscalingv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	kubernetesclientset "k8s.io/client-go/kubernetes"
-	corescheme "k8s.io/client-go/kubernetes/scheme"
+	kubernetesscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	apiregistrationclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	apiregistrationscheme "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/scheme"
+	metricsv1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	gardenercoreinstall "github.com/gardener/gardener/pkg/apis/core/install"
+	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	gardenoperationsinstall "github.com/gardener/gardener/pkg/apis/operations/install"
+	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
+	gardenseedmanagementinstall "github.com/gardener/gardener/pkg/apis/seedmanagement/install"
+	gardensettingsinstall "github.com/gardener/gardener/pkg/apis/settings/install"
+	"github.com/gardener/gardener/pkg/chartrenderer"
 )
 
 var (
@@ -59,8 +55,6 @@ var (
 	SeedScheme = runtime.NewScheme()
 	// ShootScheme is the scheme used in the Shoot cluster.
 	ShootScheme = runtime.NewScheme()
-	// PlantScheme is the scheme used in the Plant cluster
-	PlantScheme = runtime.NewScheme()
 
 	// DefaultDeleteOptions use foreground propagation policy and grace period of 60 seconds.
 	DefaultDeleteOptions = []client.DeleteOption{
@@ -72,6 +66,9 @@ var (
 		client.PropagationPolicy(metav1.DeletePropagationBackground),
 		client.GracePeriodSeconds(0),
 	}
+
+	// GardenCodec is a codec factory using the Garden scheme.
+	GardenCodec = serializer.NewCodecFactory(GardenScheme)
 
 	// SeedSerializer is a YAML serializer using the Seed scheme.
 	SeedSerializer = json.NewSerializerWithOptions(json.DefaultMetaFactory, SeedScheme, SeedScheme, json.SerializerOptions{Yaml: true, Pretty: false, Strict: false})
@@ -95,21 +92,20 @@ func DefaultUpdateOptions() metav1.UpdateOptions { return metav1.UpdateOptions{}
 
 func init() {
 	gardenSchemeBuilder := runtime.NewSchemeBuilder(
-		corescheme.AddToScheme,
-		gardencorescheme.AddToScheme,
-		gardenseedmanagementscheme.AddToScheme,
-		gardensettingsscheme.AddToScheme,
-		gardenoperationsscheme.AddToScheme,
+		kubernetesscheme.AddToScheme,
+		gardenercoreinstall.AddToScheme,
+		gardenseedmanagementinstall.AddToScheme,
+		gardensettingsinstall.AddToScheme,
+		gardenoperationsinstall.AddToScheme,
 		apiregistrationscheme.AddToScheme,
 	)
 	utilruntime.Must(gardenSchemeBuilder.AddToScheme(GardenScheme))
 
 	seedSchemeBuilder := runtime.NewSchemeBuilder(
-		corescheme.AddToScheme,
-		dnsv1alpha1.AddToScheme,
-		gardenextensionsscheme.AddToScheme,
-		resourcesscheme.AddToScheme,
-		autoscalingscheme.AddToScheme,
+		kubernetesscheme.AddToScheme,
+		extensionsv1alpha1.AddToScheme,
+		resourcesv1alpha1.AddToScheme,
+		vpaautoscalingv1.AddToScheme,
 		hvpav1alpha1.AddToScheme,
 		druidv1alpha1.AddToScheme,
 		apiextensionsscheme.AddToScheme,
@@ -119,18 +115,14 @@ func init() {
 	utilruntime.Must(seedSchemeBuilder.AddToScheme(SeedScheme))
 
 	shootSchemeBuilder := runtime.NewSchemeBuilder(
-		corescheme.AddToScheme,
+		kubernetesscheme.AddToScheme,
 		apiextensionsscheme.AddToScheme,
 		apiregistrationscheme.AddToScheme,
-		autoscalingscheme.AddToScheme,
+		vpaautoscalingv1.AddToScheme,
+		metricsv1beta1.AddToScheme,
+		volumesnapshotv1beta1.AddToScheme,
 	)
 	utilruntime.Must(shootSchemeBuilder.AddToScheme(ShootScheme))
-
-	plantSchemeBuilder := runtime.NewSchemeBuilder(
-		corescheme.AddToScheme,
-		gardencorescheme.AddToScheme,
-	)
-	utilruntime.Must(plantSchemeBuilder.AddToScheme(PlantScheme))
 }
 
 // MergeFunc determines how oldOj is merged into new oldObj.
@@ -171,15 +163,6 @@ type Interface interface {
 	ChartApplier() ChartApplier
 
 	Kubernetes() kubernetesclientset.Interface
-	GardenCore() gardencoreclientset.Interface
-	GardenSeedManagement() gardenseedmanagementclientset.Interface
-	GardenOperations() gardenoperationsclientset.Interface
-	APIExtension() apiextensionsclientset.Interface
-	APIRegistration() apiregistrationclientset.Interface
-
-	// Deprecated: Use `Client()` and utils instead.
-	ForwardPodPort(string, string, int, int) (chan struct{}, error)
-	CheckForwardPodPort(string, string, int, int) error
 
 	// Version returns the server version of the targeted Kubernetes cluster.
 	Version() string

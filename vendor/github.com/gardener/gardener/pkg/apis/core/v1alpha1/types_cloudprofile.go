@@ -121,6 +121,9 @@ type MachineImageVersion struct {
 	// CRI list of supported container runtime and interfaces supported by this version
 	// +optional
 	CRI []CRI `json:"cri,omitempty" protobuf:"bytes,2,rep,name=cri"`
+	// Architectures is the list of CPU architectures of the machine image in this version.
+	// +optional
+	Architectures []string `json:"architectures,omitempty" protobuf:"bytes,3,opt,name=architectures"`
 }
 
 // ExpirableVersion contains a version and an expiration date.
@@ -151,6 +154,9 @@ type MachineType struct {
 	// Usable defines if the machine type can be used for shoot clusters.
 	// +optional
 	Usable *bool `json:"usable,omitempty" protobuf:"varint,6,opt,name=usable"`
+	// Architecture is the CPU architecture of this machine type.
+	// +optional
+	Architecture *string `json:"architecture,omitempty" protobuf:"bytes,7,opt,name=architecture"`
 }
 
 // MachineTypeStorage is the amount of storage associated with the root volume of this machine type.
@@ -217,7 +223,7 @@ const (
 	VolumeClassPremium string = "premium"
 )
 
-// VersionClassification is the logical state of a version according to https://github.com/gardener/gardener/blob/master/docs/operations/versioning.md
+// VersionClassification is the logical state of a version.
 type VersionClassification string
 
 const (
@@ -225,7 +231,7 @@ const (
 	// ClassificationPreview versions will not be considered for automatic Kubernetes and Machine Image patch version updates.
 	ClassificationPreview VersionClassification = "preview"
 	// ClassificationSupported indicates that a patch version is the recommended version for a shoot.
-	// Using VersionMaintenance (see: https://github.com/gardener/gardener/docs/operation/versioning.md) there is one supported version per maintained minor version.
+	// Only one "supported" version is allowed per minor version.
 	// Supported versions are eligible for the automated Kubernetes and Machine image patch version update for shoot clusters in Gardener.
 	ClassificationSupported VersionClassification = "supported"
 	// ClassificationDeprecated indicates that a patch version should not be used anymore, should be updated to a new version

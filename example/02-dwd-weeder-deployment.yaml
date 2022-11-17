@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dependency-watchdog-weeder
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dependency-watchdog-weeder
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: dependency-watchdog-weeder
+    spec:
+      containers:
+        - command:
+            - /dependency-watchdog
+            - weeder # command to run. (prober or weeder)
+            - --config-file=/etc/dependency-watchdog/config/dep-config.yaml # location of the weeder config.
+            - --kube-api-qps=20.0 # Optional parameter. Default Value is 5.0. Maximum QPS (queries per second) allowed from the client to the API server
+            - --kube-api-burst=100 # Optional parameter.Default Value is 10. Maximum burst to throttle the calls to the API server
+            - --zap-log-level=DEBUG # Optional parameter. Default Value is INFO.
+            - --concurrent-reconciles=1 # Optional parameter. Default value is 1. Maximum number of concurrent reconciles
+            # Leader election and other related flags can be checked out inside "weeder.go" in the "cmd" package
+          image: <dwd image name>
+          imagePullPolicy: IfNotPresent
+          name: dependency-watchdog
+          ports:
+            - containerPort: 9643
+              name: metrics
+              protocol: TCP
+          resources:
+            limits:
+              memory: 512Mi
+            requests:
+              cpu: 200m
+              memory: 256Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /etc/dependency-watchdog/config
+              name: config
+              readOnly: true
+      dnsPolicy: ClusterFirst
+      priorityClassName: gardener-system-800
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      serviceAccountName: dependency-watchdog-weeder
+      terminationGracePeriodSeconds: 5
+      volumes:
+        - configMap:
+            defaultMode: 420
+            name: dependency-watchdog-weeder-config # config map containing the weeder config.
+          name: config

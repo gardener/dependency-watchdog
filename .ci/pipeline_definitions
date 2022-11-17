@@ -11,10 +11,6 @@ dependency-watchdog:
           'inject-commit-hash'
         inject_effective_version: true
       publish:
-        oci-builder: docker-buildx
-        platforms:
-        - linux/amd64
-        - linux/arm64
         dockerimages:
           dependency-watchdog:
             registry: 'gcr-readwrite'
@@ -27,11 +23,11 @@ dependency-watchdog:
                 build: ~
     steps:
       check:
-        image: 'golang:1.17.12'
+        image: 'golang:1.19.2'
       test:
-        image: 'golang:1.17.12'
+        image: 'golang:1.19.2'
       build:
-        image: 'golang:1.17.12'
+        image: 'golang:1.19.2'
         output_dir: 'binary'
 
   jobs:

@@ -1,0 +1,25 @@
+watchDuration: 2m11s
+servicesAndDependantSelectors:
+  etcd-main-client:
+    podSelectors:
+      - matchExpressions:
+          - key: gardener.cloud/role
+            operator: In
+            values:
+              - controlplane
+          - key: role
+            operator: In
+            values:
+              - apiserver
+  kube-apiserver:
+    podSelectors:
+      - matchExpressions:
+          - key: gardener.cloud/role
+            operator: In
+            values:
+              - controlplane
+          - key: role
+            operator: NotIn
+            values:
+              - main
+              - apiserver

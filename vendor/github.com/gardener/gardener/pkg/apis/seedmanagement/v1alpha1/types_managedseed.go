@@ -64,6 +64,7 @@ type ManagedSeedTemplate struct {
 // ManagedSeedSpec is the specification of a ManagedSeed.
 type ManagedSeedSpec struct {
 	// Shoot references a Shoot that should be registered as Seed.
+	// This field is immutable.
 	// +optional
 	Shoot *Shoot `json:"shoot,omitempty" protobuf:"bytes,1,opt,name=shoot"`
 	// SeedTemplate is a template for a Seed object, that should be used to register a given cluster as a Seed.
@@ -95,10 +96,11 @@ type Gardenlet struct {
 	// Bootstrap is the mechanism that should be used for bootstrapping gardenlet connection to the Garden cluster. One of ServiceAccount, BootstrapToken, None.
 	// If set to ServiceAccount or BootstrapToken, a service account or a bootstrap token will be created in the garden cluster and used to compute the bootstrap kubeconfig.
 	// If set to None, the gardenClientConnection.kubeconfig field will be used to connect to the Garden cluster. Defaults to BootstrapToken.
+	// This field is immutable.
 	// +optional
 	Bootstrap *Bootstrap `json:"bootstrap,omitempty" protobuf:"bytes,3,opt,name=bootstrap"`
 	// MergeWithParent specifies whether the GardenletConfiguration of the parent gardenlet
-	// should be merged with the specified GardenletConfiguration. Defaults to true.
+	// should be merged with the specified GardenletConfiguration. Defaults to true. This field is immutable.
 	// +optional
 	MergeWithParent *bool `json:"mergeWithParent,omitempty" protobuf:"varint,4,opt,name=mergeWithParent"`
 }
@@ -109,7 +111,7 @@ type GardenletDeployment struct {
 	// ReplicaCount is the number of gardenlet replicas. Defaults to 1.
 	// +optional
 	ReplicaCount *int32 `json:"replicaCount,omitempty" protobuf:"varint,1,opt,name=replicaCount"`
-	// RevisionHistoryLimit is the number of old gardenlet ReplicaSets to retain to allow rollback. Defaults to 1.
+	// RevisionHistoryLimit is the number of old gardenlet ReplicaSets to retain to allow rollback. Defaults to 10.
 	// +optional
 	RevisionHistoryLimit *int32 `json:"revisionHistoryLimit,omitempty" protobuf:"varint,2,opt,name=revisionHistoryLimit"`
 	// ServiceAccountName is the name of the ServiceAccount to use to run gardenlet pods.
@@ -139,6 +141,10 @@ type GardenletDeployment struct {
 	// VPA specifies whether to enable VPA for gardenlet. Defaults to true.
 	// +optional
 	VPA *bool `json:"vpa,omitempty" protobuf:"bytes,11,rep,name=vpa"`
+	// FailureToleranceType determines how gardenlet replicas are spread across the failure domains, possible values are either `node` or `zone`.
+	// Please make sure to adjust the replicaCount accordingly if you intend to run an HA setup for gardenlet.
+	// +optional
+	FailureToleranceType *gardencorev1beta1.FailureToleranceType `json:"failureToleranceType,omitempty" protobuf:"bytes,12,opt,name=failureToleranceType"`
 }
 
 // Image specifies container image parameters.
