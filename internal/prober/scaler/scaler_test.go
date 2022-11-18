@@ -317,10 +317,11 @@ func testScalingWhenKindOfResourceIsInvalid(t *testing.T) {
 	t.Log("scaling when res has invalid kind test finished")
 }
 
+// TODO: (rishabh-11) Move this test to use a fake client.
 func testWaitTillMinTargetReplicasReachedReturnsError(t *testing.T) {
 	g := NewWithT(t)
 	probeCfg := createProbeConfig(nil)
-	ds := createScaler(g, probeCfg, 2*time.Millisecond, 1*time.Millisecond, 1*time.Millisecond)
+	ds := createScaler(g, probeCfg, 0*time.Millisecond, 1*time.Millisecond, 1*time.Millisecond)
 
 	table := []struct {
 		mcmReplicas               int32
