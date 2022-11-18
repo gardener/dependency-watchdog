@@ -35,11 +35,11 @@ type Config struct {
 	SuccessThreshold *int `json:"successThreshold,omitempty"`
 	// FailureThreshold is the number of consecutive times a probe is unsuccessful to ascertain that the probe is unhealthy
 	FailureThreshold *int `json:"failureThreshold,omitempty"`
-	// InternalProbeFailureBackoffDuration backoff duration if the internal probe is unhealthy, before attempting again
+	// InternalProbeFailureBackoffDuration is the backoff duration if the internal probe is unhealthy, before reattempting the internal probe
 	InternalProbeFailureBackoffDuration *metav1.Duration `json:"internalProbeFailureBackoffDuration,omitempty"`
-	// BackoffJitterFactor jitter with which a probe is run
+	// BackoffJitterFactor is the jitter with which a probe is run
 	BackoffJitterFactor *float64 `json:"backoffJitterFactor,omitempty"`
-	// DependentResourceInfos dependent resources that should be considered for scaling in case the shoot control API server cannot be reached via external domain
+	// DependentResourceInfos are the dependent resources that should be considered for scaling in case the shoot control API server cannot be reached via external domain
 	DependentResourceInfos []DependentResourceInfo `json:"dependentResourceInfos"`
 }
 
@@ -47,8 +47,8 @@ type Config struct {
 type DependentResourceInfo struct {
 	// Ref identifies a resource
 	Ref *autoscalingv1.CrossVersionObjectReference `json:"ref"`
-	// ShouldExist should be true if this resource should be present. If the resource is optional then it should be false.
-	ShouldExist *bool `json:"shouldExist"`
+	// Optional should be true if this resource should be present. If the resource is optional then it should be false.
+	Optional *bool `json:"optional"`
 	// ScaleUpInfo captures the configuration to scale up the resource identified by Ref
 	ScaleUpInfo *ScaleInfo `json:"scaleUp,omitempty"`
 	// ScaleDownInfo captures the configuration to scale down the resource identified by Ref

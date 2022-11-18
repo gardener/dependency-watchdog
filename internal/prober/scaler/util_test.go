@@ -31,9 +31,9 @@ import (
 func TestCreateScaleUpResourceInfos(t *testing.T) {
 	g := NewWithT(t)
 	var depResInfos []papi.DependentResourceInfo
-	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(mcmObjectRef.Name, 1, 0, nil, nil, true))
-	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(caObjectRef.Name, 1, 0, nil, nil, true))
-	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(kcmObjectRef.Name, 0, 1, nil, nil, true))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(mcmObjectRef.Name, 1, 0, nil, nil, false))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(caObjectRef.Name, 1, 0, nil, nil, false))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(kcmObjectRef.Name, 0, 1, nil, nil, false))
 
 	resInfos := createScalableResourceInfos(scaleUp, depResInfos)
 	g.Expect(resInfos).To(HaveLen(len(depResInfos)))
@@ -53,9 +53,9 @@ func TestCreateScaleDownResourceInfos(t *testing.T) {
 		timeout      = 20 * time.Second
 		initialDelay = 45 * time.Second
 	)
-	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(mcmObjectRef.Name, 1, 0, pointer.Duration(timeout), pointer.Duration(initialDelay), true))
-	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(caObjectRef.Name, 1, 0, pointer.Duration(timeout), pointer.Duration(initialDelay), true))
-	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(kcmObjectRef.Name, 0, 1, pointer.Duration(timeout), pointer.Duration(initialDelay), true))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(mcmObjectRef.Name, 1, 0, pointer.Duration(timeout), pointer.Duration(initialDelay), false))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(caObjectRef.Name, 1, 0, pointer.Duration(timeout), pointer.Duration(initialDelay), false))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(kcmObjectRef.Name, 0, 1, pointer.Duration(timeout), pointer.Duration(initialDelay), false))
 
 	resInfos := createScalableResourceInfos(scaleDown, depResInfos)
 	g.Expect(resInfos).To(HaveLen(len(depResInfos)))

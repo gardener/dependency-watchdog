@@ -36,9 +36,9 @@ var flowTestLogger logr.Logger
 func TestCreateScaleUpSequentialFlow(t *testing.T) {
 	g := NewWithT(t)
 	var depResInfos []papi.DependentResourceInfo
-	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(kcmObjectRef.Name, 0, 2, nil, nil, true))
-	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(mcmObjectRef.Name, 1, 1, nil, nil, true))
-	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(caObjectRef.Name, 2, 0, nil, nil, true))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(kcmObjectRef.Name, 0, 2, nil, nil, false))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(mcmObjectRef.Name, 1, 1, nil, nil, false))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(caObjectRef.Name, 2, 0, nil, nil, false))
 
 	expectedScaleUpResNames := []string{kcmObjectRef.Name, mcmObjectRef.Name, caObjectRef.Name}
 	flowName := "testCreateSequentialFlow"
@@ -70,9 +70,9 @@ func TestCreateScaleUpSequentialFlow(t *testing.T) {
 func TestCreateScaleDownSequentialAndConcurrentFlow(t *testing.T) {
 	g := NewWithT(t)
 	var depResInfos []papi.DependentResourceInfo
-	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(kcmObjectRef.Name, 0, 1, nil, nil, true))
-	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(mcmObjectRef.Name, 1, 0, nil, nil, true))
-	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(caObjectRef.Name, 2, 0, nil, nil, true))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(kcmObjectRef.Name, 0, 1, nil, nil, false))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(mcmObjectRef.Name, 1, 0, nil, nil, false))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(caObjectRef.Name, 2, 0, nil, nil, false))
 
 	expectedScaleUpResNames := map[int][]string{0: {mcmObjectRef.Name, caObjectRef.Name}, 1: {kcmObjectRef.Name}}
 	flowName := "testCreateSequentialAndConcurrentFlow"

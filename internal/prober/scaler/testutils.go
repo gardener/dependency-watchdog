@@ -39,7 +39,7 @@ var (
 	caObjectRef  = autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "cluster-autoscaler", APIVersion: "apps/v1"}
 )
 
-func createTestDeploymentDependentResourceInfo(name string, scaleUpLevel, scaleDownLevel int, timeout *time.Duration, initialDelay *time.Duration, shouldExist bool) papi.DependentResourceInfo {
+func createTestDeploymentDependentResourceInfo(name string, scaleUpLevel, scaleDownLevel int, timeout *time.Duration, initialDelay *time.Duration, optional bool) papi.DependentResourceInfo {
 	if timeout == nil {
 		timeout = pointer.Duration(defaultTimeout)
 	}
@@ -47,8 +47,8 @@ func createTestDeploymentDependentResourceInfo(name string, scaleUpLevel, scaleD
 		initialDelay = pointer.Duration(defaultInitialDelay)
 	}
 	return papi.DependentResourceInfo{
-		Ref:         &autoscalingv1.CrossVersionObjectReference{Name: name, Kind: deploymentKind, APIVersion: deploymentAPIVersion},
-		ShouldExist: &shouldExist,
+		Ref:      &autoscalingv1.CrossVersionObjectReference{Name: name, Kind: deploymentKind, APIVersion: deploymentAPIVersion},
+		Optional: &optional,
 		ScaleUpInfo: &papi.ScaleInfo{
 			Level:        scaleUpLevel,
 			InitialDelay: &metav1.Duration{Duration: *initialDelay},

@@ -54,7 +54,7 @@ dependentResourceInfos:
       kind: "Deployment"
       name: "kube-controller-manager"
       apiVersion: "apps/v1"
-    shouldExist: true
+    optional: false
     scaleUp:
       level: 1
     scaleDown:
@@ -63,7 +63,7 @@ dependentResourceInfos:
       kind: "Deployment"
       name: "machine-controller-manager"
       apiVersion: "apps/v1"
-    shouldExist: true
+    optional: false
     scaleUp:
       level: 2
       initialDelay: 30s
@@ -73,7 +73,7 @@ dependentResourceInfos:
       kind: "Deployment"
       name: "cluster-autoscaler"
       apiVersion: "apps/v1"
-    shouldExist: false
+    optional: true
     scaleUp:
       level: 0
     scaleDown:
