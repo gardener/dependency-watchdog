@@ -24,7 +24,7 @@ dependency-watchdog:
     steps:
       check:
         image: 'golang:1.19.2'
-      test:
+      test-unit:
         image: 'golang:1.19.2'
       build:
         image: 'golang:1.19.2'
@@ -35,9 +35,6 @@ dependency-watchdog:
       traits:
         component_descriptor: ~
         draft_release: ~
-    pull-request:
-      traits:
-        pull-request: ~
     release:
       traits:
         version:

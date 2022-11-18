@@ -37,7 +37,7 @@ func ReadyEndpoints(logger logr.Logger) predicate.Predicate {
 				return true
 			}
 		}
-		log.Info("Endpoint does not have any IP address. Skipping processing this endpoint.", "namespace", ep.Namespace, "endpoint", ep.Name)
+		log.Info("Endpoint does not have any IP address. Skipping processing this endpoint", "namespace", ep.Namespace, "endpoint", ep.Name)
 		return false
 	}
 

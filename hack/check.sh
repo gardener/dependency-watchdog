@@ -35,11 +35,11 @@ golangci-lint run $GOLANGCI_LINT_CONFIG_FILE --timeout 10m $@
 
 echo "Executing gomegacheck"
 # shellcheck disable=SC2068
-gomegacheck ${@:2}
+gomegacheck ${@:1}
 
 echo "Executing logcheck"
 # shellcheck disable=SC2068
-logcheck ${@:2}
+logcheck ${@:1}
 
 echo "Executing gofmt/goimports"
 folders=()
