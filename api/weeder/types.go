@@ -20,14 +20,15 @@ import (
 
 // Config provides typed access weeder configuration
 type Config struct {
-	// WatchDuration Duration for which all dependent pods for a service under surveillance will be watched after the service has recovered.
+	// WatchDuration is the duration for which all dependent pods for a service under surveillance will be watched after the service has recovered.
 	// If the dependent pods have not transitioned to CrashLoopBackOff in this duration then it is assumed that they will not enter that state.
 	WatchDuration *metav1.Duration `json:"watchDuration,omitempty"`
 	// ServicesAndDependantSelectors is a map whose key is the service name and the value is a DependantSelectors
 	ServicesAndDependantSelectors map[string]DependantSelectors `json:"servicesAndDependantSelectors"`
 }
 
-// DependantSelectors encapsulates LabelSelector's used to identify dependants for a service
+// DependantSelectors encapsulates LabelSelector's used to identify dependants for a service.
+// [Trivia]: Dependent is used as an adjective and dependant is used as a noun. This explains the choice of the variant.
 type DependantSelectors struct {
 	// PodSelectors is a slice of LabelSelector's used to identify dependant pods
 	PodSelectors []*metav1.LabelSelector `json:"podSelectors"`

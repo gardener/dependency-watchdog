@@ -54,7 +54,7 @@ Each dependent resource info has the following properties:
 | Name | Type | Required | Default Value | Description |
 | --- | --- | --- | --- | --- |
 | ref | autoscalingv1.CrossVersionObjectReference | Yes | NA | It is a collection of ApiVersion, Kind and Name for a kubernetes resource thus serving as an identifier. |
-| shouldExist | bool | Yes | NA | It is possible that a dependent resource is optional for a Shoot control plane. This property enables a probe to determine the correct behavior in case it is unable to find the resource identified via `ref`. |
+| optional | bool | Yes | NA | It is possible that a dependent resource is optional for a Shoot control plane. This property enables a probe to determine the correct behavior in case it is unable to find the resource identified via `ref`. |
 | scaleUp | prober.ScaleInfo | No | | Captures the configuration to scale up this resource. Detailed below. |
 | scaleDown | prober.ScaleInfo | No | | Captures the configuration to scale down this resource. Detailed below. |
 

@@ -43,7 +43,7 @@ func createScalableResourceInfos(op operation, dependentResourceInfos []papi.Dep
 		}
 		resInfo := scalableResourceInfo{
 			ref:          depResInfo.Ref,
-			shouldExist:  *depResInfo.ShouldExist,
+			optional:     *depResInfo.Optional,
 			level:        level,
 			initialDelay: initialDelay,
 			timeout:      timeout,

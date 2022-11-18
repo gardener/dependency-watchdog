@@ -78,7 +78,7 @@ func (r *resScaler) scale(ctx context.Context) error {
 	}
 
 	if resourceAnnot, err = util.GetResourceAnnotations(ctx, r.client, r.namespace, r.resourceInfo.ref); err != nil {
-		if apierrors.IsNotFound(err) && !r.resourceInfo.shouldExist {
+		if apierrors.IsNotFound(err) && r.resourceInfo.optional {
 			r.logger.Info("Resource not found. Ignoring this resource as its existence is marked as optional")
 			return nil
 		}

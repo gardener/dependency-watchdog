@@ -118,7 +118,7 @@ func (i operation) minTargetReplicasReached(currentReplicas int32) bool {
 // scalableResourceInfo captures scaling configuration for a DependentResourceInfo.
 type scalableResourceInfo struct {
 	ref          *autoscalingv1.CrossVersionObjectReference
-	shouldExist  bool
+	optional     bool
 	level        int
 	initialDelay time.Duration
 	timeout      time.Duration

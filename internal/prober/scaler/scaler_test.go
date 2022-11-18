@@ -62,8 +62,8 @@ func TestScalerSuite(t *testing.T) {
 		{"test getting scale subresource times out", testGettingScaleSubResourceTimesOut},
 		{"test scaling when kind of a resource is invalid", testScalingWhenKindOfResourceIsInvalid},
 		{"test waitTillMinTargetReplicasReached returns an error", testWaitTillMinTargetReplicasReachedReturnsError},
-		{"test scaling when mandatory resource(shouldExist is true in resourceInfo) is not found", testScalingWhenMandatoryResourceNotFound},
-		{"test scaling when optional resource(shouldExist is false in resourceInfo) is not found", testScalingWhenOptionalResourceNotFound},
+		{"test scaling when mandatory resource(optional is false in resourceInfo) is not found", testScalingWhenMandatoryResourceNotFound},
+		{"test scaling when optional resource(optional is true in resourceInfo) is not found", testScalingWhenOptionalResourceNotFound},
 		{"test scale down then scale up when ignore scaling annotation is not present", testScaleDownThenScaleUpWhenIgnoreScalingAnnotationIsNotPresent},
 		{"test scale down then scale up when ignore scaling annotation is present", testScaleDownThenScaleUpWhenIgnoreScalingAnnotationIsPresent},
 		{"test scale up should not happen if current replica count is positive", testResourceShouldNotScaleUpIfCurrentReplicaCountIsPositive},
@@ -463,8 +463,8 @@ func createProbeConfig(timeout *time.Duration) *papi.Config {
 
 func createDepResourceInfoArray(timeout *time.Duration) []papi.DependentResourceInfo {
 	var dependentResourceInfos []papi.DependentResourceInfo
-	dependentResourceInfos = append(dependentResourceInfos, createTestDeploymentDependentResourceInfo(mcmObjectRef.Name, 2, 0, timeout, pointer.Duration(0*time.Second), true))
-	dependentResourceInfos = append(dependentResourceInfos, createTestDeploymentDependentResourceInfo(kcmObjectRef.Name, 1, 0, timeout, pointer.Duration(0*time.Second), true))
-	dependentResourceInfos = append(dependentResourceInfos, createTestDeploymentDependentResourceInfo(caObjectRef.Name, 0, 1, timeout, pointer.Duration(0*time.Second), false))
+	dependentResourceInfos = append(dependentResourceInfos, createTestDeploymentDependentResourceInfo(mcmObjectRef.Name, 2, 0, timeout, pointer.Duration(0*time.Second), false))
+	dependentResourceInfos = append(dependentResourceInfos, createTestDeploymentDependentResourceInfo(kcmObjectRef.Name, 1, 0, timeout, pointer.Duration(0*time.Second), false))
+	dependentResourceInfos = append(dependentResourceInfos, createTestDeploymentDependentResourceInfo(caObjectRef.Name, 0, 1, timeout, pointer.Duration(0*time.Second), true))
 	return dependentResourceInfos
 }
