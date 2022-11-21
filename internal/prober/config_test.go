@@ -60,7 +60,7 @@ func testCheckIfDefaultValuesAreSetForAllOptionalMissingValues(t *testing.T, s *
 	g := NewWithT(t)
 	testutil.ValidateIfFileExists(testdataPath, t)
 
-	configPath := filepath.Join(testdataPath, "config_missing_optional_values.yaml")
+	configPath := filepath.Join(testdataPath, "config_missing_voluntary_values.yaml")
 	testutil.ValidateIfFileExists(configPath, t)
 	config, err := LoadConfig(configPath, s)
 
