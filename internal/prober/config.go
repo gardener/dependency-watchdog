@@ -67,7 +67,6 @@ func validate(c *papi.Config, scheme *runtime.Scheme) error {
 	v.MustNotBeEmpty("ScaleResourceInfos", c.DependentResourceInfos)
 	for _, resInfo := range c.DependentResourceInfos {
 		v.ResourceRefMustBeValid(resInfo.Ref, scheme)
-		v.MustNotBeNil("optional", resInfo.Optional)
 		v.MustNotBeNil("scaleUp", resInfo.ScaleUpInfo)
 		v.MustNotBeNil("scaleDown", resInfo.ScaleDownInfo)
 	}

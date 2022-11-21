@@ -48,7 +48,7 @@ func createTestDeploymentDependentResourceInfo(name string, scaleUpLevel, scaleD
 	}
 	return papi.DependentResourceInfo{
 		Ref:      &autoscalingv1.CrossVersionObjectReference{Name: name, Kind: deploymentKind, APIVersion: deploymentAPIVersion},
-		Optional: &optional,
+		Optional: optional,
 		ScaleUpInfo: &papi.ScaleInfo{
 			Level:        scaleUpLevel,
 			InitialDelay: &metav1.Duration{Duration: *initialDelay},

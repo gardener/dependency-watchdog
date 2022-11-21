@@ -47,8 +47,8 @@ type Config struct {
 type DependentResourceInfo struct {
 	// Ref identifies a resource
 	Ref *autoscalingv1.CrossVersionObjectReference `json:"ref"`
-	// Optional should be true if this resource should be present. If the resource is optional then it should be false.
-	Optional *bool `json:"optional"`
+	// Optional should be false if this resource should be present. If the resource is optional then it should be true.
+	Optional bool `json:"optional,omitempty"`
 	// ScaleUpInfo captures the configuration to scale up the resource identified by Ref
 	ScaleUpInfo *ScaleInfo `json:"scaleUp,omitempty"`
 	// ScaleDownInfo captures the configuration to scale down the resource identified by Ref
