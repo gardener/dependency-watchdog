@@ -60,7 +60,7 @@ func testCheckIfDefaultValuesAreSetForAllOptionalMissingValues(t *testing.T, s *
 	g := NewWithT(t)
 	testutil.ValidateIfFileExists(testdataPath, t)
 
-	configPath := filepath.Join(testdataPath, "config_missing_optional_values.yaml")
+	configPath := filepath.Join(testdataPath, "config_missing_voluntary_values.yaml")
 	testutil.ValidateIfFileExists(configPath, t)
 	config, err := LoadConfig(configPath, s)
 
@@ -86,7 +86,7 @@ func testMissingConfigValuesShouldReturnErrorAndNilConfig(t *testing.T, s *runti
 		fileName         string
 		expectedErrCount int
 	}{
-		{"config_missing_mandatory_values.yaml", 9},
+		{"config_missing_mandatory_values.yaml", 6},
 		{"config_missing_dependent_resource_infos.yaml", 3},
 	}
 
