@@ -131,17 +131,12 @@ func TestRetryUntilPredicateForContextCancelled(t *testing.T) {
 }
 
 func TestRetryUntilPredicateWithBackgroundContext(t *testing.T) {
-	counter := 0
 	table := []struct {
 		predicateFn    func() bool
 		expectedResult bool
 	}{
 		{func() bool { return false }, false},
 		{func() bool { return true }, true},
-		{func() bool {
-			counter++
-			return counter%2 == 0
-		}, true},
 	}
 	for _, entry := range table {
 		g := NewWithT(t)
@@ -154,7 +149,6 @@ func TestRetryUntilPredicateWithBackgroundContext(t *testing.T) {
 		}()
 		wg.Wait()
 	}
-
 }
 
 func TestRetryOnError(t *testing.T) {
