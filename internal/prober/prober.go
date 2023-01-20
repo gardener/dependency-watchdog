@@ -133,7 +133,7 @@ func (p *Prober) probeInternal(shootClient kubernetes.Interface) {
 	if err != nil {
 		if !p.internalProbeStatus.canIgnoreProbeError(err) {
 			p.internalProbeStatus.recordFailure(err, *p.config.FailureThreshold, p.config.InternalProbeFailureBackoffDuration.Duration)
-			p.l.Info("Recording internal probe failure, Skipping external probe and scaling", "err", err.Error(), "failedAttempts", p.internalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
+			p.l.Info("Recording internal probe failure, Skipping external probe and scaling operation", "err", err.Error(), "failedAttempts", p.internalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
 		} else {
 			p.internalProbeStatus.handleIgnorableError(err)
 			p.l.Info("Internal probe was not successful. ignoring this error", "err", err.Error())
