@@ -17,7 +17,7 @@ dependency-watchdog:
         - linux/arm64
         dockerimages:
           dependency-watchdog:
-           inputs:
+            inputs:
               repos:
                 source: ~
               steps:
