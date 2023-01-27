@@ -1,7 +1,7 @@
 ---
-name: Bug Report
-about: Report a bug encountered while operating DWD 
-labels: kind/bug
+name: Enhancement Request
+about: Suggest an enhancement to the Gardener/DWD project
+labels: kind/enhancement
 
 ---
 
@@ -19,19 +19,9 @@ If multiple identifiers make sense you can also state the commands multiple time
 "/priority" identifiers: 1|2|3|4|5 (ordered from greatest to least)
 -->
 /area TODO
-/kind bug
+/kind enhancement
 /priority 3
 
-**What happened**:
+**What would you like to be added**:
 
-**What you expected to happen**:
-
-**How to reproduce it (as minimally and precisely as possible)**:
-
-**Anything else we need to know?**:
-
-**Environment**:
-
-- Kubernetes version (use `kubectl version`):
-- Cloud provider or hardware configuration:
-- Others:
+**Why is this needed**:
