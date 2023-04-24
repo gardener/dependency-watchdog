@@ -1,4 +1,4 @@
-// Copyright (c) 2020 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
+// Copyright 2020 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,8 +30,6 @@ var (
 	ShootFromCluster = extensions.ShootFromCluster
 	// GetShoot tries to read Gardener's Cluster extension resource in the given namespace and return the embedded Shoot resource.
 	GetShoot = extensions.GetShoot
-	// GetOwnerNameAndID reads the owner DNS name and ID from the owner DNSRecord extension resource in the given namespace.
-	GetOwnerNameAndID = extensions.GetOwnerNameAndID
 	// GenericTokenKubeconfigSecretNameFromCluster reads the generic-token-kubeconfig.secret.gardener.cloud/name annotation
 	// and returns its value. If the annotation is not present then it falls back to the deprecated
 	// SecretNameGenericTokenKubeconfig.

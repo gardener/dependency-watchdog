@@ -1,4 +1,4 @@
-// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
+// Copyright 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,17 +17,17 @@ package kubernetes
 import (
 	"fmt"
 
-	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
-
 	"github.com/Masterminds/semver"
+
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 )
 
 var (
-	lowestSupportedKubernetesVersionMajorMinor = "1.17"
+	lowestSupportedKubernetesVersionMajorMinor = "1.20"
 	lowestSupportedKubernetesVersion, _        = semver.NewVersion(lowestSupportedKubernetesVersionMajorMinor)
 
 	admissionPlugins = map[string][]gardencorev1beta1.AdmissionPlugin{
-		"1.17": getDefaultPlugins("1.17"),
+		"1.20": getDefaultPlugins("1.20"),
 		"1.23": getDefaultPlugins("1.23"),
 		"1.25": getDefaultPlugins("1.25"),
 	}
@@ -65,7 +65,7 @@ func getAdmissionPluginsForVersionInternal(v string) []gardencorev1beta1.Admissi
 func getDefaultPlugins(version string) []gardencorev1beta1.AdmissionPlugin {
 	var admissionPlugins []gardencorev1beta1.AdmissionPlugin
 	switch version {
-	case "1.17":
+	case "1.20":
 		admissionPlugins = append(admissionPlugins, []gardencorev1beta1.AdmissionPlugin{
 			{Name: "Priority"},
 			{Name: "NamespaceLifecycle"},

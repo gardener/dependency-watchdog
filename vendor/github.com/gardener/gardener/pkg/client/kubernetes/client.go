@@ -1,4 +1,4 @@
-// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
+// Copyright 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,12 +32,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	gardenercoreinstall "github.com/gardener/gardener/pkg/apis/core/install"
+	gardencoreinstall "github.com/gardener/gardener/pkg/apis/core/install"
 	seedmanagementinstall "github.com/gardener/gardener/pkg/apis/seedmanagement/install"
 	settingsinstall "github.com/gardener/gardener/pkg/apis/settings/install"
-	kcache "github.com/gardener/gardener/pkg/client/kubernetes/cache"
+	kubernetescache "github.com/gardener/gardener/pkg/client/kubernetes/cache"
 	"github.com/gardener/gardener/pkg/utils"
-	versionutils "github.com/gardener/gardener/pkg/utils/version"
 )
 
 const (
@@ -60,7 +59,7 @@ const (
 func init() {
 	// enable protobuf for Gardener API for controller-runtime clients
 	protobufSchemeBuilder := runtime.NewSchemeBuilder(
-		gardenercoreinstall.AddToScheme,
+		gardencoreinstall.AddToScheme,
 		seedmanagementinstall.AddToScheme,
 		settingsinstall.AddToScheme,
 	)
@@ -232,32 +231,6 @@ func ValidateConfigWithAllowList(config clientcmdapi.Config, allowedFields []str
 	return nil
 }
 
-var supportedKubernetesVersions = []string{
-	"1.17",
-	"1.18",
-	"1.19",
-	"1.20",
-	"1.21",
-	"1.22",
-	"1.23",
-	"1.24",
-	"1.25",
-}
-
-func checkIfSupportedKubernetesVersion(gitVersion string) error {
-	for _, supportedVersion := range supportedKubernetesVersions {
-		ok, err := versionutils.CompareVersions(gitVersion, "~", supportedVersion)
-		if err != nil {
-			return err
-		}
-
-		if ok {
-			return nil
-		}
-	}
-	return fmt.Errorf("unsupported kubernetes version %q", gitVersion)
-}
-
 // NewWithConfig returns a new Kubernetes base client.
 func NewWithConfig(fns ...ConfigFunc) (Interface, error) {
 	conf := &Config{}
@@ -389,7 +362,7 @@ type FallbackClient struct {
 	Reader client.Reader
 }
 
-var cacheError = &kcache.CacheError{}
+var cacheError = &kubernetescache.CacheError{}
 
 // Get retrieves an obj for a given object key from the Kubernetes Cluster.
 // In case of a cache error, the underlying API reader is used to execute the request again.
