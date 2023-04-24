@@ -14,7 +14,7 @@
 
 //go:build !kind_tests
 
-package controllers
+package cluster
 
 import (
 	"context"
@@ -28,7 +28,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	proberpackage "github.com/gardener/dependency-watchdog/internal/prober"
-	testenv "github.com/gardener/dependency-watchdog/internal/test"
+	testutil "github.com/gardener/dependency-watchdog/internal/test"
 	"github.com/gardener/dependency-watchdog/internal/util"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardenerv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
@@ -53,9 +53,9 @@ const (
 
 func setupProberEnv(ctx context.Context, g *WithT) (client.Client, *envtest.Environment, *ClusterReconciler, manager.Manager) {
 	scheme := buildScheme()
-	crdDirectoryPaths := []string{filepath.Join("testdata", "crd", "prober")}
+	crdDirectoryPaths := []string{testdataPath}
 
-	controllerTestEnv, err := testenv.CreateControllerTestEnv(scheme, crdDirectoryPaths)
+	controllerTestEnv, err := testutil.CreateControllerTestEnv(scheme, crdDirectoryPaths)
 	g.Expect(err).To(BeNil())
 
 	testEnv := controllerTestEnv.GetEnv()
@@ -70,7 +70,7 @@ func setupProberEnv(ctx context.Context, g *WithT) (client.Client, *envtest.Envi
 	scalesGetter, err := util.CreateScalesGetter(cfg)
 	g.Expect(err).To(BeNil())
 
-	probeConfigPath := filepath.Join(testdataPath, "config", "prober-config.yaml")
+	probeConfigPath := filepath.Join(testdataPath, "prober-config.yaml")
 	validateIfFileExists(probeConfigPath, g)
 	proberConfig, err := proberpackage.LoadConfig(probeConfigPath, scheme)
 	g.Expect(err).To(BeNil())
@@ -92,12 +92,6 @@ func setupProberEnv(ctx context.Context, g *WithT) (client.Client, *envtest.Envi
 	}()
 
 	return crClient, testEnv, clusterReconciler, mgr
-}
-
-func teardownEnv(g *WithT, testEnv *envtest.Environment, cancelFn context.CancelFunc) {
-	cancelFn()
-	err := testEnv.Stop()
-	g.Expect(err).NotTo(HaveOccurred())
 }
 
 func TestClusterControllerSuite(t *testing.T) {
@@ -130,15 +124,17 @@ func testProberDedicatedEnvTest(t *testing.T) {
 		t.Run(test.title, func(t *testing.T) {
 			test.run(ctx, t, testEnv, crClient, reconciler, mgr, cancelFn)
 		})
-		teardownEnv(g, testEnv, cancelFn)
+		testutil.TeardownEnv(g, testEnv, cancelFn)
 	}
 }
 
 func testReconciliationAfterAPIServerIsDown(ctx context.Context, t *testing.T, testEnv *envtest.Environment, _ client.Client, reconciler *ClusterReconciler, _ manager.Manager, cancelFn context.CancelFunc) {
+	var err error
 	g := NewWithT(t)
-	cluster, _ := createClusterResource()
+	cluster, _, err := testutil.CreateClusterResource(1, false)
+	g.Expect(err).To(BeNil())
 	cancelFn()
-	err := testEnv.ControlPlane.APIServer.Stop()
+	err = testEnv.ControlPlane.APIServer.Stop()
 	g.Expect(err).To(BeNil())
 	_, err = reconciler.Reconcile(ctx, reconcile.Request{
 		NamespacedName: types.NamespacedName{Name: cluster.ObjectMeta.Name, Namespace: ""}})
@@ -152,7 +148,7 @@ func testProberSharedEnvTest(t *testing.T) {
 	g := NewWithT(t)
 	ctx, cancelFn := context.WithCancel(context.Background())
 	crClient, testEnv, reconciler, _ := setupProberEnv(ctx, g)
-	defer teardownEnv(g, testEnv, cancelFn)
+	defer testutil.TeardownEnv(g, testEnv, cancelFn)
 
 	tests := []struct {
 		title string
@@ -167,6 +163,7 @@ func testProberSharedEnvTest(t *testing.T) {
 		{"no prober if shoot control plane is restoring after migrate", testShootRestoringIsNotComplete},
 		{"start prober if last operation is restore and successfully", testLastOperationIsRestoreAndSuccessful},
 		{"start prober if last operation is reconciliation of shoot", testLastOperationIsShootReconciliation},
+		{"no prober if shoot has no workers", testShootHasNoWorkers},
 	}
 
 	for _, test := range tests {
@@ -217,7 +214,8 @@ func updateShootHibernationSpecAndCheckProber(g *WithT, crClient client.Client, 
 }
 
 func testChangingHibernationSpec(g *WithT, crClient client.Client, reconciler *ClusterReconciler) {
-	cluster, shoot := createClusterResource()
+	cluster, shoot, err := testutil.CreateClusterResource(1, false)
+	g.Expect(err).To(BeNil())
 	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
 	updateShootHibernationSpecAndCheckProber(g, crClient, cluster, shoot, pointer.Bool(true), reconciler, proberShouldNotBePresent)
 	updateShootHibernationSpecAndCheckProber(g, crClient, cluster, shoot, pointer.Bool(false), reconciler, proberShouldBePresent)
@@ -234,7 +232,8 @@ func updateShootHibernationStatus(g *WithT, crClient client.Client, reconciler *
 }
 
 func testChangingHibernationStatus(g *WithT, crClient client.Client, reconciler *ClusterReconciler) {
-	cluster, shoot := createClusterResource()
+	cluster, shoot, err := testutil.CreateClusterResource(1, false)
+	g.Expect(err).To(BeNil())
 	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
 	updateShootHibernationStatus(g, crClient, reconciler, cluster, shoot, true, nil) // checkProber is nil because in practice it is not possible that prober is present and cluster is hibernated.
 	updateShootHibernationStatus(g, crClient, reconciler, cluster, shoot, false, proberShouldBePresent)
@@ -242,7 +241,8 @@ func testChangingHibernationStatus(g *WithT, crClient client.Client, reconciler 
 }
 
 func testInvalidShootInClusterSpec(g *WithT, crClient client.Client, reconciler *ClusterReconciler) {
-	cluster, _ := createClusterResource()
+	cluster, _, err := testutil.CreateClusterResource(1, false)
+	g.Expect(err).To(BeNil())
 	cluster.Spec.Shoot.Object = nil
 	cluster.Spec.Shoot.Raw = []byte(`{"apiVersion": 8}`)
 	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
@@ -262,7 +262,8 @@ func updateShootDeletionTimeStamp(g *WithT, crClient client.Client, cluster *gar
 }
 
 func testProberShouldBeRemovedIfDeletionTimeStampIsSet(g *WithT, crClient client.Client, reconciler *ClusterReconciler) {
-	cluster, shoot := createClusterResource()
+	cluster, shoot, err := testutil.CreateClusterResource(1, false)
+	g.Expect(err).To(BeNil())
 	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
 	updateShootDeletionTimeStamp(g, crClient, cluster, shoot)
 	proberShouldNotBePresent(g, reconciler, cluster)
@@ -280,7 +281,8 @@ func setShootLastOperationStatus(cluster *gardenerv1alpha1.Cluster, shoot *garde
 }
 
 func testShootCreationNotComplete(g *WithT, crClient client.Client, reconciler *ClusterReconciler) {
-	cluster, shoot := createClusterResource()
+	cluster, shoot, err := testutil.CreateClusterResource(1, false)
+	g.Expect(err).To(BeNil())
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeCreate, gardencorev1beta1.LastOperationStateProcessing)
 	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
 
@@ -300,7 +302,8 @@ func setShootLastOperationStatusAndCheckProber(g *WithT, crClient client.Client,
 }
 
 func testShootIsMigrating(g *WithT, crClient client.Client, reconciler *ClusterReconciler) {
-	cluster, shoot := createClusterResource()
+	cluster, shoot, err := testutil.CreateClusterResource(1, false)
+	g.Expect(err).To(BeNil())
 	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeMigrate, "")
 	updateClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
@@ -308,7 +311,8 @@ func testShootIsMigrating(g *WithT, crClient client.Client, reconciler *ClusterR
 }
 
 func testShootRestoringIsNotComplete(g *WithT, crClient client.Client, reconciler *ClusterReconciler) {
-	cluster, shoot := createClusterResource()
+	cluster, shoot, err := testutil.CreateClusterResource(1, false)
+	g.Expect(err).To(BeNil())
 	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
 	// cluster migration starts
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeMigrate, "")
@@ -320,17 +324,25 @@ func testShootRestoringIsNotComplete(g *WithT, crClient client.Client, reconcile
 }
 
 func testLastOperationIsRestoreAndSuccessful(g *WithT, crClient client.Client, reconciler *ClusterReconciler) {
-	cluster, shoot := createClusterResource()
+	cluster, shoot, err := testutil.CreateClusterResource(1, false)
+	g.Expect(err).To(BeNil())
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeRestore, gardencorev1beta1.LastOperationStateSucceeded)
 	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
 func testLastOperationIsShootReconciliation(g *WithT, crClient client.Client, reconciler *ClusterReconciler) {
-	cluster, shoot := createClusterResource()
+	cluster, shoot, err := testutil.CreateClusterResource(1, false)
+	g.Expect(err).To(BeNil())
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeReconcile, "")
 	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldBePresent)
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
+}
+
+func testShootHasNoWorkers(g *WithT, crClient client.Client, reconciler *ClusterReconciler) {
+	cluster, _, err := testutil.CreateClusterResource(0, false)
+	g.Expect(err).To(BeNil())
+	createClusterAndCheckProber(g, crClient, reconciler, cluster, proberShouldNotBePresent)
 }
 
 func proberShouldBePresent(g *WithT, reconciler *ClusterReconciler, cluster *gardenerv1alpha1.Cluster) {
@@ -363,60 +375,4 @@ func buildScheme() *runtime.Scheme {
 	)
 	utilruntime.Must(localSchemeBuilder.AddToScheme(scheme))
 	return scheme
-}
-
-func createClusterResource() (*gardenerv1alpha1.Cluster, *gardencorev1beta1.Shoot) {
-	falseVal := false
-	end := "00 08 * * 1,2,3,4,5"
-	start := "30 19 * * 1,2,3,4,5"
-	location := "Asia/Calcutta"
-
-	cloudProfile := gardencorev1beta1.CloudProfile{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "aws",
-		},
-	}
-	seed := gardencorev1beta1.Seed{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "aws",
-		},
-	}
-	shoot := gardencorev1beta1.Shoot{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "shoot--test",
-		},
-		Spec: gardencorev1beta1.ShootSpec{
-			Hibernation: &gardencorev1beta1.Hibernation{
-				Enabled: &falseVal,
-				Schedules: []gardencorev1beta1.HibernationSchedule{
-					{End: &end, Start: &start, Location: &location},
-				},
-			},
-		},
-		Status: gardencorev1beta1.ShootStatus{
-			IsHibernated: false,
-			SeedName:     &seed.ObjectMeta.Name,
-			LastOperation: &gardencorev1beta1.LastOperation{
-				Type:  gardencorev1beta1.LastOperationTypeCreate,
-				State: gardencorev1beta1.LastOperationStateSucceeded,
-			},
-		},
-	}
-	cluster := gardenerv1alpha1.Cluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "shoot--test",
-		},
-		Spec: gardenerv1alpha1.ClusterSpec{
-			CloudProfile: runtime.RawExtension{
-				Object: &cloudProfile,
-			},
-			Seed: runtime.RawExtension{
-				Object: &seed,
-			},
-			Shoot: runtime.RawExtension{
-				Object: &shoot,
-			},
-		},
-	}
-	return &cluster, &shoot
 }

@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -115,4 +116,11 @@ func CreateTestNamespace(ctx context.Context, g *WithT, cli client.Client, nameP
 	}
 	g.Expect(cli.Create(ctx, &ns)).To(BeNil())
 	return ns.Name
+}
+
+// TeardownEnv cancels the context and stops testenv.
+func TeardownEnv(g *WithT, testEnv *envtest.Environment, cancelFn context.CancelFunc) {
+	cancelFn()
+	err := testEnv.Stop()
+	g.Expect(err).NotTo(HaveOccurred())
 }

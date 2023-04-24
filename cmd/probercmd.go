@@ -18,7 +18,7 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/gardener/dependency-watchdog/controllers"
+	"github.com/gardener/dependency-watchdog/controllers/cluster"
 	"github.com/gardener/dependency-watchdog/internal/prober"
 	"github.com/gardener/dependency-watchdog/internal/util"
 	gardenextensions "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
@@ -126,7 +126,7 @@ func startClusterControllerMgr(logger logr.Logger) (manager.Manager, error) {
 		return nil, fmt.Errorf("failed to create clientSet for scalesGetter %w", err)
 	}
 
-	if err := (&controllers.ClusterReconciler{
+	if err := (&cluster.ClusterReconciler{
 		Client:                  mgr.GetClient(),
 		Scheme:                  mgr.GetScheme(),
 		ScaleGetter:             scalesGetter,

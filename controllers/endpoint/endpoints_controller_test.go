@@ -14,7 +14,7 @@
 
 //go:build !kind_tests
 
-package controllers
+package endpoint
 
 import (
 	"context"
@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	testenv "github.com/gardener/dependency-watchdog/internal/test"
+	testutil "github.com/gardener/dependency-watchdog/internal/test"
 	"k8s.io/client-go/kubernetes/scheme"
 
 	internalutils "github.com/gardener/dependency-watchdog/internal/util"
@@ -47,6 +47,7 @@ const (
 	healthyPod                    = "pod-h"
 	crashingPod                   = "pod-c"
 	testPodName                   = "test-pod"
+	testdataPath                  = "testdata"
 )
 
 var (
@@ -59,9 +60,10 @@ var (
 	}
 )
 
-func setupWeederEnv(ctx context.Context, g *WithT, apiServerFlags map[string]string) (*envtest.Environment, *EndpointReconciler) {
+func setupWeederEnv(ctx context.Context, t *testing.T, apiServerFlags map[string]string) (*envtest.Environment, *EndpointReconciler) {
 	s := scheme.Scheme
-	controllerTestEnv, err := testenv.CreateDefaultControllerTestEnv(s)
+	g := NewWithT(t)
+	controllerTestEnv, err := testutil.CreateDefaultControllerTestEnv(s)
 	g.Expect(err).To(BeNil())
 
 	testEnv := controllerTestEnv.GetEnv()
@@ -77,8 +79,8 @@ func setupWeederEnv(ctx context.Context, g *WithT, apiServerFlags map[string]str
 	clientSet, err := internalutils.CreateClientSetFromRestConfig(cfg)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	weederConfigPath := filepath.Join(testdataPath, "config", "weeder-config.yaml")
-	validateIfFileExists(weederConfigPath, g)
+	weederConfigPath := filepath.Join(testdataPath, "weeder-config.yaml")
+	testutil.ValidateIfFileExists(weederConfigPath, t)
 	weederConfig, err := weederpackage.LoadConfig(weederConfigPath)
 	g.Expect(err).To(BeNil())
 
@@ -123,8 +125,8 @@ func TestEndpointsControllerSuite(t *testing.T) {
 func testWeederSharedEnvTest(t *testing.T) {
 	g := NewWithT(t)
 	ctx, cancelFn := context.WithCancel(context.Background())
-	testEnv, reconciler := setupWeederEnv(ctx, g, nil)
-	defer teardownEnv(g, testEnv, cancelFn)
+	testEnv, reconciler := setupWeederEnv(ctx, t, nil)
+	defer testutil.TeardownEnv(g, testEnv, cancelFn)
 
 	tests := []struct {
 		name        string
@@ -140,7 +142,7 @@ func testWeederSharedEnvTest(t *testing.T) {
 
 	for _, test := range tests {
 		childCtx, chileCancelFn := context.WithCancel(ctx)
-		ns := testenv.CreateTestNamespace(childCtx, g, reconciler.Client, strings.ToLower(test.name))
+		ns := testutil.CreateTestNamespace(childCtx, g, reconciler.Client, strings.ToLower(test.name))
 		t.Run(test.description, func(t *testing.T) {
 			test.run(childCtx, chileCancelFn, g, reconciler, ns)
 		})
@@ -162,12 +164,12 @@ func testWeederDedicatedEnvTest(t *testing.T) {
 	}
 	for _, test := range tests {
 		ctx, cancelFn := context.WithCancel(context.Background())
-		testEnv, reconciler := setupWeederEnv(ctx, g, test.apiServerFlags)
-		ns := testenv.CreateTestNamespace(ctx, g, reconciler.Client, strings.ToLower(test.name))
+		testEnv, reconciler := setupWeederEnv(ctx, t, test.apiServerFlags)
+		ns := testutil.CreateTestNamespace(ctx, g, reconciler.Client, strings.ToLower(test.name))
 		t.Run(test.description, func(t *testing.T) {
 			test.run(ctx, cancelFn, g, reconciler, ns)
 		})
-		teardownEnv(g, testEnv, cancelFn)
+		testutil.TeardownEnv(g, testEnv, cancelFn)
 	}
 }
 
