@@ -42,9 +42,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-const (
-	controllerName = "cluster"
-)
+const controllerName = "cluster"
 
 // Reconciler reconciles a Cluster object
 type Reconciler struct {

@@ -32,9 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-const (
-	controllerName = "endpoint"
-)
+const controllerName = "endpoint"
 
 // Reconciler EndpointReconciler reconciles an Endpoints object
 type Reconciler struct {
