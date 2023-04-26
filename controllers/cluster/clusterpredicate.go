@@ -16,7 +16,7 @@ package cluster
 
 import (
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
-	gardenerv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 
 	"github.com/go-logr/logr"
 
@@ -53,7 +53,7 @@ func workerLessShoot(logger logr.Logger) predicate.Predicate {
 
 // shootHasWorkers extracts the shoot from the cluster and checks if shoot has workers.
 func shootHasWorkers(obj runtime.Object, logger logr.Logger) bool {
-	cluster, ok := obj.(*gardenerv1alpha1.Cluster)
+	cluster, ok := obj.(*extensionsv1alpha1.Cluster)
 	if !ok {
 		return false
 	}

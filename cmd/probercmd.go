@@ -21,7 +21,7 @@ import (
 	"github.com/gardener/dependency-watchdog/controllers/cluster"
 	"github.com/gardener/dependency-watchdog/internal/prober"
 	"github.com/gardener/dependency-watchdog/internal/util"
-	gardenextensions "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -84,7 +84,7 @@ type proberOptions struct {
 func init() {
 	localSchemeBuilder := runtime.NewSchemeBuilder(
 		clientgoscheme.AddToScheme,
-		gardenextensions.AddToScheme,
+		extensionsv1alpha1.AddToScheme,
 	)
 	utilruntime.Must(localSchemeBuilder.AddToScheme(scheme))
 }
