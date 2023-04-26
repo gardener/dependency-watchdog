@@ -31,8 +31,8 @@ import (
 
 	"github.com/gardener/dependency-watchdog/internal/prober"
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
-	gardencorev1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
-	gardenerv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
+	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -89,7 +89,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// if hibernation is enabled then we will remove any existing prober. Any resource scaling that is required in case of hibernation will now be handled as part of worker reconciliation in extension controllers.
-	if gardencorev1beta1helper.HibernationIsEnabled(shoot) {
+	if v1beta1helper.HibernationIsEnabled(shoot) {
 		if r.ProberMgr.Unregister(req.Name) {
 			log.Info("Cluster hibernation is enabled, existing prober has been removed")
 		}
@@ -122,8 +122,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 }
 
 // getCluster will retrieve the cluster object given the namespace and name Not found is not treated as an error and is handled differently in the caller
-func (r *Reconciler) getCluster(ctx context.Context, namespace string, name string) (cluster *gardenerv1alpha1.Cluster, notFound bool, err error) {
-	cluster = &gardenerv1alpha1.Cluster{}
+func (r *Reconciler) getCluster(ctx context.Context, namespace string, name string) (cluster *extensionsv1alpha1.Cluster, notFound bool, err error) {
+	cluster = &extensionsv1alpha1.Cluster{}
 	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, cluster); err != nil {
 		if errors.IsNotFound(err) {
 			return nil, true, nil
@@ -178,5 +178,5 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return err
 	}
-	return c.Watch(&source.Kind{Type: &gardenerv1alpha1.Cluster{}}, &handler.EnqueueRequestForObject{}, workerLessShoot(c.GetLogger()))
+	return c.Watch(&source.Kind{Type: &extensionsv1alpha1.Cluster{}}, &handler.EnqueueRequestForObject{}, workerLessShoot(c.GetLogger()))
 }
