@@ -1,10 +1,9 @@
-// Copyright 2022 SAP SE or an SAP affiliate company
+// Copyright © 2018 Steve Francia <spf@spf13.com>.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,14 +11,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build tools
-// +build tools
-
-// This package imports things required by build scripts, to force `go mod` to see them as dependencies
-package tools
+package afero
 
 import (
-	_ "github.com/golang/mock/mockgen/model"
-	_ "k8s.io/code-generator/cmd/import-boss"
-	_ "sigs.k8s.io/controller-runtime/tools/setup-envtest"
+	"os"
 )
+
+// Lstater is an optional interface in Afero. It is only implemented by the
+// filesystems saying so.
+// It will call Lstat if the filesystem iself is, or it delegates to, the os filesystem.
+// Else it will call Stat.
+// In addtion to the FileInfo, it will return a boolean telling whether Lstat was called or not.
+type Lstater interface {
+	LstatIfPossible(name string) (os.FileInfo, bool, error)
+}
