@@ -88,7 +88,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		predicate.And(
 			predicate.ResourceVersionChangedPredicate{},
 			MatchingEndpoints(r.WeederConfig.ServicesAndDependantSelectors),
-			ReadyEndpoints(mgr.GetLogger()),
+			ReadyEndpoints(c.GetLogger()),
 		),
 	)
 }
