@@ -26,8 +26,14 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/source"
+)
+
+const (
+	controllerName = "endpoint"
 )
 
 // Reconciler EndpointReconciler reconciles an Endpoints object
@@ -66,11 +72,23 @@ func (r *Reconciler) startWeeder(ctx context.Context, logger logr.Logger, namesp
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1.Endpoints{}).
-		WithEventFilter(predicate.And(
+	c, err := controller.New(
+		controllerName,
+		mgr,
+		controller.Options{
+			MaxConcurrentReconciles: r.MaxConcurrentReconciles,
+			Reconciler:              r},
+	)
+	if err != nil {
+		return err
+	}
+	return c.Watch(
+		&source.Kind{Type: &v1.Endpoints{}},
+		&handler.EnqueueRequestForObject{},
+		predicate.And(
 			predicate.ResourceVersionChangedPredicate{},
-			MatchingEndpoints(r.WeederConfig.ServicesAndDependantSelectors), ReadyEndpoints(mgr.GetLogger()))).
-		WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}).
-		Complete(r)
+			MatchingEndpoints(r.WeederConfig.ServicesAndDependantSelectors),
+			ReadyEndpoints(mgr.GetLogger()),
+		),
+	)
 }

@@ -23,8 +23,9 @@ import (
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"github.com/gardener/dependency-watchdog/internal/prober/scaler"
 	"github.com/go-logr/logr"
-	ctrlbuilder "sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
 
@@ -39,6 +40,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+)
+
+const (
+	controllerName = "cluster"
 )
 
 // Reconciler reconciles a Cluster object
@@ -163,11 +168,15 @@ func (r *Reconciler) startProber(ctx context.Context, logger logr.Logger, key st
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(
-			&gardenerv1alpha1.Cluster{},
-			ctrlbuilder.WithPredicates(workerLessShoot(mgr.GetLogger())),
-		).
-		WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}).
-		Complete(r)
+	c, err := controller.New(
+		controllerName,
+		mgr,
+		controller.Options{
+			Reconciler:              r,
+			MaxConcurrentReconciles: r.MaxConcurrentReconciles},
+	)
+	if err != nil {
+		return err
+	}
+	return c.Watch(&source.Kind{Type: &gardenerv1alpha1.Cluster{}}, &handler.EnqueueRequestForObject{}, workerLessShoot(c.GetLogger()))
 }
