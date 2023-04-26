@@ -22,6 +22,10 @@ ENVTEST_K8S_VERSION="1.26"
 export KUBEBUILDER_ASSETS="$(setup-envtest --os $(go env GOOS) --arch $(go env GOARCH) use $ENVTEST_K8S_VERSION -p path)"
 echo "Running tests using KUBEBUILDER_ASSETS=$KUBEBUILDER_ASSETS"
 export KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT=true
-go test -v ./... -coverprofile cover.out
+# Tests using envtest needs to be serialized as there are issues in starting more than one envtest concurrently.
+# see https://github.com/kubernetes-sigs/controller-runtime/issues/1363 which remains unresolved.
+go test -v ./controllers/cluster
+go test -v ./controllers/endpoint
+go test -v ./internal/...
 
 

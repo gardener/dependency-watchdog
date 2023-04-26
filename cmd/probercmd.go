@@ -126,7 +126,7 @@ func startClusterControllerMgr(logger logr.Logger) (manager.Manager, error) {
 		return nil, fmt.Errorf("failed to create clientSet for scalesGetter %w", err)
 	}
 
-	if err := (&cluster.ClusterReconciler{
+	if err := (&cluster.Reconciler{
 		Client:                  mgr.GetClient(),
 		Scheme:                  mgr.GetScheme(),
 		ScaleGetter:             scalesGetter,

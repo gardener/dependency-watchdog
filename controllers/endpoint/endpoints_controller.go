@@ -30,8 +30,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-// EndpointReconciler reconciles an Endpoints object
-type EndpointReconciler struct {
+// Reconciler EndpointReconciler reconciles an Endpoints object
+type Reconciler struct {
 	client.Client
 	SeedClient              kubernetes.Interface
 	WeederConfig            *wapi.Config
@@ -43,7 +43,7 @@ type EndpointReconciler struct {
 // +kubebuilder:rbac:resources=pods,verbs=get;list;watch;delete
 
 // Reconcile listens to create/update events for `Endpoints` resources and manages weeder which shoot the dependent pods of the configured services, if necessary
-func (r *EndpointReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 	//Get the endpoint object
 	var ep v1.Endpoints
@@ -57,7 +57,7 @@ func (r *EndpointReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 }
 
 // startWeeder starts a new weeder for the endpoint
-func (r *EndpointReconciler) startWeeder(ctx context.Context, logger logr.Logger, namespace string, ep *v1.Endpoints) {
+func (r *Reconciler) startWeeder(ctx context.Context, logger logr.Logger, namespace string, ep *v1.Endpoints) {
 	w := weeder.NewWeeder(ctx, namespace, r.WeederConfig, r.Client, r.SeedClient, ep, logger)
 	// Register the weeder
 	r.WeederMgr.Register(*w)
@@ -65,7 +65,7 @@ func (r *EndpointReconciler) startWeeder(ctx context.Context, logger logr.Logger
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *EndpointReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1.Endpoints{}).
 		WithEventFilter(predicate.And(

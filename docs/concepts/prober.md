@@ -46,6 +46,8 @@ In the following cases it will either remove an existing probe for this cluster 
 1. Cluster is marked for deletion.
 2. Hibernation has been enabled for the cluster.
 3. There is an ongoing seed migration for this cluster.
+4. If a new cluster is created with no workers.
+5. If an update is made to the cluster by removing all workers (in other words making it worker-less).
 
 If none of the above conditions are true and there is no existing probe for this cluster then a new probe will be created, registered and started.
 

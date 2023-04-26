@@ -110,7 +110,7 @@ func startEndpointsControllerMgr(logger logr.Logger) (manager.Manager, error) {
 		return nil, fmt.Errorf("failed creating clientset for dwd-weeder %w", err)
 	}
 
-	if err := (&endpoint.EndpointReconciler{
+	if err := (&endpoint.Reconciler{
 		Client:       mgr.GetClient(),
 		SeedClient:   clientSet,
 		WeederConfig: weederConfig,

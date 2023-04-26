@@ -41,8 +41,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// ClusterReconciler reconciles a Cluster object
-type ClusterReconciler struct {
+// Reconciler reconciles a Cluster object
+type Reconciler struct {
 	client.Client
 	Scheme                  *runtime.Scheme
 	ProberMgr               prober.Manager
@@ -56,7 +56,7 @@ type ClusterReconciler struct {
 
 // Reconcile listens to create/update/delete events for `Cluster` resources and
 // manages probes for the shoot control namespace for these clusters by looking at the cluster state.
-func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 	cluster, notFound, err := r.getCluster(ctx, req.Namespace, req.Name)
 	if err != nil {
@@ -117,7 +117,7 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 }
 
 // getCluster will retrieve the cluster object given the namespace and name Not found is not treated as an error and is handled differently in the caller
-func (r *ClusterReconciler) getCluster(ctx context.Context, namespace string, name string) (cluster *gardenerv1alpha1.Cluster, notFound bool, err error) {
+func (r *Reconciler) getCluster(ctx context.Context, namespace string, name string) (cluster *gardenerv1alpha1.Cluster, notFound bool, err error) {
 	cluster = &gardenerv1alpha1.Cluster{}
 	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, cluster); err != nil {
 		if errors.IsNotFound(err) {
@@ -149,7 +149,7 @@ func canStartProber(shoot *v1beta1.Shoot) bool {
 
 // startProber sets up a new probe against a given key which uniquely identifies the probe.
 // Typically, the key in case of a shoot cluster is the shoot namespace
-func (r *ClusterReconciler) startProber(ctx context.Context, logger logr.Logger, key string) {
+func (r *Reconciler) startProber(ctx context.Context, logger logr.Logger, key string) {
 	_, ok := r.ProberMgr.GetProber(key)
 	if !ok {
 		deploymentScaler := scaler.NewScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter, logger)
@@ -162,7 +162,7 @@ func (r *ClusterReconciler) startProber(ctx context.Context, logger logr.Logger,
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(
 			&gardenerv1alpha1.Cluster{},
