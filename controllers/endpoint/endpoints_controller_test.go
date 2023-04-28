@@ -14,7 +14,7 @@
 
 //go:build !kind_tests
 
-package controllers
+package endpoint
 
 import (
 	"context"
@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	testenv "github.com/gardener/dependency-watchdog/internal/test"
+	testutil "github.com/gardener/dependency-watchdog/internal/test"
 	"k8s.io/client-go/kubernetes/scheme"
 
 	internalutils "github.com/gardener/dependency-watchdog/internal/util"
@@ -47,6 +47,7 @@ const (
 	healthyPod                    = "pod-h"
 	crashingPod                   = "pod-c"
 	testPodName                   = "test-pod"
+	testdataPath                  = "testdata"
 )
 
 var (
@@ -59,30 +60,26 @@ var (
 	}
 )
 
-func setupWeederEnv(ctx context.Context, g *WithT, apiServerFlags map[string]string) (*envtest.Environment, *EndpointReconciler) {
+func setupWeederEnv(ctx context.Context, t *testing.T, kubeApiServerFlags map[string]string) (*envtest.Environment, *Reconciler) {
 	s := scheme.Scheme
-	controllerTestEnv, err := testenv.CreateDefaultControllerTestEnv(s)
+	g := NewWithT(t)
+
+	controllerTestEnv, err := testutil.CreateDefaultControllerTestEnv(s, kubeApiServerFlags)
 	g.Expect(err).To(BeNil())
 
 	testEnv := controllerTestEnv.GetEnv()
 	cfg := controllerTestEnv.GetConfig()
 	crClient := controllerTestEnv.GetClient()
 
-	kubeAPIServer := testEnv.ControlPlane.GetAPIServer()
-	args := kubeAPIServer.Configure()
-	for k, v := range apiServerFlags {
-		args.Set(k, v)
-	}
-
 	clientSet, err := internalutils.CreateClientSetFromRestConfig(cfg)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	weederConfigPath := filepath.Join(testdataPath, "config", "weeder-config.yaml")
-	validateIfFileExists(weederConfigPath, g)
+	weederConfigPath := filepath.Join(testdataPath, "weeder-config.yaml")
+	testutil.ValidateIfFileExists(weederConfigPath, t)
 	weederConfig, err := weederpackage.LoadConfig(weederConfigPath)
 	g.Expect(err).To(BeNil())
 
-	epReconciler := &EndpointReconciler{
+	epReconciler := &Reconciler{
 		Client:                  crClient,
 		WeederConfig:            weederConfig,
 		SeedClient:              clientSet,
@@ -123,13 +120,13 @@ func TestEndpointsControllerSuite(t *testing.T) {
 func testWeederSharedEnvTest(t *testing.T) {
 	g := NewWithT(t)
 	ctx, cancelFn := context.WithCancel(context.Background())
-	testEnv, reconciler := setupWeederEnv(ctx, g, nil)
-	defer teardownEnv(g, testEnv, cancelFn)
+	testEnv, reconciler := setupWeederEnv(ctx, t, nil)
+	defer testutil.TeardownEnv(g, testEnv, cancelFn)
 
 	tests := []struct {
 		name        string
 		description string
-		run         func(ctx context.Context, cancelFn context.CancelFunc, g *WithT, reconciler *EndpointReconciler, namespace string)
+		run         func(ctx context.Context, cancelFn context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string)
 	}{
 		{"testOnlyCLBFPodDeletion", "Single Crashlooping pod , single healthy pod with matching labels expect only Crashlooping pod to be deleted", testOnlyCLBFPodDeletion},
 		{"testPodTurningCLBFDeletion", "Single healthy pod, turned to CrashLoopBackoff , should be deleted", testPodTurningCLBFDeletion},
@@ -140,7 +137,7 @@ func testWeederSharedEnvTest(t *testing.T) {
 
 	for _, test := range tests {
 		childCtx, chileCancelFn := context.WithCancel(ctx)
-		ns := testenv.CreateTestNamespace(childCtx, g, reconciler.Client, strings.ToLower(test.name))
+		ns := testutil.CreateTestNamespace(childCtx, g, reconciler.Client, strings.ToLower(test.name))
 		t.Run(test.description, func(t *testing.T) {
 			test.run(childCtx, chileCancelFn, g, reconciler, ns)
 		})
@@ -154,7 +151,7 @@ func testWeederDedicatedEnvTest(t *testing.T) {
 	tests := []struct {
 		name           string
 		description    string
-		run            func(ctx context.Context, cancelFn context.CancelFunc, g *WithT, reconciler *EndpointReconciler, namespace string)
+		run            func(ctx context.Context, cancelFn context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string)
 		apiServerFlags map[string]string
 	}{
 		{"testPodWatchEndsAbruptlyBeforeSpecifiedWatchDuration", "single Crashlooping pod should be deleted even when watch on pods times-out in the middle", testPodWatchEndsAbruptlyBeforeSpecifiedWatchDuration, map[string]string{"min-request-timeout": "5"}},
@@ -162,12 +159,12 @@ func testWeederDedicatedEnvTest(t *testing.T) {
 	}
 	for _, test := range tests {
 		ctx, cancelFn := context.WithCancel(context.Background())
-		testEnv, reconciler := setupWeederEnv(ctx, g, test.apiServerFlags)
-		ns := testenv.CreateTestNamespace(ctx, g, reconciler.Client, strings.ToLower(test.name))
+		testEnv, reconciler := setupWeederEnv(ctx, t, test.apiServerFlags)
+		ns := testutil.CreateTestNamespace(ctx, g, reconciler.Client, strings.ToLower(test.name))
 		t.Run(test.description, func(t *testing.T) {
 			test.run(ctx, cancelFn, g, reconciler, ns)
 		})
-		teardownEnv(g, testEnv, cancelFn)
+		testutil.TeardownEnv(g, testEnv, cancelFn)
 	}
 }
 
@@ -179,7 +176,7 @@ func testWeederDedicatedEnvTest(t *testing.T) {
 // case 5: deletion of CLBF pod shouldn't happen if endpoint is not ready (means the serving pod is not present/not ready)
 // case 6: cancelling the context should mean no deletion of CLBF pod happens
 // case 7: watch cancelled by API server, should lead to create of new watch (#dedicated env test)
-func testOnlyCLBFPodDeletion(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *EndpointReconciler, namespace string) {
+func testOnlyCLBFPodDeletion(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string) {
 	createEp(ctx, g, reconciler, namespace, true)
 	pC := newPod(crashingPod, namespace, "node-0", correctLabels)
 	pH := newPod(healthyPod, namespace, "node-0", correctLabels)
@@ -209,7 +206,7 @@ func testOnlyCLBFPodDeletion(ctx context.Context, _ context.CancelFunc, g *WithT
 	g.Expect(resultpH.DeletionTimestamp).To(BeNil(), "Healthy pod shouldn't be deleted")
 }
 
-func testPodTurningCLBFDeletion(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *EndpointReconciler, namespace string) {
+func testPodTurningCLBFDeletion(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string) {
 	createEp(ctx, g, reconciler, namespace, true)
 	pod := newPod(testPodName, namespace, "node-0", correctLabels)
 
@@ -230,7 +227,7 @@ func testPodTurningCLBFDeletion(ctx context.Context, _ context.CancelFunc, g *Wi
 	g.Expect(apierrors.IsNotFound(err)).To(BeTrue(), "CrashLooping pod should be deleted")
 }
 
-func testCLBFPodWithWrongLabelsDeletion(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *EndpointReconciler, namespace string) {
+func testCLBFPodWithWrongLabelsDeletion(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string) {
 	createEp(ctx, g, reconciler, namespace, true)
 	pod := newPod(crashingPod, namespace, "node-0", inCorrectLabels)
 	err := reconciler.Client.Create(ctx, pod)
@@ -245,7 +242,7 @@ func testCLBFPodWithWrongLabelsDeletion(ctx context.Context, _ context.CancelFun
 	g.Expect(currentPod.DeletionTimestamp).To(BeNil(), "CrashLoop Pod shouldn't be deleted in this case")
 }
 
-func testPodTurningCLBFAfterWatchDuration(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *EndpointReconciler, namespace string) {
+func testPodTurningCLBFAfterWatchDuration(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string) {
 	createEp(ctx, g, reconciler, namespace, true)
 	pod := newPod(testPodName, namespace, "node-0", correctLabels)
 
@@ -265,7 +262,7 @@ func testPodTurningCLBFAfterWatchDuration(ctx context.Context, _ context.CancelF
 	g.Expect(currentPod.DeletionTimestamp).To(BeNil(), "CrashLoop pod shouldn't be deleted in this case")
 }
 
-func testNoCLBFPodDeletionWhenEndpointNotReady(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *EndpointReconciler, namespace string) {
+func testNoCLBFPodDeletionWhenEndpointNotReady(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string) {
 	createEp(ctx, g, reconciler, namespace, false)
 	ep := &v1.Endpoints{}
 	g.Expect(reconciler.Client.Get(ctx, types.NamespacedName{Name: epName, Namespace: namespace}, ep)).To(Succeed())
@@ -288,7 +285,7 @@ func testNoCLBFPodDeletionWhenEndpointNotReady(ctx context.Context, _ context.Ca
 
 }
 
-func testNoCLBFPodDeletionOnContextCancellation(ctx context.Context, cancelFn context.CancelFunc, g *WithT, reconciler *EndpointReconciler, namespace string) {
+func testNoCLBFPodDeletionOnContextCancellation(ctx context.Context, cancelFn context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string) {
 	pod := newPod(crashingPod, namespace, "node-0", correctLabels)
 	err := reconciler.Client.Create(ctx, pod)
 	g.Expect(err).To(BeNil())
@@ -303,7 +300,7 @@ func testNoCLBFPodDeletionOnContextCancellation(ctx context.Context, cancelFn co
 	g.Expect(currentPod.DeletionTimestamp).To(BeNil())
 }
 
-func testPodWatchEndsAbruptlyBeforeSpecifiedWatchDuration(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *EndpointReconciler, namespace string) {
+func testPodWatchEndsAbruptlyBeforeSpecifiedWatchDuration(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string) {
 	pod := newPod(testPodName, namespace, "node-0", correctLabels)
 
 	err := reconciler.Client.Create(ctx, pod)
@@ -352,7 +349,7 @@ func deleteAllEp(ctx context.Context, g *WithT, cli client.Client) {
 	}
 }
 
-func createEp(ctx context.Context, g *WithT, reconciler *EndpointReconciler, namespace string, ready bool) {
+func createEp(ctx context.Context, g *WithT, reconciler *Reconciler, namespace string, ready bool) {
 	ep := newEndpoint(epName, namespace)
 	if !ready {
 		ep.Subsets[0].Addresses = nil

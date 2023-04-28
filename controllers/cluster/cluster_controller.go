@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package cluster
 
 import (
 	"context"
@@ -24,13 +24,15 @@ import (
 	"github.com/gardener/dependency-watchdog/internal/prober/scaler"
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
 
 	"github.com/gardener/dependency-watchdog/internal/prober"
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
-	gardencorev1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
-	gardenerv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
+	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -40,8 +42,10 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// ClusterReconciler reconciles a Cluster object
-type ClusterReconciler struct {
+const controllerName = "cluster"
+
+// Reconciler reconciles a Cluster object
+type Reconciler struct {
 	client.Client
 	Scheme                  *runtime.Scheme
 	ProberMgr               prober.Manager
@@ -55,7 +59,7 @@ type ClusterReconciler struct {
 
 // Reconcile listens to create/update/delete events for `Cluster` resources and
 // manages probes for the shoot control namespace for these clusters by looking at the cluster state.
-func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 	cluster, notFound, err := r.getCluster(ctx, req.Namespace, req.Name)
 	if err != nil {
@@ -64,7 +68,7 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// If the cluster is not found then any existing probes if present will be unregistered
 	if notFound {
 		if r.ProberMgr.Unregister(req.Name) {
-			log.Info("Cluster not found, existing prober will be removed")
+			log.Info("Cluster not found, existing prober has been removed")
 		}
 		return ctrl.Result{}, nil
 	}
@@ -77,15 +81,15 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// If shoot is marked for deletion then any existing probes will be unregistered
 	if shoot.DeletionTimestamp != nil {
 		if r.ProberMgr.Unregister(req.Name) {
-			log.Info("Cluster has been marked for deletion, existing prober will be removed")
+			log.Info("Cluster has been marked for deletion, existing prober has been removed")
 		}
 		return ctrl.Result{}, nil
 	}
 
 	// if hibernation is enabled then we will remove any existing prober. Any resource scaling that is required in case of hibernation will now be handled as part of worker reconciliation in extension controllers.
-	if gardencorev1beta1helper.HibernationIsEnabled(shoot) {
+	if v1beta1helper.HibernationIsEnabled(shoot) {
 		if r.ProberMgr.Unregister(req.Name) {
-			log.Info("Cluster hibernation is enabled, existing prober will be removed")
+			log.Info("Cluster hibernation is enabled, existing prober has been removed")
 		}
 		return ctrl.Result{}, nil
 	}
@@ -93,7 +97,18 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// if control plane migration has started for a shoot, then any existing probe should be removed as it is no longer needed.
 	if shoot.Status.LastOperation != nil && shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeMigrate {
 		if r.ProberMgr.Unregister(req.Name) {
-			log.Info("Cluster migration is enabled, existing prober will be removed")
+			log.Info("Cluster migration is enabled, existing prober has been removed")
+		}
+		return ctrl.Result{}, nil
+	}
+
+	// if a shoot is created without any workers (this can only happen for control-plane-as-a-service use case), then if there is a probe registered then
+	// unregister the probe and return early. If there is no existing probe registered then return early.
+	if len(shoot.Spec.Provider.Workers) == 0 {
+		if r.ProberMgr.Unregister(req.Name) {
+			log.Info("Cluster does not have any workers. An existing probe has been removed")
+		} else {
+			log.Info("Cluster does not have any workers. No probe will be created")
 		}
 		return ctrl.Result{}, nil
 	}
@@ -105,8 +120,8 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 }
 
 // getCluster will retrieve the cluster object given the namespace and name Not found is not treated as an error and is handled differently in the caller
-func (r *ClusterReconciler) getCluster(ctx context.Context, namespace string, name string) (cluster *gardenerv1alpha1.Cluster, notFound bool, err error) {
-	cluster = &gardenerv1alpha1.Cluster{}
+func (r *Reconciler) getCluster(ctx context.Context, namespace string, name string) (cluster *extensionsv1alpha1.Cluster, notFound bool, err error) {
+	cluster = &extensionsv1alpha1.Cluster{}
 	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, cluster); err != nil {
 		if errors.IsNotFound(err) {
 			return nil, true, nil
@@ -122,8 +137,7 @@ func (r *ClusterReconciler) getCluster(ctx context.Context, namespace string, na
 // is in the process of creation, then it is possible that the control plane components have not completely come up. If the probe starts prematurely then it could start to scale down resources.
 // 2. During control plane migration, the value of shoot.Status.LastOperation.Type will be "Restore" => During this time it is imperative that probe is started early to ensure
 // that MCM is scaled down in case connectivity to the Kube API server of the shoot on the destination seed is broken, else it will try and recreate machines.
-//
-// If the shoot.Status.LastOperation.Type == "Reconcile" then it is assumed that the cluster has been successfully created at-least once and it is safe to start the probe
+// If the shoot.Status.LastOperation.Type == "Reconcile" then it is assumed that the cluster has been successfully created at-least once, and it is safe to start the probe.
 func canStartProber(shoot *v1beta1.Shoot) bool {
 	if shoot.Status.IsHibernated || shoot.Status.LastOperation == nil {
 		return false
@@ -138,7 +152,7 @@ func canStartProber(shoot *v1beta1.Shoot) bool {
 
 // startProber sets up a new probe against a given key which uniquely identifies the probe.
 // Typically, the key in case of a shoot cluster is the shoot namespace
-func (r *ClusterReconciler) startProber(ctx context.Context, logger logr.Logger, key string) {
+func (r *Reconciler) startProber(ctx context.Context, logger logr.Logger, key string) {
 	_, ok := r.ProberMgr.GetProber(key)
 	if !ok {
 		deploymentScaler := scaler.NewScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter, logger)
@@ -151,9 +165,16 @@ func (r *ClusterReconciler) startProber(ctx context.Context, logger logr.Logger,
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&gardenerv1alpha1.Cluster{}).
-		WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}).
-		Complete(r)
+func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+	c, err := controller.New(
+		controllerName,
+		mgr,
+		controller.Options{
+			Reconciler:              r,
+			MaxConcurrentReconciles: r.MaxConcurrentReconciles},
+	)
+	if err != nil {
+		return err
+	}
+	return c.Watch(&source.Kind{Type: &extensionsv1alpha1.Cluster{}}, &handler.EnqueueRequestForObject{}, workerLessShoot(c.GetLogger()))
 }

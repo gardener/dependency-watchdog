@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -115,4 +116,35 @@ func CreateTestNamespace(ctx context.Context, g *WithT, cli client.Client, nameP
 	}
 	g.Expect(cli.Create(ctx, &ns)).To(BeNil())
 	return ns.Name
+}
+
+// TeardownEnv cancels the context and stops testenv.
+func TeardownEnv(g *WithT, testEnv *envtest.Environment, cancelFn context.CancelFunc) {
+	cancelFn()
+	err := testEnv.Stop()
+	g.Expect(err).NotTo(HaveOccurred())
+}
+
+// MergeMaps merges newMaps with an oldMap. Keys defined in the new Map which are present in the old Map will be overwritten.
+func MergeMaps[T any](oldMap map[string]T, newMaps ...map[string]T) map[string]T {
+	var out map[string]T
+
+	if oldMap != nil {
+		out = make(map[string]T)
+	}
+	for k, v := range oldMap {
+		out[k] = v
+	}
+
+	for _, newMap := range newMaps {
+		if newMap != nil && out == nil {
+			out = make(map[string]T)
+		}
+
+		for k, v := range newMap {
+			out[k] = v
+		}
+	}
+
+	return out
 }

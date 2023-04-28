@@ -19,4 +19,6 @@ set -e
 echo "> Adding Apache License header to all go files where it is not present"
 
 # Uses the tool https://github.com/google/addlicense
-addlicense -v -c "SAP SE or an SAP affiliate company" -y 2022 -l apache -ignore "vendor/**" -ignore "**/*.md" -ignore "**/*.yaml" -ignore "**/Dockerfile" .
+
+YEAR="$(date +%Y)"
+addlicense -v -c "SAP SE or an SAP affiliate company" -y "${YEAR}" -l apache -ignore "vendor/**" -ignore "**/*.md" -ignore "**/*.yaml" -ignore "**/Dockerfile" .

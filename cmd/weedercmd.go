@@ -18,7 +18,7 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/gardener/dependency-watchdog/controllers"
+	"github.com/gardener/dependency-watchdog/controllers/endpoint"
 	internalutils "github.com/gardener/dependency-watchdog/internal/util"
 	"github.com/gardener/dependency-watchdog/internal/weeder"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
@@ -110,7 +110,7 @@ func startEndpointsControllerMgr(logger logr.Logger) (manager.Manager, error) {
 		return nil, fmt.Errorf("failed creating clientset for dwd-weeder %w", err)
 	}
 
-	if err := (&controllers.EndpointReconciler{
+	if err := (&endpoint.Reconciler{
 		Client:       mgr.GetClient(),
 		SeedClient:   clientSet,
 		WeederConfig: weederConfig,

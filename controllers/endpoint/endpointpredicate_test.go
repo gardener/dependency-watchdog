@@ -14,7 +14,7 @@
 
 //go:build !kind_tests
 
-package controllers
+package endpoint
 
 import (
 	"testing"

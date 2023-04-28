@@ -49,6 +49,8 @@ These are the points to be followed while writing tests that use `envtest` setup
 - The tests run by the suite can be table-driven as well.
 - Use the `envtest` setup when there is a need of an environment close to an actual setup. Eg: start controllers against a real Kubernetes control plane to catch bugs that can only happen when talking to a real API server.
 
+> NOTE: It is currently not possible to bring up more than one envtest environments. See [issue#1363](https://github.com/kubernetes-sigs/controller-runtime/issues/1363). We enforce running serial execution of test suites each of which uses a different envtest environments. See [hack/test.sh](../../hack/test.sh).
+
 ### Vanilla Kind Cluster Tests
 There are some tests where we need a vanilla kind cluster setup, for eg:- The `scaler.go` code in the `prober` package uses the `scale` subresource to scale the deployments mentioned in the prober config. But the `envtest` setup does not support the `scale` subresource as of now. So we need this setup to test if the deployments are scaled as per the config or not.
 You can check out the code for this setup [here](../../internal/test/kind.go). You can add utility methods for different kubernetes and custom resources in there.

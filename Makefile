@@ -15,8 +15,8 @@ ENVTEST   := $(TOOLS_BIN_DIR)/setup-envtest
 
 .PHONY: revendor
 revendor:
-	@env GO111MODULE=on go mod tidy -v
-	@env GO111MODULE=on go mod vendor -v
+	@env GO111MODULE=on go mod tidy
+	@env GO111MODULE=on go mod vendor
 
 .PHONY: update-dependencies
 update-dependencies:

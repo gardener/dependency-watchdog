@@ -44,17 +44,25 @@ type controllerTestEnv struct {
 }
 
 // CreateDefaultControllerTestEnv creates a controller-runtime testEnv and provides access to the convenience interface to interact with it.
-func CreateDefaultControllerTestEnv(scheme *runtime.Scheme) (ControllerTestEnv, error) {
-	return CreateControllerTestEnv(scheme, nil)
+func CreateDefaultControllerTestEnv(scheme *runtime.Scheme, apiServerFlags map[string]string) (ControllerTestEnv, error) {
+	return CreateControllerTestEnv(scheme, nil, apiServerFlags)
 }
 
 // CreateControllerTestEnv creates a controller-runtime testEnv using the provided scheme and crdDirectoryPaths and provides access to the convenience interface to interact with it.
-func CreateControllerTestEnv(scheme *runtime.Scheme, crdDirectoryPaths []string) (ControllerTestEnv, error) {
+func CreateControllerTestEnv(scheme *runtime.Scheme, crdDirectoryPaths []string, apiServerFlags map[string]string) (ControllerTestEnv, error) {
 	testEnv := &envtest.Environment{
 		CRDDirectoryPaths:     crdDirectoryPaths,
 		ErrorIfCRDPathMissing: false,
 		Scheme:                scheme,
 	}
+
+	if apiServerFlags != nil {
+		kubeApiServerArgs := testEnv.ControlPlane.GetAPIServer().Configure()
+		for k, v := range apiServerFlags {
+			kubeApiServerArgs.Set(k, v)
+		}
+	}
+
 	cfg, err := testEnv.Start()
 	if err != nil {
 		log.Fatalf("error in starting testEnv: %v", err)
