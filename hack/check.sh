@@ -30,7 +30,7 @@ done
 echo "> Check"
 
 echo "Executing golangci-lint"
-golangci-lint -v run $GOLANGCI_LINT_CONFIG_FILE --timeout 10m $@
+golangci-lint run $GOLANGCI_LINT_CONFIG_FILE --timeout 10m $@
 
 
 echo "Executing gomegacheck"
