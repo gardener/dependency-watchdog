@@ -30,7 +30,7 @@ set -o pipefail
 echo "> Check Imports"
 
 this_module=$(go list -m)
-export GO111MODULE=on
+export GO111MODULE=off
 
 packages=()
 for p in "$@" ; do
