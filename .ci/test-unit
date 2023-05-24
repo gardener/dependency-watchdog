@@ -44,6 +44,4 @@ fi
 ###############################################################################
 
 make test
-go tool cover -func cover.out
-
 echo "Finished executing unit/env tests."
