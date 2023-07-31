@@ -111,5 +111,3 @@ require (
 	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 )
-
-exclude k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
