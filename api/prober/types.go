@@ -21,10 +21,8 @@ import (
 
 // Config provides typed access to prober configuration
 type Config struct {
-	// InternalKubeConfigSecretName is the name of the kubernetes secret which has the kubeconfig to connect to the shoot control plane API server via internal domain
-	InternalKubeConfigSecretName string `json:"internalKubeConfigSecretName"`
-	// ExternalKubeConfigSecretName is the name of the kubernetes secret which has the kubeconfig to connect to the shoot control plane API server via external domain
-	ExternalKubeConfigSecretName string `json:"externalKubeConfigSecretName"`
+	// KubeConfigSecretName is the name of the kubernetes secret which has the kubeconfig to connect to the shoot control plane API server via internal domain
+	KubeConfigSecretName string `json:"kubeConfigSecretName"`
 	// ProbeInterval is the interval with which the probe will be run
 	ProbeInterval *metav1.Duration `json:"probeInterval,omitempty"`
 	// InitialDelay is the initial delay in running a probe for the first time
@@ -35,12 +33,16 @@ type Config struct {
 	SuccessThreshold *int `json:"successThreshold,omitempty"`
 	// FailureThreshold is the number of consecutive times a probe is unsuccessful to ascertain that the probe is unhealthy
 	FailureThreshold *int `json:"failureThreshold,omitempty"`
-	// InternalProbeFailureBackoffDuration is the backoff duration if the internal probe is unhealthy, before reattempting the internal probe
-	InternalProbeFailureBackoffDuration *metav1.Duration `json:"internalProbeFailureBackoffDuration,omitempty"`
+	// APIServerProbeFailureBackoffDuration is the backoff duration if the internal probe is unhealthy, before reattempting the internal probe
+	APIServerProbeFailureBackoffDuration *metav1.Duration `json:"internalProbeFailureBackoffDuration,omitempty"`
 	// BackoffJitterFactor is the jitter with which a probe is run
 	BackoffJitterFactor *float64 `json:"backoffJitterFactor,omitempty"`
 	// DependentResourceInfos are the dependent resources that should be considered for scaling in case the shoot control API server cannot be reached via external domain
 	DependentResourceInfos []DependentResourceInfo `json:"dependentResourceInfos"`
+	// KCMNodeMonitorGraceDuration is the node-monitor-grace-duration set in the kcm flags
+	KCMNodeMonitorGraceDuration *metav1.Duration `json:"kcmNodeMonitorGraceDuration"`
+	// LeaseFailureThresholdFraction is used to determine the maximum number of leases that can be expired for a lease probe to succeed.
+	LeaseFailureThresholdFraction *float64 `json:"leaseFailureThresholdFraction,omitempty"`
 }
 
 // DependentResourceInfo captures a dependent resource which should be scaled

@@ -217,8 +217,8 @@ func runProberAndCheckStatus(t *testing.T, duration time.Duration, probeStatusEn
 	runProber(p, duration)
 
 	g.Expect(p.IsClosed()).To(BeTrue())
-	checkProbeStatus(t, p.internalProbeStatus, probeStatusEntry.expectedInternalProbeSuccessCount, probeStatusEntry.expectedInternalProbeErrorCount)
-	checkProbeStatus(t, p.externalProbeStatus, probeStatusEntry.expectedExternalProbeSuccessCount, probeStatusEntry.expectedExternalProbeErrorCount)
+	checkProbeStatus(t, p.apiServerProbeStatus, probeStatusEntry.expectedInternalProbeSuccessCount, probeStatusEntry.expectedInternalProbeErrorCount)
+	checkProbeStatus(t, p.leaseProbeStatus, probeStatusEntry.expectedExternalProbeSuccessCount, probeStatusEntry.expectedExternalProbeErrorCount)
 }
 
 func runProber(p *Prober, d time.Duration) {
@@ -261,12 +261,12 @@ func setupProberTest(t *testing.T) {
 
 func createConfig(successThreshold int, failureThreshold int, probeInterval metav1.Duration, initialDelay metav1.Duration, backoffJitterFactor float64) *papi.Config {
 	return &papi.Config{
-		SuccessThreshold:                    &successThreshold,
-		FailureThreshold:                    &failureThreshold,
-		ProbeInterval:                       &probeInterval,
-		BackoffJitterFactor:                 &backoffJitterFactor,
-		InternalProbeFailureBackoffDuration: &internalProbeFailureBackoffDuration,
-		InitialDelay:                        &initialDelay,
-		ProbeTimeout:                        &defaultProbeTimeout,
+		SuccessThreshold:                     &successThreshold,
+		FailureThreshold:                     &failureThreshold,
+		ProbeInterval:                        &probeInterval,
+		BackoffJitterFactor:                  &backoffJitterFactor,
+		APIServerProbeFailureBackoffDuration: &internalProbeFailureBackoffDuration,
+		InitialDelay:                         &initialDelay,
+		ProbeTimeout:                         &defaultProbeTimeout,
 	}
 }

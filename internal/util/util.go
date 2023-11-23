@@ -47,3 +47,19 @@ func ReadAndUnmarshall[T any](filename string) (*T, error) {
 	}
 	return t, nil
 }
+
+// EqualOrBeforeNow returns false if the argument passed is after the current time.
+func EqualOrBeforeNow(expiryTime time.Time) bool {
+	if expiryTime.After(time.Now()) {
+		return false
+	}
+	return true
+}
+
+// FillDefaultIfNil assigns the default value if the pointer is nil
+func FillDefaultIfNil[T any](val *T, defaultVal T) {
+	if val == nil {
+		val = new(T)
+		*val = defaultVal
+	}
+}
