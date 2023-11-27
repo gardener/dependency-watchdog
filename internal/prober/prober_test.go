@@ -182,7 +182,26 @@ func TestAPIServerProbeShouldNotRunIfClientNotCreated(t *testing.T) {
 	runProberAndCheckStatus(t, 12*time.Millisecond, config, entry)
 }
 
-func runProberAndCheckStatus(t *testing.T, duration time.Duration, config *papi.Config, probeStatusEntry probeSimulatorEntry) {
+func TestLeaseProbeShouldResetIfNoOwnedLeasesPresent(t *testing.T) {
+	createMockInterfaces(t)
+	config := createConfig(1, 2, metav1.Duration{Duration: 5 * time.Millisecond}, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+	entry := probeSimulatorEntry{
+		name:                               "lease probe should reset if no owned lease is present",
+		leaseList:                          &coordinationv1.LeaseList{},
+		expectedAPIServerProbeSuccessCount: 1,
+		expectedAPIServerProbeErrorCount:   0,
+		expectedLeaseProbeSuccessCount:     0,
+		expectedLeaseProbeErrorCount:       0,
+	}
+	initializeMockInterfaces(entry)
+	p := NewProber(context.Background(), "default", config, fakeClient, mockScaler, mockShootClientCreator, proberTestLogger)
+	p.leaseProbeStatus.successCount = 1
+	runProber(p, 12*time.Millisecond)
+	checkProbeStatus(t, p.leaseProbeStatus, entry.expectedLeaseProbeSuccessCount, entry.expectedLeaseProbeErrorCount)
+	checkProbeStatus(t, p.apiServerProbeStatus, entry.expectedAPIServerProbeSuccessCount, entry.expectedAPIServerProbeErrorCount)
+}
+
+func runProberAndCheckStatus(t *testing.T, duration time.Duration, config *papi.Config, simulatorEntry probeSimulatorEntry) {
 	g := NewWithT(t)
 	p := NewProber(context.Background(), "default", config, fakeClient, mockScaler, mockShootClientCreator, proberTestLogger)
 	g.Expect(p.IsClosed()).To(BeFalse())
@@ -190,8 +209,8 @@ func runProberAndCheckStatus(t *testing.T, duration time.Duration, config *papi.
 	runProber(p, duration)
 
 	g.Expect(p.IsClosed()).To(BeTrue())
-	checkProbeStatus(t, p.apiServerProbeStatus, probeStatusEntry.expectedAPIServerProbeSuccessCount, probeStatusEntry.expectedAPIServerProbeErrorCount)
-	checkProbeStatus(t, p.leaseProbeStatus, probeStatusEntry.expectedLeaseProbeSuccessCount, probeStatusEntry.expectedLeaseProbeErrorCount)
+	checkProbeStatus(t, p.apiServerProbeStatus, simulatorEntry.expectedAPIServerProbeSuccessCount, simulatorEntry.expectedAPIServerProbeErrorCount)
+	checkProbeStatus(t, p.leaseProbeStatus, simulatorEntry.expectedLeaseProbeSuccessCount, simulatorEntry.expectedLeaseProbeErrorCount)
 }
 
 func runProber(p *Prober, d time.Duration) {
