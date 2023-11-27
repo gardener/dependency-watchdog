@@ -56,10 +56,10 @@ func EqualOrBeforeNow(expiryTime time.Time) bool {
 	return true
 }
 
-// FillDefaultIfNil assigns the default value if the pointer is nil
-func FillDefaultIfNil[T any](val *T, defaultVal T) {
+// GetValOrDefault assigns the default value if the pointer is nil
+func GetValOrDefault[T any](val *T, defaultVal T) *T {
 	if val == nil {
-		val = new(T)
-		*val = defaultVal
+		return &defaultVal
 	}
+	return val
 }

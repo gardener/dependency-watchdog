@@ -72,6 +72,7 @@ func testCheckIfDefaultValuesAreSetForAllOptionalMissingValues(t *testing.T, s *
 	g.Expect(*config.FailureThreshold).To(Equal(DefaultFailureThreshold), "LoadConfig should set failure threshold to DefaultFailureThreshold if not set in the config file")
 	g.Expect(config.APIServerProbeFailureBackoffDuration.Milliseconds()).To(Equal(DefaultAPIServerProbeFailureBackoffDuration.Milliseconds()), "LoadConfig should set backOff duration to DefaultAPIServerProbeFailureBackoffDuration if not set in the config file")
 	g.Expect(*config.BackoffJitterFactor).To(Equal(DefaultBackoffJitterFactor), "LoadConfig should set jitter factor to DefaultJitterFactor if not set in the config file")
+	g.Expect(*config.LeaseFailureThresholdFraction).To(Equal(DefaultLeaseFailureThresholdFraction), "LoadConfig should set lease failure threshold fraction to DefaultLeaseFailureThresholdFraction if not set in the config file")
 	for _, resInfo := range config.DependentResourceInfos {
 		g.Expect(resInfo.ScaleUpInfo.InitialDelay.Milliseconds()).To(Equal(DefaultScaleInitialDelay.Milliseconds()), fmt.Sprintf("LoadConfig should set scale up initial delay for %v to DefaultInitialDelay if not set in the config file", resInfo.Ref.Name))
 		g.Expect(resInfo.ScaleUpInfo.Timeout.Milliseconds()).To(Equal(DefaultScaleUpdateTimeout.Milliseconds()), fmt.Sprintf("LoadConfig should set scale up timeout for %v to DefaultScaleUpTimeout if not set in the config file", resInfo.Ref.Name))

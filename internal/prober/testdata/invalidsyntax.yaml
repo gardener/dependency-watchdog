@@ -1,5 +1,5 @@
-internalKubeConfigSecretName: "dws-interal-probe-secret"
-externalKubeConfigSecretName: "dwd-external-probe-secret"
+kubeConfigSecretName: "dwd-api-server-probe-secret"
+kcmNodeMonitorGraceDuration: 2m
 dependentResourceInfos:
   - ref:
       kind: "Deployment"

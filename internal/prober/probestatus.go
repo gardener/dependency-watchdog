@@ -23,7 +23,6 @@ import (
 type probeStatus struct {
 	successCount int
 	errorCount   int
-	lastErr      error
 	backOff      *time.Timer
 }
 
@@ -42,11 +41,10 @@ func (ps *probeStatus) handleIgnorableError(err error) {
 	}
 }
 
-func (ps *probeStatus) recordFailure(err error, failureThreshold int, failureThresholdBackoffDuration time.Duration) {
+func (ps *probeStatus) recordFailure(failureThreshold int, failureThresholdBackoffDuration time.Duration) {
 	if ps.errorCount < failureThreshold {
 		ps.errorCount++
 	}
-	ps.lastErr = err
 	ps.successCount = 0
 	if ps.isUnhealthy(failureThreshold) {
 		ps.resetBackoff(failureThresholdBackoffDuration)
@@ -55,10 +53,15 @@ func (ps *probeStatus) recordFailure(err error, failureThreshold int, failureThr
 
 func (ps *probeStatus) recordSuccess(successThreshold int) {
 	ps.errorCount = 0
-	ps.lastErr = nil
 	if ps.successCount < successThreshold {
 		ps.successCount++
 	}
+	ps.resetBackoff(0)
+}
+
+func (ps *probeStatus) reset() {
+	ps.errorCount = 0
+	ps.successCount = 0
 	ps.resetBackoff(0)
 }
 

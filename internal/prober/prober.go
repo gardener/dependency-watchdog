@@ -139,7 +139,7 @@ func (p *Prober) probeAPIServer(shootClient kubernetes.Interface) {
 	err := p.doProbe(shootClient)
 	if err != nil {
 		if !p.apiServerProbeStatus.canIgnoreProbeError(err) {
-			p.apiServerProbeStatus.recordFailure(err, *p.config.FailureThreshold, p.config.APIServerProbeFailureBackoffDuration.Duration)
+			p.apiServerProbeStatus.recordFailure(*p.config.FailureThreshold, p.config.APIServerProbeFailureBackoffDuration.Duration)
 			p.l.Info("Recording API server probe failure, Skipping lease probe and scaling operation", "err", err.Error(), "failedAttempts", p.apiServerProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
 		} else {
 			p.apiServerProbeStatus.handleIgnorableError(err)
@@ -151,22 +151,6 @@ func (p *Prober) probeAPIServer(shootClient kubernetes.Interface) {
 	p.l.Info("API server probe is successful", "successfulAttempts", p.apiServerProbeStatus.successCount, "successThreshold", p.config.SuccessThreshold)
 }
 
-/*
-Get Node Leases.
-if err != nil -> log and return
-list all leases -> filter ones with ownerReferences.
-calc number of expired leases,
-if more than x% nodes have expired leases -> scale down flow
-else -> scale up flow
-
-New config values:-
-// kubeletNodeLeaseDuration
-// KCMNodeMonitorGraceDuration
-if GraceDuration > LeaseDuration then expiry time = spec.renewTime + kubeletNodeLeaseDuration
-if GraceDuration = LeaseDuration then expiry time = spec.renewTime + (kubeletNodeLeaseDuration * fraction(to be decided later))
-
-// FailureThresholdFraction (how many leases expired before taking action)
-*/
 func (p *Prober) probeNodeLeases(shootClient kubernetes.Interface) {
 	backOffIfNeeded(&p.leaseProbeStatus)
 	leaseList, err := shootClient.CoordinationV1().Leases(nodeLeaseNamespace).List(p.ctx, metav1.ListOptions{})
@@ -186,16 +170,14 @@ func (p *Prober) probeNodeLeases(shootClient kubernetes.Interface) {
 			}
 		}
 	}
-
-	if expiredLeaseCount == 0 || ownedLeaseCount == 0 {
+	if ownedLeaseCount == 0 {
+		p.l.Info("No owned node leases are present in the cluster, resetting the lease probe")
+		p.leaseProbeStatus.reset()
 		return
 	}
 	if expiredLeaseCount/ownedLeaseCount > *p.config.LeaseFailureThresholdFraction {
-		p.leaseProbeStatus.recordFailure(
-			fmt.Errorf("leaseFailureThreshold %f breached for Shoot: %s. %f leases expired out of total %f observed node leases", *p.config.LeaseFailureThresholdFraction, p.namespace, expiredLeaseCount, ownedLeaseCount),
-			*p.config.FailureThreshold,
-			0)
-		p.l.Info("Recording lease probe failure", "err", err.Error(), "failedAttempts", p.leaseProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
+		p.leaseProbeStatus.recordFailure(*p.config.FailureThreshold, 0)
+		p.l.Info("Recording lease probe failure", "err", fmt.Errorf("leaseFailureThreshold %f breached for Shoot: %s. %f leases expired out of total %f observed node leases", *p.config.LeaseFailureThresholdFraction, p.namespace, expiredLeaseCount, ownedLeaseCount), "failedAttempts", p.leaseProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
 	} else {
 		p.leaseProbeStatus.recordSuccess(*p.config.SuccessThreshold)
 		p.l.Info("Lease probe is successful", "successfulAttempts", p.leaseProbeStatus.successCount, "successThreshold", p.config.SuccessThreshold)
@@ -205,7 +187,7 @@ func (p *Prober) probeNodeLeases(shootClient kubernetes.Interface) {
 func (p *Prober) isLeaseExpired(lease coordinationv1.Lease) bool {
 	var expiryTime time.Time
 	kcmNodeMonitorGraceDuration := p.config.KCMNodeMonitorGraceDuration.Duration
-	kubeletNodeLeaseDuration := time.Duration(*lease.Spec.LeaseDurationSeconds)
+	kubeletNodeLeaseDuration := time.Duration(*lease.Spec.LeaseDurationSeconds) * time.Second
 
 	if kcmNodeMonitorGraceDuration > kubeletNodeLeaseDuration {
 		expiryTime = lease.Spec.RenewTime.Add(kubeletNodeLeaseDuration)

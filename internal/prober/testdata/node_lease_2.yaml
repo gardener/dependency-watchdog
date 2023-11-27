@@ -1,0 +1,12 @@
+apiVersion: coordination.k8s.io/v1
+kind: Lease
+metadata:
+  name: lease-2
+  namespace: kube-node-lease
+  ownerReferences:
+    - apiVersion: v1
+      kind: Node
+      name: node-2
+spec:
+  holderIdentity: node-2
+  leaseDurationSeconds: 40

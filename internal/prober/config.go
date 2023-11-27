@@ -69,7 +69,7 @@ func validate(c *papi.Config, scheme *runtime.Scheme) error {
 	v := new(util.Validator)
 	// Check the mandatory config parameters for which a default will not be set
 	v.MustNotBeEmpty("KubeConfigSecretName", c.KubeConfigSecretName)
-	v.MustNotBeEmpty("KCMNodeMonitorGraceDuration", c.KCMNodeMonitorGraceDuration)
+	v.MustNotBeNil("KCMNodeMonitorGraceDuration", c.KCMNodeMonitorGraceDuration)
 	v.MustNotBeEmpty("ScaleResourceInfos", c.DependentResourceInfos)
 	for _, resInfo := range c.DependentResourceInfos {
 		v.ResourceRefMustBeValid(resInfo.Ref, scheme)
@@ -83,14 +83,14 @@ func validate(c *papi.Config, scheme *runtime.Scheme) error {
 }
 
 func fillDefaultValues(c *papi.Config) {
-	util.FillDefaultIfNil(c.ProbeInterval, metav1.Duration{Duration: DefaultProbeInterval})
-	util.FillDefaultIfNil(c.InitialDelay, metav1.Duration{Duration: DefaultProbeInitialDelay})
-	util.FillDefaultIfNil(c.ProbeTimeout, metav1.Duration{Duration: DefaultProbeTimeout})
-	util.FillDefaultIfNil(c.APIServerProbeFailureBackoffDuration, metav1.Duration{Duration: DefaultAPIServerProbeFailureBackoffDuration})
-	util.FillDefaultIfNil(c.SuccessThreshold, DefaultSuccessThreshold)
-	util.FillDefaultIfNil(c.FailureThreshold, DefaultFailureThreshold)
-	util.FillDefaultIfNil(c.BackoffJitterFactor, DefaultBackoffJitterFactor)
-	util.FillDefaultIfNil(c.LeaseFailureThresholdFraction, DefaultLeaseFailureThresholdFraction)
+	c.ProbeInterval = util.GetValOrDefault(c.ProbeInterval, metav1.Duration{Duration: DefaultProbeInterval})
+	c.InitialDelay = util.GetValOrDefault(c.InitialDelay, metav1.Duration{Duration: DefaultProbeInitialDelay})
+	c.ProbeTimeout = util.GetValOrDefault(c.ProbeTimeout, metav1.Duration{Duration: DefaultProbeTimeout})
+	c.APIServerProbeFailureBackoffDuration = util.GetValOrDefault(c.APIServerProbeFailureBackoffDuration, metav1.Duration{Duration: DefaultAPIServerProbeFailureBackoffDuration})
+	c.SuccessThreshold = util.GetValOrDefault(c.SuccessThreshold, DefaultSuccessThreshold)
+	c.FailureThreshold = util.GetValOrDefault(c.FailureThreshold, DefaultFailureThreshold)
+	c.BackoffJitterFactor = util.GetValOrDefault(c.BackoffJitterFactor, DefaultBackoffJitterFactor)
+	c.LeaseFailureThresholdFraction = util.GetValOrDefault(c.LeaseFailureThresholdFraction, DefaultLeaseFailureThresholdFraction)
 	fillDefaultValuesForResourceInfos(c.DependentResourceInfos)
 }
 
@@ -103,7 +103,7 @@ func fillDefaultValuesForResourceInfos(resourceInfos []papi.DependentResourceInf
 
 func fillDefaultValuesForScaleInfo(scaleInfo *papi.ScaleInfo) {
 	if scaleInfo != nil {
-		util.FillDefaultIfNil(scaleInfo.Timeout, metav1.Duration{Duration: DefaultScaleUpdateTimeout})
-		util.FillDefaultIfNil(scaleInfo.InitialDelay, metav1.Duration{Duration: DefaultScaleInitialDelay})
+		scaleInfo.Timeout = util.GetValOrDefault(scaleInfo.Timeout, metav1.Duration{Duration: DefaultScaleUpdateTimeout})
+		scaleInfo.InitialDelay = util.GetValOrDefault(scaleInfo.InitialDelay, metav1.Duration{Duration: DefaultScaleInitialDelay})
 	}
 }

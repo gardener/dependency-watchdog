@@ -1,5 +1,4 @@
-internalKubeConfigSecretName: ""
-externalKubeConfigSecretName: ""
+kubeConfigSecretName: ""
 probeInterval: 20s
 initialDelay: 5s
 successThreshold: 1

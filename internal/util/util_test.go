@@ -18,6 +18,7 @@ package util
 
 import (
 	"context"
+	"k8s.io/utils/pointer"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -80,4 +81,22 @@ func TestReadAndUnmarshall(t *testing.T) {
 	for k, v := range c.Data {
 		g.Expect(expectedData).To(HaveKeyWithValue(k, v))
 	}
+}
+
+func TestEqualOrBeforeNow(t *testing.T) {
+	g := NewWithT(t)
+	g.Expect(EqualOrBeforeNow(time.Now())).To(Equal(true))
+	g.Expect(EqualOrBeforeNow(time.Now().Add(-time.Millisecond))).To(Equal(true))
+	g.Expect(EqualOrBeforeNow(time.Now().Add(time.Millisecond))).To(Equal(false))
+}
+
+func TestFillDefaultIfNil(t *testing.T) {
+	g := NewWithT(t)
+	var testInt *int
+	testInt = GetValOrDefault[int](testInt, 10)
+	g.Expect(*testInt).To(Equal(10))
+
+	testFloat := pointer.Float64(1.0)
+	testFloat = GetValOrDefault(testFloat, 2.0)
+	g.Expect(*testFloat).To(Equal(1.0))
 }

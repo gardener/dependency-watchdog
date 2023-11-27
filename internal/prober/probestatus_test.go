@@ -30,8 +30,8 @@ import (
 
 func TestIsHealthy(t *testing.T) {
 	g := NewWithT(t)
-	unhealthy := createProbeStatus(0, 0, nil, nil)
-	healthy := createProbeStatus(4, 0, nil, nil)
+	unhealthy := createProbeStatus(0, 0, nil)
+	healthy := createProbeStatus(4, 0, nil)
 	successThreshold := 3
 
 	g.Expect(unhealthy.isHealthy(successThreshold)).To(BeFalse(), "unhealthy.isHealthy should have been false")
@@ -41,8 +41,8 @@ func TestIsHealthy(t *testing.T) {
 
 func TestIsUnhealthy(t *testing.T) {
 	g := NewWithT(t)
-	unhealthy := createProbeStatus(0, 4, nil, nil)
-	healthy := createProbeStatus(0, 2, nil, nil)
+	unhealthy := createProbeStatus(0, 4, nil)
+	healthy := createProbeStatus(0, 2, nil)
 	failureThreshold := 3
 
 	g.Expect(unhealthy.isUnhealthy(failureThreshold)).To(BeTrue(), "unhealthy.isUnhealthy should have been true")
@@ -52,12 +52,12 @@ func TestIsUnhealthy(t *testing.T) {
 
 func TestRestBackoff(t *testing.T) {
 	g := NewWithT(t)
-	ps := createProbeStatus(0, 0, nil, time.NewTimer(1*time.Minute))
+	ps := createProbeStatus(0, 0, time.NewTimer(1*time.Minute))
 	prevTimer := ps.backOff
 	ps.resetBackoff(1 * time.Millisecond)
 	g.Expect(prevTimer.Stop()).To(BeFalse(), "RestBackOff should have stopped the existing timer before starting a new one")
 
-	ps = createProbeStatus(0, 0, nil, nil)
+	ps = createProbeStatus(0, 0, nil)
 	ps.resetBackoff(1 * time.Millisecond)
 	g.Expect(ps.backOff).ToNot(BeNil(), "RestBackOff should start a new timer if probestatus backOff is nil")
 
@@ -67,7 +67,7 @@ func TestRestBackoff(t *testing.T) {
 
 func TestRecordSuccess(t *testing.T) {
 	g := NewWithT(t)
-	ps := createProbeStatus(2, 0, nil, time.NewTimer(1*time.Minute))
+	ps := createProbeStatus(2, 0, time.NewTimer(1*time.Minute))
 	successThreshold := 3
 	successCount := ps.successCount
 
@@ -75,26 +75,20 @@ func TestRecordSuccess(t *testing.T) {
 
 	g.Expect(ps.successCount).To(Equal(successCount+1), "RecordSuccess should have incremented success count by 1")
 	g.Expect(ps.errorCount).To(BeZero(), "RecordSuccess should have made errorCount equal to 0")
-	g.Expect(ps.lastErr).ToNot(HaveOccurred(), "RecordSuccess should have made lastErr equal to nil")
-
 	t.Log("RecordSuccess Passed")
 }
 
 func TestRecordFailure(t *testing.T) {
 	g := NewWithT(t)
-	ps := createProbeStatus(0, 1, nil, nil)
+	ps := createProbeStatus(0, 1, nil)
 	failureThreshold := 3
 	errCount := ps.errorCount
-	err := errors.New("failure")
-
-	ps.recordFailure(err, failureThreshold, 0)
+	ps.recordFailure(failureThreshold, 0)
 
 	g.Expect(ps.errorCount).To(Equal(errCount+1), "RecordFailure should have incremented the errorCount by 1")
 	g.Expect(ps.backOff).To(BeNil(), "RecordFailure should not reset backOff if failureThreshold is not crossed")
 	g.Expect(ps.successCount).To(BeZero(), "RecordFailure should have made successCount equal to 0")
-	g.Expect(ps.lastErr).To(Equal(err), "RecordFailure should set the lastErr value to the current error")
-
-	ps.recordFailure(err, failureThreshold, 1*time.Minute)
+	ps.recordFailure(failureThreshold, 1*time.Minute)
 
 	g.Expect(ps.backOff).ToNot(BeNil(), "RecordFailure should have reset the backOff when failureThreshold is crossed")
 
@@ -104,7 +98,7 @@ func TestRecordFailure(t *testing.T) {
 
 func TestCanIgnoreProbeError(t *testing.T) {
 	g := NewWithT(t)
-	ps := createProbeStatus(0, 0, nil, nil)
+	ps := createProbeStatus(0, 0, nil)
 	err := errors.New("test")
 
 	g.Expect(ps.canIgnoreProbeError(err)).To(BeFalse(), fmt.Sprintf("CanIgnoreProbeError should return false for %v", err))
@@ -120,7 +114,7 @@ func TestCanIgnoreProbeError(t *testing.T) {
 
 func TestHandleIgnorableError(t *testing.T) {
 	g := NewWithT(t)
-	ps := createProbeStatus(0, 0, nil, nil)
+	ps := createProbeStatus(0, 0, nil)
 	ps.handleIgnorableError(apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden")))
 	g.Expect(ps.backOff).To(BeNil(),
 		"handleIgnorableError should not reset backOff timer for errors other than throttling error.")
@@ -131,7 +125,15 @@ func TestHandleIgnorableError(t *testing.T) {
 	t.Log("HandleIgnorableError Passed")
 }
 
-func createProbeStatus(successCount int, errCount int, lastErr error, backOff *time.Timer) *probeStatus {
-	return &probeStatus{successCount: successCount, errorCount: errCount,
-		lastErr: lastErr, backOff: backOff}
+func TestReset(t *testing.T) {
+	g := NewWithT(t)
+	ps := createProbeStatus(1, 1, time.NewTimer(1*time.Minute))
+	ps.reset()
+	g.Expect(ps.successCount).To(Equal(0))
+	g.Expect(ps.errorCount).To(Equal(0))
+	g.Expect(ps.backOff.Stop()).To(BeFalse())
+}
+
+func createProbeStatus(successCount int, errCount int, backOff *time.Timer) *probeStatus {
+	return &probeStatus{successCount: successCount, errorCount: errCount, backOff: backOff}
 }

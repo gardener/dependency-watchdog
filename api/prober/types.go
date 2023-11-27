@@ -34,7 +34,7 @@ type Config struct {
 	// FailureThreshold is the number of consecutive times a probe is unsuccessful to ascertain that the probe is unhealthy
 	FailureThreshold *int `json:"failureThreshold,omitempty"`
 	// APIServerProbeFailureBackoffDuration is the backoff duration if the internal probe is unhealthy, before reattempting the internal probe
-	APIServerProbeFailureBackoffDuration *metav1.Duration `json:"internalProbeFailureBackoffDuration,omitempty"`
+	APIServerProbeFailureBackoffDuration *metav1.Duration `json:"apiServerProbeFailureBackoffDuration,omitempty"`
 	// BackoffJitterFactor is the jitter with which a probe is run
 	BackoffJitterFactor *float64 `json:"backoffJitterFactor,omitempty"`
 	// DependentResourceInfos are the dependent resources that should be considered for scaling in case the shoot control API server cannot be reached via external domain
