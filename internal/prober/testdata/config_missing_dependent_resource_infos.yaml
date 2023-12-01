@@ -1,8 +1,5 @@
 kubeConfigSecretName:
 probeInterval: 20s
 initialDelay: 5s
-successThreshold: 1
-failureThreshold: 3
-backOffDuration: 30s
 backOffJitterFactor: 0.2
 kcmNodeMonitorGraceDuration:

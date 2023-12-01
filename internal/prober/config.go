@@ -32,12 +32,6 @@ const (
 	DefaultScaleInitialDelay = 0 * time.Second
 	// DefaultProbeTimeout is the default duration representing total timeout for a probe to complete.
 	DefaultProbeTimeout = 30 * time.Second
-	// DefaultAPIServerProbeFailureBackoffDuration is the default duration representing a backOff duration in the event the internal probe transitions to failed state.
-	DefaultAPIServerProbeFailureBackoffDuration = 30 * time.Second
-	// DefaultSuccessThreshold is the default value for consecutive successful probes required to transition a probe status to success.
-	DefaultSuccessThreshold = 1
-	// DefaultFailureThreshold is the default value for consecutive erroneous probes required to transition a probe status to failed.
-	DefaultFailureThreshold = 3
 	// DefaultBackoffJitterFactor is the default jitter value with which successive probe runs are scheduled.
 	DefaultBackoffJitterFactor = 0.2
 	// DefaultScaleUpdateTimeout is the default duration representing a timeout for the scale operation to complete.
@@ -86,9 +80,6 @@ func fillDefaultValues(c *papi.Config) {
 	c.ProbeInterval = util.GetValOrDefault(c.ProbeInterval, metav1.Duration{Duration: DefaultProbeInterval})
 	c.InitialDelay = util.GetValOrDefault(c.InitialDelay, metav1.Duration{Duration: DefaultProbeInitialDelay})
 	c.ProbeTimeout = util.GetValOrDefault(c.ProbeTimeout, metav1.Duration{Duration: DefaultProbeTimeout})
-	c.APIServerProbeFailureBackoffDuration = util.GetValOrDefault(c.APIServerProbeFailureBackoffDuration, metav1.Duration{Duration: DefaultAPIServerProbeFailureBackoffDuration})
-	c.SuccessThreshold = util.GetValOrDefault(c.SuccessThreshold, DefaultSuccessThreshold)
-	c.FailureThreshold = util.GetValOrDefault(c.FailureThreshold, DefaultFailureThreshold)
 	c.BackoffJitterFactor = util.GetValOrDefault(c.BackoffJitterFactor, DefaultBackoffJitterFactor)
 	c.LeaseFailureThresholdFraction = util.GetValOrDefault(c.LeaseFailureThresholdFraction, DefaultLeaseFailureThresholdFraction)
 	fillDefaultValuesForResourceInfos(c.DependentResourceInfos)

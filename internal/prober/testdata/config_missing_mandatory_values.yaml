@@ -1,9 +1,6 @@
 kubeConfigSecretName: ""
 probeInterval: 20s
 initialDelay: 5s
-successThreshold: 1
-failureThreshold: 3
-internalProbeFailureBackoffDuration: 30s
 backOffJitterFactor: 0.2
 dependentResourceInfos:
   - ref:

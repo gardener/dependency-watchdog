@@ -29,12 +29,6 @@ type Config struct {
 	InitialDelay *metav1.Duration `json:"initialDelay,omitempty"`
 	// ProbeTimeout is the timeout that is set on the client which is used to reach the shoot control plane API server
 	ProbeTimeout *metav1.Duration `json:"probeTimeout,omitempty"`
-	// SuccessThreshold is the number of consecutive times a probe is successful to ascertain that the probe is healthy
-	SuccessThreshold *int `json:"successThreshold,omitempty"`
-	// FailureThreshold is the number of consecutive times a probe is unsuccessful to ascertain that the probe is unhealthy
-	FailureThreshold *int `json:"failureThreshold,omitempty"`
-	// APIServerProbeFailureBackoffDuration is the backoff duration if the internal probe is unhealthy, before reattempting the internal probe
-	APIServerProbeFailureBackoffDuration *metav1.Duration `json:"apiServerProbeFailureBackoffDuration,omitempty"`
 	// BackoffJitterFactor is the jitter with which a probe is run
 	BackoffJitterFactor *float64 `json:"backoffJitterFactor,omitempty"`
 	// DependentResourceInfos are the dependent resources that should be considered for scaling in case the shoot control API server cannot be reached via external domain

@@ -157,7 +157,7 @@ func (r *Reconciler) startProber(ctx context.Context, logger logr.Logger, key st
 	if !ok {
 		deploymentScaler := scaler.NewScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter, logger)
 		shootClientCreator := prober.NewShootClientCreator(r.Client)
-		p := prober.NewProber(ctx, key, r.ProbeConfig, r.Client, deploymentScaler, shootClientCreator, logger)
+		p := prober.NewProber(ctx, key, r.ProbeConfig, deploymentScaler, shootClientCreator, logger)
 		r.ProberMgr.Register(*p)
 		logger.Info("Starting a new prober")
 		go p.Run()

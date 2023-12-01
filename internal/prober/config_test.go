@@ -68,9 +68,6 @@ func testCheckIfDefaultValuesAreSetForAllOptionalMissingValues(t *testing.T, s *
 	g.Expect(config).ToNot(BeNil(), "LoadConfig should not return nil for a valid config file")
 	g.Expect(config.InitialDelay.Milliseconds()).To(Equal(DefaultProbeInitialDelay.Milliseconds()), "LoadConfig should set initial delay to DefaultInitialDelay if not set in the config file")
 	g.Expect(config.ProbeInterval.Milliseconds()).To(Equal(DefaultProbeInterval.Milliseconds()), "LoadConfig should set probe delay to DefaultProbeInterval if not set in the config file")
-	g.Expect(*config.SuccessThreshold).To(Equal(DefaultSuccessThreshold), "LoadConfig should set success threshold to DefaultSuccessThreshold if not set in the config file")
-	g.Expect(*config.FailureThreshold).To(Equal(DefaultFailureThreshold), "LoadConfig should set failure threshold to DefaultFailureThreshold if not set in the config file")
-	g.Expect(config.APIServerProbeFailureBackoffDuration.Milliseconds()).To(Equal(DefaultAPIServerProbeFailureBackoffDuration.Milliseconds()), "LoadConfig should set backOff duration to DefaultAPIServerProbeFailureBackoffDuration if not set in the config file")
 	g.Expect(*config.BackoffJitterFactor).To(Equal(DefaultBackoffJitterFactor), "LoadConfig should set jitter factor to DefaultJitterFactor if not set in the config file")
 	g.Expect(*config.LeaseFailureThresholdFraction).To(Equal(DefaultLeaseFailureThresholdFraction), "LoadConfig should set lease failure threshold fraction to DefaultLeaseFailureThresholdFraction if not set in the config file")
 	for _, resInfo := range config.DependentResourceInfos {
