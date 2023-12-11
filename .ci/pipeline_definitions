@@ -2,9 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 dependency-watchdog:
-  template: 'default'
   base_definition:
-    repo: ~
     traits:
       version:
         preprocess:
@@ -22,7 +20,6 @@ dependency-watchdog:
                 source: ~
               steps:
                 build: ~
-            registry: 'gcr-readwrite'
             image: 'eu.gcr.io/gardener-project/gardener/dependency-watchdog'
             dockerfile: 'Dockerfile'
     steps:
