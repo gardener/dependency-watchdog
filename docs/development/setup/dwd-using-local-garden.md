@@ -7,7 +7,7 @@ To setup a local garden cluster you can follow the [setup-guide](https://github.
 
 ## Dependency Watchdog resources
 
-As part of the local garden installation, a `local` seed will be available. 
+As part of the local garden installation, a `local` seed will be available.
 
 ### Dependency Watchdog resources created in the seed
 

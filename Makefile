@@ -28,7 +28,7 @@ check-vulnerabilities: $(GO_VULN_CHECK)
 	$(GO_VULN_CHECK) ./...
 
 .PHONY: build
-build: 
+build:
 	@.ci/build
 
 .PHONY: build-local
@@ -36,7 +36,7 @@ build-local:
 	@env LOCAL_BUILD=1 .ci/build
 
 .PHONY: docker-image
-docker-image: 
+docker-image:
 	@docker build -t $(IMAGE_REPOSITORY):$(IMAGE_TAG) -f Dockerfile --rm .
 
 .PHONY: docker-push
