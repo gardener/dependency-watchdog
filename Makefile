@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 VERSION             := $(shell cat VERSION)
-REGISTRY            := eu.gcr.io/gardener-project/gardener
+REGISTRY            := europe-docker.pkg.dev/gardener-project/public/gardener
 IMAGE_REPOSITORY    := $(REGISTRY)/dependency-watchdog
 IMAGE_TAG           := $(VERSION)
 BIN_DIR             := bin

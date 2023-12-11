@@ -60,8 +60,8 @@ Local gardener hosts a docker registry which can be access at `localhost:5001`. 
 ```bash
 > docker images
 # Get the IMAGE ID of the dependency watchdog images that were built using docker-build make target.
-> docker tag <IMAGE-ID> localhost:5001/eu.gcr.io/gardener-project/dependency-watchdog-prober:<TAGNAME>
-> docker push localhost:5001/eu.gcr.io/gardener-project/dependency-watchdog-prober:<TAGNAME>
+> docker tag <IMAGE-ID> localhost:5001/europe-docker.pkg.dev/gardener-project/public/gardener/dependency-watchdog-prober:<TAGNAME>
+> docker push localhost:5001/europe-docker.pkg.dev/gardener-project/public/gardener/dependency-watchdog-prober:<TAGNAME>
 ```
 
 ### Update ManagedResource
