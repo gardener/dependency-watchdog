@@ -33,7 +33,7 @@ func TestConfigFileNotFound(t *testing.T) {
 	g := NewWithT(t)
 	config, err := LoadConfig(filepath.Join(testdataPath, "notfound.yaml"))
 	g.Expect(err).To(HaveOccurred(), "LoadConfig should give error if config file is not found")
-	g.Expect(config).ToNot(HaveOccurred(), "LoadConfig should return a nil config if config file is not found")
+	g.Expect(config).To(BeNil(), "LoadConfig should return a nil config if config file is not found")
 	g.Expect(err.Error()).To(ContainSubstring("no such file or directory"), "LoadConfig did not load all the dependent resources")
 }
 
@@ -68,7 +68,7 @@ func TestMissingMandatoryFieldsShouldReturnErrorAndNilConfig(t *testing.T) {
 		config, err := LoadConfig(configPath)
 
 		g.Expect(err).To(HaveOccurred(), "LoadConfig should return error for a config with missing mandatory values")
-		g.Expect(config).ToNot(HaveOccurred(), "LoadConfig should return a nil config for a file with missing mandatory values")
+		g.Expect(config).To(BeNil(), "LoadConfig should return a nil config for a file with missing mandatory values")
 		if merr, ok := err.(*multierr.Error); ok {
 			g.Expect(merr.Errors).To(HaveLen(entry.expectedErrCount), "LoadConfig did not return all the errors for a faulty config")
 		}
