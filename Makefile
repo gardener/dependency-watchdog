@@ -50,9 +50,13 @@ clean:
 	@rm -rf $(TOOLS_BIN_DIR)
 
 .PHONY: check
-check: $(GOIMPORTS) $(GOLANGCI_LINT) $(GOMEGACHECK) $(LOGCHECK) $(GO_IMPORT_BOSS)
+check: $(GOIMPORTS) $(GOLANGCI_LINT) $(LOGCHECK) $(GO_IMPORT_BOSS)
 	@./hack/check.sh --golangci-lint-config=./.golangci.yaml ./controllers/... ./internal/...
 	@./hack/check-imports.sh ./api/... ./cmd/... ./controllers/... ./internal/...
+
+.PHONY: import-boss 
+import-boss: $(GO_IMPORT_BOSS)
+	@./hack/check-imports.sh ./cmd/...
 
 .PHONY: format
 format:

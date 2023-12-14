@@ -33,7 +33,7 @@ this_module=$(go list -m)
 export GO111MODULE=off
 
 packages=()
-for p in "$@" ; do
+for p in "$@"; do
   packages+=("$this_module/${p#./}")
 done
 
