@@ -309,7 +309,7 @@ func testGetResourceAnnotationsWhenNoneExists(t *testing.T) {
 		APIVersion: "apps/v1",
 	})
 	g.Expect(err).ToNot(HaveOccurred())
-	g.Expect(annotations).ToNot(HaveOccurred())
+	g.Expect(annotations).To(BeNil())
 }
 
 func testPatchResourceAnnotations(t *testing.T) {
