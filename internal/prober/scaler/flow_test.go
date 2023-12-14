@@ -53,7 +53,7 @@ func TestCreateScaleUpSequentialFlow(t *testing.T) {
 		currentTaskStep := f.flowStepInfos[i]
 		// using taskID format (see createTaskName function) extract and assert level and resource ref targeted in the task step
 		level, resourceRefNames, err := parseTaskID(string(currentTaskStep.taskID))
-		g.Expect(err).To(BeNil())
+		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(level).To(Equal(i))
 		g.Expect(resourceRefNames).To(HaveLen(1))
 		g.Expect(resourceRefNames[0]).To(Equal(expectedScaleUpResNames[i]))
@@ -87,7 +87,7 @@ func TestCreateScaleDownSequentialAndConcurrentFlow(t *testing.T) {
 		currentTaskStep := f.flowStepInfos[i]
 		// using taskID format (see createTaskName function) extract and assert level and resource ref targeted in the task step
 		level, resourceRefNames, err := parseTaskID(string(currentTaskStep.taskID))
-		g.Expect(err).To(BeNil())
+		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(level).To(Equal(i))
 		g.Expect(expectedScaleUpResNames[i]).To(Equal(resourceRefNames))
 

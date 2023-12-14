@@ -46,8 +46,8 @@ func TestProberConfigSuite(t *testing.T) {
 	}
 
 	scheme := runtime.NewScheme()
-	g.Expect(appsv1.AddToScheme(scheme)).To(BeNil())
-	g.Expect(corev1.AddToScheme(scheme)).To(BeNil())
+	g.Expect(appsv1.AddToScheme(scheme)).To(Succeed())
+	g.Expect(corev1.AddToScheme(scheme)).To(Succeed())
 
 	for _, entry := range tests {
 		t.Run(entry.title, func(t *testing.T) {
@@ -100,7 +100,7 @@ func testMissingConfigValuesShouldReturnErrorAndNilConfig(t *testing.T, s *runti
 		g.Expect(err).To(HaveOccurred(), "LoadConfig should return error for a config with missing mandatory values")
 		g.Expect(config).To(BeNil(), "LoadConfig should return a nil config for a file with missing mandatory values")
 		if merr, ok := err.(*multierr.Error); ok {
-			g.Expect(len(merr.Errors)).To(Equal(entry.expectedErrCount), "LoadConfig did not return all the errors for a faulty config")
+			g.Expect(merr.Errors).To(HaveLen(entry.expectedErrCount), "LoadConfig did not return all the errors for a faulty config")
 		}
 	}
 	t.Log("All the missing mandatory values are identified")
@@ -135,7 +135,7 @@ func testValidConfigShouldPassAllValidations(t *testing.T, s *runtime.Scheme) {
 	config, err := LoadConfig(configPath, s)
 	g.Expect(err).ToNot(HaveOccurred(), "LoadConfig should not give error for a valid config")
 	g.Expect(config).ToNot(BeNil(), "LoadConfig should got nil config for a valid file")
-	g.Expect(len(config.DependentResourceInfos)).To(Equal(3), "LoadConfig did not load all the dependent resources")
+	g.Expect(config.DependentResourceInfos).To(HaveLen(3), "LoadConfig did not load all the dependent resources")
 
 	t.Log("Valid config is loaded correctly")
 }

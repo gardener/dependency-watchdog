@@ -64,7 +64,7 @@ func beforeAll(t *testing.T) {
 
 	t.Log("setting up kind cluster", "name:", kindTestClusterName)
 	kindCluster, err = testutil.CreateKindCluster(testutil.KindConfig{Name: kindTestClusterName})
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	k8sClient = kindCluster.GetClient()
 	restConfig = kindCluster.GetRestConfig()
 }
@@ -73,7 +73,7 @@ func afterAll(t *testing.T) {
 	g := NewWithT(t)
 	t.Log("deleting kind cluster", "name:", kindTestClusterName)
 	err := kindCluster.Delete()
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 }
 
 func TestSuitForK8sHelper(t *testing.T) {
@@ -164,7 +164,7 @@ func testCreateScalesGetter(t *testing.T) {
 	config := getRestConfig(g, kubeConfigPath)
 
 	scalesGetter, err := CreateScalesGetter(config)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(scalesGetter).ToNot(BeNil())
 }
 
@@ -176,7 +176,7 @@ func testGetScaleResource(t *testing.T) {
 	g := NewWithT(t)
 	ctx := context.Background()
 	scalesGetter, err := CreateScalesGetter(restConfig)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(scalesGetter).ToNot(BeNil())
 
 	deployment, cleanup := createDeployment(ctx, g, deploymentPath)
@@ -190,7 +190,7 @@ func testGetScaleResource(t *testing.T) {
 
 	scaler := scalesGetter.Scales(deployment.Namespace)
 	groupResource, scaleRes, err := GetScaleResource(ctx, k8sClient, scaler, k8sHelperTestLogger, resourceRef, 20*time.Second)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 
 	g.Expect(groupResource.Group).To(Equal(resourceGroup))
 	g.Expect(groupResource.Resource).To(Equal(deploymentResource))
@@ -202,7 +202,7 @@ func testGetScaleResourceForUnsupportedGKV(t *testing.T) {
 	g := NewWithT(t)
 	ctx := context.Background()
 	scalesGetter, err := CreateScalesGetter(restConfig)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(scalesGetter).ToNot(BeNil())
 
 	resourceRef := &autoscalingv1.CrossVersionObjectReference{
@@ -244,7 +244,7 @@ func testGetReadyReplicasForResourceWithZeroReplicas(t *testing.T) {
 	}
 
 	readyReplicas, err := GetResourceReadyReplicas(ctx, k8sClient, namespace, resourceRef)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(readyReplicas).To(Equal(int32(0)))
 }
 
@@ -260,7 +260,7 @@ func testGetReadyReplicasForResourceWithNonZeroReplicas(t *testing.T) {
 	defer cleanup(g)
 	d.Spec.Replicas = pointer.Int32(1)
 	err = k8sClient.Create(ctx, d)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 
 	g.Eventually(func() int32 {
 		replicas, err = GetResourceReadyReplicas(ctx, k8sClient, namespace, &autoscalingv1.CrossVersionObjectReference{
@@ -268,7 +268,7 @@ func testGetReadyReplicasForResourceWithNonZeroReplicas(t *testing.T) {
 			Name:       d.Name,
 			APIVersion: "apps/v1",
 		})
-		g.Expect(err).To(BeNil())
+		g.Expect(err).ToNot(HaveOccurred())
 		return replicas
 	}, "30s").Should(Equal(int32(1)))
 }
@@ -282,14 +282,14 @@ func testGetResourceAnnotations(t *testing.T) {
 	defer cleanup(g)
 	metav1.SetMetaDataAnnotation(&d.ObjectMeta, "test.gardener.cloud/bingo", "tringo")
 	err = k8sClient.Create(ctx, d)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 
 	annotations, err := GetResourceAnnotations(ctx, k8sClient, namespace, &autoscalingv1.CrossVersionObjectReference{
 		Kind:       "Deployment",
 		Name:       d.Name,
 		APIVersion: "apps/v1",
 	})
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(annotations).Should(HaveKeyWithValue("test.gardener.cloud/bingo", "tringo"))
 }
 
@@ -301,14 +301,14 @@ func testGetResourceAnnotationsWhenNoneExists(t *testing.T) {
 	d, cleanup := getDeploymentFromFile(ctx, g, deploymentPath)
 	defer cleanup(g)
 	err = k8sClient.Create(ctx, d)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 
 	annotations, err := GetResourceAnnotations(ctx, k8sClient, namespace, &autoscalingv1.CrossVersionObjectReference{
 		Kind:       "Deployment",
 		Name:       d.Name,
 		APIVersion: "apps/v1",
 	})
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(annotations).To(BeNil())
 }
 
@@ -332,9 +332,9 @@ func testPatchResourceAnnotations(t *testing.T) {
 
 	patchBytes := createAnnotationPatchBytes(g, expectedAnnotations)
 	err := PatchResourceAnnotations(ctx, k8sClient, namespace, resourceRef, patchBytes)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	actualAnnotation, err := GetResourceAnnotations(ctx, k8sClient, namespace, resourceRef)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	for k, v := range expectedAnnotations {
 		g.Expect(actualAnnotation).To(HaveKeyWithValue(k, v))
 	}
@@ -342,7 +342,7 @@ func testPatchResourceAnnotations(t *testing.T) {
 
 func createAnnotationPatchBytes(g *WithT, annotMap map[string]string) []byte {
 	mapJson, err := json.Marshal(annotMap)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	b := strings.Builder{}
 	b.WriteString("{\"metadata\":{\"annotations\":")
 	b.WriteString(string(mapJson))
@@ -352,7 +352,7 @@ func createAnnotationPatchBytes(g *WithT, annotMap map[string]string) []byte {
 
 func getSecretFromFile(ctx context.Context, g *WithT) (*corev1.Secret, testCleanup) {
 	secret, err := testutil.GetStructured[corev1.Secret](secretPath)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(secret).ShouldNot(BeNil())
 	return secret, func(g *WithT) {
 		err := client.IgnoreNotFound(k8sClient.Delete(ctx, secret))
@@ -376,10 +376,10 @@ func createKubeConfigSecret(ctx context.Context, g *WithT, sec *corev1.Secret, k
 func createDeployment(ctx context.Context, g *WithT, yamlPath string) (*appsv1.Deployment, testCleanup) {
 	d, cleanup := getDeploymentFromFile(ctx, g, yamlPath)
 	err := k8sClient.Create(ctx, d)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	// post create TypeMeta is blanked out @see https://github.com/kubernetes-sigs/controller-runtime/issues/1517
 	gvks, unversioned, err := k8sClient.Scheme().ObjectKinds(d)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	if !unversioned && len(gvks) == 1 {
 		d.SetGroupVersionKind(gvks[0])
 	}
@@ -388,11 +388,11 @@ func createDeployment(ctx context.Context, g *WithT, yamlPath string) (*appsv1.D
 
 func getDeploymentFromFile(ctx context.Context, g *WithT, yamlPath string) (*appsv1.Deployment, testCleanup) {
 	d, err := testutil.GetStructured[appsv1.Deployment](yamlPath)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(d).ShouldNot(BeNil())
 	return d, func(g *WithT) {
 		err := client.IgnoreNotFound(k8sClient.Delete(ctx, d))
-		g.Expect(err).To(BeNil())
+		g.Expect(err).ToNot(HaveOccurred())
 	}
 }
 

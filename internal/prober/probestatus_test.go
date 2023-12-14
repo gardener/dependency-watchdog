@@ -75,7 +75,7 @@ func TestRecordSuccess(t *testing.T) {
 
 	g.Expect(ps.successCount).To(Equal(successCount+1), "RecordSuccess should have incremented success count by 1")
 	g.Expect(ps.errorCount).To(BeZero(), "RecordSuccess should have made errorCount equal to 0")
-	g.Expect(ps.lastErr).To(BeNil(), "RecordSuccess should have made lastErr equal to nil")
+	g.Expect(ps.lastErr).ToNot(HaveOccurred(), "RecordSuccess should have made lastErr equal to nil")
 
 	t.Log("RecordSuccess Passed")
 }

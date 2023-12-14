@@ -51,7 +51,7 @@ func TestCreateAndDeletePredicateFunc(t *testing.T) {
 
 func testCreatePredicateFunc(g *WithT, numWorkers int) bool {
 	cluster, _, err := test.CreateClusterResource(numWorkers, true)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	e := event.CreateEvent{Object: cluster}
 	predicateFuncs := workerLessShoot(logr.Discard())
 	return predicateFuncs.Create(e)
@@ -59,7 +59,7 @@ func testCreatePredicateFunc(g *WithT, numWorkers int) bool {
 
 func testDeletePredicateFunc(g *WithT, numWorkers int) bool {
 	cluster, _, err := test.CreateClusterResource(numWorkers, true)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	e := event.DeleteEvent{Object: cluster}
 	predicateFuncs := workerLessShoot(logr.Discard())
 	return predicateFuncs.Delete(e)
@@ -90,9 +90,9 @@ func TestUpdatePredicateFunc(t *testing.T) {
 
 func testUpdatePredicateFunc(g *WithT, oldNumWorker, newNumWorkers int) bool {
 	oldCluster, _, err := test.CreateClusterResource(oldNumWorker, true)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	newCluster, _, err := test.CreateClusterResource(newNumWorkers, true)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	e := event.UpdateEvent{
 		ObjectOld: oldCluster,
 		ObjectNew: newCluster,
@@ -122,14 +122,14 @@ func TestShootHasWorkersForNonShootResource(t *testing.T) {
 func TestShootHasWorkersForInvalidShootResource(t *testing.T) {
 	g := NewWithT(t)
 	cluster, _, err := test.CreateClusterResource(0, false)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	seed := gardencorev1beta1.Seed{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "seed-aws",
 		},
 	}
 	seedBytes, err := json.Marshal(seed)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	cluster.Spec.Shoot.Raw = seedBytes
 	result := shootHasWorkers(cluster, logr.Discard())
 	g.Expect(result).To(BeFalse())

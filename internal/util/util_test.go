@@ -32,7 +32,7 @@ func TestSleepWithContextShouldStopIfDeadlineExceeded(t *testing.T) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), 2*time.Millisecond)
 	defer cancelFn()
 	err := SleepWithContext(ctx, 10*time.Millisecond)
-	g.Expect(err).ShouldNot(BeNil())
+	g.Expect(err).Should(HaveOccurred())
 	g.Expect(err).Should(Equal(context.DeadlineExceeded))
 }
 
@@ -55,13 +55,13 @@ func TestSleepWithContextForNonCancellableContext(t *testing.T) {
 	g := NewWithT(t)
 	ctx := context.Background()
 	err := SleepWithContext(ctx, time.Microsecond)
-	g.Expect(err).Should(BeNil())
+	g.Expect(err).ShouldNot(HaveOccurred())
 }
 
 func TestReadAndUnmarshallNonExistingFile(t *testing.T) {
 	g := NewWithT(t)
 	_, err := ReadAndUnmarshall[papi.Config]("file-that-does-not-exists.yaml")
-	g.Expect(err).ToNot(BeNil())
+	g.Expect(err).To(HaveOccurred())
 }
 
 func TestReadAndUnmarshall(t *testing.T) {
@@ -73,7 +73,7 @@ func TestReadAndUnmarshall(t *testing.T) {
 	}
 	configPath := filepath.Join("testdata", "test-config.yaml")
 	c, err := ReadAndUnmarshall[config](configPath)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(c.Name).To(Equal("zeus"))
 	g.Expect(c.Version).To(Equal("v1.0"))
 	expectedData := map[string]string{"level": "god-like", "type": "warrior"}

@@ -5,7 +5,6 @@ TOOLS_BIN_DIR     := $(TOOLS_DIR)/bin
 GOLANGCI_LINT     := $(TOOLS_BIN_DIR)/golangci-lint
 GO_VULN_CHECK     := $(TOOLS_BIN_DIR)/govulncheck
 GOIMPORTS         := $(TOOLS_BIN_DIR)/goimports
-GOMEGACHECK       := $(TOOLS_BIN_DIR)/gomegacheck.so # plugin binary
 LOGCHECK          := $(TOOLS_BIN_DIR)/logcheck.so # plugin binary
 GO_ADD_LICENSE    := $(TOOLS_BIN_DIR)/addlicense
 GO_IMPORT_BOSS    := $(TOOLS_BIN_DIR)/import-boss
@@ -16,10 +15,11 @@ SETUP_ENVTEST     := $(TOOLS_BIN_DIR)/setup-envtest
 GOLANGCI_LINT_VERSION ?= v1.51.2
 GO_VULN_CHECK_VERSION ?= latest
 GOIMPORTS_VERSION ?= latest
-GOMEGACHECK_VERSION ?= latest
 LOGCHECK_VERSION ?= latest
 GO_ADD_LICENSE_VERSION ?= latest
-GO_IMPORT_BOSS_VERSION ?= latest
+# import boss failing with latest , so pinning to most up-to-date successfull version
+# refer https://pkg.go.dev/k8s.io/code-generator@v0.26.3/cmd/import-boss?tab=versions for list of versions
+GO_IMPORT_BOSS_VERSION ?= v0.28.4 
 GO_STRESS_VERSION ?= latest
 SETUP_ENVTEST_VERSION ?= latest
 
@@ -38,8 +38,6 @@ $(GOLANGCI_LINT):
 $(GOIMPORTS):
 	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION)
 
-$(GOMEGACHECK):
-	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/gardener/gardener/hack/tools/gomegacheck@$(GOMEGACHECK_VERSION)
 
 $(LOGCHECK):
 	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/gardener/gardener/hack/tools/logcheck@$(LOGCHECK_VERSION)

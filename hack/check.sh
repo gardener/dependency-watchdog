@@ -32,11 +32,6 @@ echo "> Check"
 echo "Executing golangci-lint"
 golangci-lint run $GOLANGCI_LINT_CONFIG_FILE --timeout 10m $@
 
-
-echo "Executing gomegacheck"
-# shellcheck disable=SC2068
-gomegacheck ${@:1}
-
 echo "Executing logcheck"
 # shellcheck disable=SC2068
 logcheck ${@:1}
