@@ -65,7 +65,7 @@ func setupWeederEnv(ctx context.Context, t *testing.T, kubeApiServerFlags map[st
 	g := NewWithT(t)
 
 	controllerTestEnv, err := testutil.CreateDefaultControllerTestEnv(s, kubeApiServerFlags)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 
 	testEnv := controllerTestEnv.GetEnv()
 	cfg := controllerTestEnv.GetConfig()
@@ -77,7 +77,7 @@ func setupWeederEnv(ctx context.Context, t *testing.T, kubeApiServerFlags map[st
 	weederConfigPath := filepath.Join(testdataPath, "weeder-config.yaml")
 	testutil.ValidateIfFileExists(weederConfigPath, t)
 	weederConfig, err := weederpackage.LoadConfig(weederConfigPath)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 
 	epReconciler := &Reconciler{
 		Client:                  crClient,
@@ -91,9 +91,9 @@ func setupWeederEnv(ctx context.Context, t *testing.T, kubeApiServerFlags map[st
 		Scheme: s,
 	})
 
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	err = epReconciler.SetupWithManager(mgr)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	go func() {
 		err = mgr.Start(ctx)
 		g.Expect(err).ToNot(HaveOccurred())
@@ -182,16 +182,16 @@ func testOnlyCLBFPodDeletion(ctx context.Context, _ context.CancelFunc, g *WithT
 	pH := newPod(healthyPod, namespace, "node-0", correctLabels)
 
 	err := reconciler.Client.Create(ctx, pH)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	turnPodToHealthy(ctx, g, reconciler.Client, pH)
 
 	err = reconciler.Client.Create(ctx, pC)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	turnPodToCrashLoop(ctx, g, reconciler.Client, pC)
 
 	pl, err := reconciler.SeedClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
-	g.Expect(err).To(BeNil())
-	g.Expect(len(pl.Items)).Should(Equal(2))
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(pl.Items).Should(HaveLen(2))
 
 	// wait for endpoint controller to take action
 	time.Sleep(5 * time.Second)
@@ -202,7 +202,7 @@ func testOnlyCLBFPodDeletion(ctx context.Context, _ context.CancelFunc, g *WithT
 
 	resultpH := v1.Pod{}
 	err = reconciler.Client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: healthyPod}, &resultpH)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(resultpH.DeletionTimestamp).To(BeNil(), "Healthy pod shouldn't be deleted")
 }
 
@@ -211,12 +211,12 @@ func testPodTurningCLBFDeletion(ctx context.Context, _ context.CancelFunc, g *Wi
 	pod := newPod(testPodName, namespace, "node-0", correctLabels)
 
 	err := reconciler.Client.Create(ctx, pod)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	turnPodToHealthy(ctx, g, reconciler.Client, pod)
 
 	pl, err := reconciler.SeedClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 	g.Expect(err).ToNot(HaveOccurred())
-	g.Expect(len(pl.Items)).Should(Equal(1))
+	g.Expect(pl.Items).Should(HaveLen(1))
 
 	turnPodToCrashLoop(ctx, g, reconciler.Client, pod)
 	// wait for endpoint controller to take action
@@ -231,14 +231,14 @@ func testCLBFPodWithWrongLabelsDeletion(ctx context.Context, _ context.CancelFun
 	createEp(ctx, g, reconciler, namespace, true)
 	pod := newPod(crashingPod, namespace, "node-0", inCorrectLabels)
 	err := reconciler.Client.Create(ctx, pod)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	turnPodToCrashLoop(ctx, g, reconciler.Client, pod)
 
 	time.Sleep(5 * time.Second)
 
 	currentPod := v1.Pod{}
 	err = reconciler.Client.Get(ctx, client.ObjectKeyFromObject(pod), &currentPod)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(currentPod.DeletionTimestamp).To(BeNil(), "CrashLoop Pod shouldn't be deleted in this case")
 }
 
@@ -247,7 +247,7 @@ func testPodTurningCLBFAfterWatchDuration(ctx context.Context, _ context.CancelF
 	pod := newPod(testPodName, namespace, "node-0", correctLabels)
 
 	err := reconciler.Client.Create(ctx, pod)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	turnPodToHealthy(ctx, g, reconciler.Client, pod)
 
 	// introducing wait
@@ -258,7 +258,7 @@ func testPodTurningCLBFAfterWatchDuration(ctx context.Context, _ context.CancelF
 
 	currentPod := v1.Pod{}
 	err = reconciler.Client.Get(ctx, client.ObjectKeyFromObject(pod), &currentPod)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(currentPod.DeletionTimestamp).To(BeNil(), "CrashLoop pod shouldn't be deleted in this case")
 }
 
@@ -269,18 +269,18 @@ func testNoCLBFPodDeletionWhenEndpointNotReady(ctx context.Context, _ context.Ca
 	turnEndpointToNotReady(ctx, g, reconciler.Client, ep)
 
 	el := v1.EndpointsList{}
-	g.Expect(reconciler.Client.List(ctx, &el)).To(BeNil())
+	g.Expect(reconciler.Client.List(ctx, &el)).To(Succeed())
 
 	pod := newPod(crashingPod, namespace, "node-0", correctLabels)
 	err := reconciler.Client.Create(ctx, pod)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	turnPodToCrashLoop(ctx, g, reconciler.Client, pod)
 
 	time.Sleep(5 * time.Second)
 
 	currentPod := v1.Pod{}
 	err = reconciler.Client.Get(ctx, client.ObjectKeyFromObject(pod), &currentPod)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(currentPod.DeletionTimestamp).To(BeNil())
 
 }
@@ -288,7 +288,7 @@ func testNoCLBFPodDeletionWhenEndpointNotReady(ctx context.Context, _ context.Ca
 func testNoCLBFPodDeletionOnContextCancellation(ctx context.Context, cancelFn context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string) {
 	pod := newPod(crashingPod, namespace, "node-0", correctLabels)
 	err := reconciler.Client.Create(ctx, pod)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	turnPodToCrashLoop(ctx, g, reconciler.Client, pod)
 
 	createEp(ctx, g, reconciler, namespace, true)
@@ -296,7 +296,7 @@ func testNoCLBFPodDeletionOnContextCancellation(ctx context.Context, cancelFn co
 	cancelFn()
 
 	currentPod, err := reconciler.SeedClient.CoreV1().Pods(namespace).Get(context.TODO(), crashingPod, metav1.GetOptions{})
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(currentPod.DeletionTimestamp).To(BeNil())
 }
 
@@ -304,7 +304,7 @@ func testPodWatchEndsAbruptlyBeforeSpecifiedWatchDuration(ctx context.Context, _
 	pod := newPod(testPodName, namespace, "node-0", correctLabels)
 
 	err := reconciler.Client.Create(ctx, pod)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	turnPodToHealthy(ctx, g, reconciler.Client, pod)
 
 	// new endpoint creation should trigger watch creation
@@ -360,7 +360,7 @@ func createEp(ctx context.Context, g *WithT, reconciler *Reconciler, namespace s
 			},
 		}
 	}
-	g.Expect(reconciler.Client.Create(ctx, ep)).To(BeNil())
+	g.Expect(reconciler.Client.Create(ctx, ep)).To(Succeed())
 }
 
 func newPod(name, namespace, host string, labels map[string]string) *v1.Pod {

@@ -58,7 +58,7 @@ func TestSuite(t *testing.T) {
 		{"testCreateShootClient", "shootclient should be created", testCreateShootClient},
 	}
 	envTest, err = testenv.CreateDefaultControllerTestEnv(scheme.Scheme, nil)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	sk8sClient = envTest.GetClient()
 	for _, test := range tests {
 		ns := testenv.CreateTestNamespace(context.Background(), g, sk8sClient, strings.ToLower(test.name))
@@ -74,7 +74,7 @@ func testSecretNotFound(t *testing.T, namespace string) {
 	setupShootClientTest(t, namespace)
 	k8sInterface, err := clientCreator.CreateClient(sctx, shootClientTestLogger, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, time.Second)
 	g.Expect(apierrors.IsNotFound(err)).To(BeTrue())
-	g.Expect(k8sInterface).To(BeNil())
+	g.Expect(k8sInterface).ToNot(HaveOccurred())
 }
 
 func testConfigNotFound(t *testing.T, namespace string) {
@@ -82,11 +82,11 @@ func testConfigNotFound(t *testing.T, namespace string) {
 	teardown := setupShootClientTest(t, namespace)
 	defer teardown()
 	err := sk8sClient.Create(sctx, secret)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	shootClient, err := clientCreator.CreateClient(sctx, shootClientTestLogger, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, time.Second)
-	g.Expect(err).ToNot(BeNil())
+	g.Expect(err).To(HaveOccurred())
 	g.Expect(apierrors.IsNotFound(err)).To(BeFalse())
-	g.Expect(shootClient).To(BeNil())
+	g.Expect(shootClient).ToNot(HaveOccurred())
 
 }
 
@@ -95,16 +95,16 @@ func testCreateShootClient(t *testing.T, namespace string) {
 	teardown := setupShootClientTest(t, namespace)
 	defer teardown()
 	kubeconfig, err := testenv.ReadFile(kubeConfigPath)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(kubeconfig).ToNot(BeNil())
 	secret.Data = map[string][]byte{
 		"kubeconfig": kubeconfig.Bytes(),
 	}
 	err = sk8sClient.Create(sctx, secret)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 
 	shootClient, err := clientCreator.CreateClient(sctx, shootClientTestLogger, secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, time.Second)
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(shootClient).ToNot(BeNil())
 }
 
@@ -114,12 +114,12 @@ func setupShootClientTest(t *testing.T, namespace string) func() {
 	testenv.FileExistsOrFail(secretPath)
 	secret, err = testenv.GetStructured[corev1.Secret](secretPath)
 	secret.ObjectMeta.Namespace = namespace
-	g.Expect(err).To(BeNil())
+	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(secret).ToNot(BeNil())
 	clientCreator = NewShootClientCreator(sk8sClient)
 
 	return func() {
 		err := sk8sClient.Delete(sctx, secret)
-		g.Expect(err).Should(BeNil())
+		g.Expect(err).ShouldNot(HaveOccurred())
 	}
 }

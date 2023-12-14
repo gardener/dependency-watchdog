@@ -48,7 +48,7 @@ func TestMustNotBeEmpty(t *testing.T) {
 		actualResult := v.MustNotBeEmpty(entry.key, entry.value)
 		g.Expect(entry.result).To(Equal(actualResult))
 		if !actualResult {
-			g.Expect(v.Error).ToNot(BeNil())
+			g.Expect(v.Error).To(HaveOccurred())
 		}
 	}
 }
@@ -71,7 +71,7 @@ func TestMustNotBeNil(t *testing.T) {
 		actualResult := v.MustNotBeNil(entry.key, entry.value)
 		g.Expect(entry.result).To(Equal(actualResult))
 		if !actualResult {
-			g.Expect(v.Error).ToNot(BeNil())
+			g.Expect(v.Error).To(HaveOccurred())
 		}
 	}
 }
@@ -80,8 +80,8 @@ func TestResourceRefMustBeValid(t *testing.T) {
 	g := NewWithT(t)
 
 	scheme := runtime.NewScheme()
-	g.Expect(appsv1.AddToScheme(scheme)).To(BeNil())
-	g.Expect(corev1.AddToScheme(scheme)).To(BeNil())
+	g.Expect(appsv1.AddToScheme(scheme)).To(Succeed())
+	g.Expect(corev1.AddToScheme(scheme)).To(Succeed())
 
 	tests := []struct {
 		resourceRef autoscalingv1.CrossVersionObjectReference

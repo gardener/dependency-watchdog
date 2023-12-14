@@ -114,7 +114,7 @@ func CreateTestNamespace(ctx context.Context, g *WithT, cli client.Client, nameP
 			GenerateName: namePrefix + "-",
 		},
 	}
-	g.Expect(cli.Create(ctx, &ns)).To(BeNil())
+	g.Expect(cli.Create(ctx, &ns)).To(Succeed())
 	return ns.Name
 }
 

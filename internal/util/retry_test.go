@@ -40,9 +40,9 @@ var (
 func TestNoErrorIfTaskEventuallySucceeds(t *testing.T) {
 	g := NewWithT(t)
 	result := Retry(context.Background(), retryTestLogger, "", passEventually(), numAttempts, backoff, AlwaysRetry)
-	g.Expect(result.Err).Should(BeNil())
+	g.Expect(result.Err).ShouldNot(HaveOccurred())
 	g.Expect(result.Value).Should(Equal("appendPass"))
-	g.Expect(len(list)).Should(Equal(3))
+	g.Expect(list).Should(HaveLen(3))
 	g.Expect(list[0:2]).Should(ConsistOf("appendFail", "appendFail"))
 	g.Expect(list[2]).To(Equal("appendPass"))
 	emptyList()
@@ -51,7 +51,7 @@ func TestNoErrorIfTaskEventuallySucceeds(t *testing.T) {
 func TestErrorIfExceedsAttempts(t *testing.T) {
 	g := NewWithT(t)
 	result := Retry(context.Background(), retryTestLogger, "", appendFail, numAttempts, backoff, AlwaysRetry)
-	g.Expect(len(list)).Should(Equal(numAttempts))
+	g.Expect(list).Should(HaveLen(numAttempts))
 	g.Expect(result.Err.Error()).Should(Equal("appendFail"))
 	g.Expect(result.Value).Should(Equal("appendFail"))
 	emptyList()
@@ -68,7 +68,7 @@ func TestCanRetryReturnsFalse(t *testing.T) {
 		return false
 	}
 	result := Retry(context.Background(), retryTestLogger, "", passEventually(), numAttempts, backoff, runOnceFn)
-	g.Expect(len(list)).Should(Equal(2))
+	g.Expect(list).Should(HaveLen(2))
 	g.Expect(list[0:2]).Should(ConsistOf("appendFail", "appendFail"))
 	g.Expect(result.Err.Error()).Should(Equal("appendFail"))
 	g.Expect(result.Value).Should(Equal(""))
@@ -110,7 +110,7 @@ func TestContextCancelledBeforeBackoffBegins(t *testing.T) {
 
 		g.Expect(result.Err).Should(Equal(context.Canceled))
 		g.Expect(result.Value).Should(Equal(""))
-		g.Expect(len(list)).Should(Equal(1))
+		g.Expect(list).Should(HaveLen(1))
 	}()
 	wg.Wait()
 	emptyList()
@@ -183,7 +183,7 @@ func TestRetryOnErrorWhenContextIsCancelled(t *testing.T) {
 	time.Sleep(20 * time.Millisecond) //forcing counter to be incremented
 	cancelFn()
 	g.Expect(counter).To(BeNumerically(">", 0))
-	g.Expect(ctx.Err()).ToNot(BeNil())
+	g.Expect(ctx.Err()).ToNot(Succeed())
 }
 
 func appendFail() (string, error) {
