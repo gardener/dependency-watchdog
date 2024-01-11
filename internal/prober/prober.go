@@ -16,7 +16,6 @@ package prober
 
 import (
 	"context"
-	"fmt"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,7 +36,6 @@ const (
 	defaultGetSecretMaxAttempts         = 3
 	backOffDurationForThrottledRequests = 10 * time.Second
 	// expiryBufferFraction is used to compute a revised expiry time used by the prober to determine expired leases
-	// This will be used only when nodeLeaseDuration is equal to the kcmNodeMonitorGraceDuration.
 	// Using a fraction allows the prober to intervene before KCM marks a node as unknown, but at the same time allowing
 	// kubelet sufficient retries to renew the node lease.
 	// Eg:- nodeLeaseDuration = 40s, kcmNodeMonitorGraceDuration = 40s, kubeletRenewTime = 10s.
@@ -109,22 +107,41 @@ func (p *Prober) probe(ctx context.Context) {
 	}
 	p.l.Info("API server probe is successful, will conduct node lease probe")
 
-	shouldScale, err := p.probeNodeLeases(shootClient)
-	if shouldScale {
-		if err != nil {
-			p.l.Info("Lease probe failed, performing scale down operation if required", "err", err.Error())
-			err := p.scaler.ScaleDown(ctx)
-			if err != nil {
-				p.l.Error(err, "Failed to scale down resources")
-			}
-			return
-		}
+	candidateNodeLeases, err := p.probeNodeLeases(shootClient)
+	if err != nil {
+		return
+	}
+	if len(candidateNodeLeases) == 0 {
+		p.l.Info("No owned node leases are present in the cluster, skipping scaling operation")
+		return
+	}
+	if p.shouldPerformScaleUp(candidateNodeLeases) {
 		p.l.Info("Lease probe succeeded, performing scale up operation if required")
 		err := p.scaler.ScaleUp(ctx)
 		if err != nil {
 			p.l.Error(err, "Failed to scale up resources")
 		}
+	} else {
+		p.l.Info("Lease probe failed, performing scale down operation if required")
+		err := p.scaler.ScaleDown(ctx)
+		if err != nil {
+			p.l.Error(err, "Failed to scale down resources")
+		}
+		return
 	}
+}
+
+// shouldPerformScaleUp returns true if the ratio of expired node leases to valid node leases is less than or equal to
+// the NodeLeaseFailureFraction set in the prober config
+func (p *Prober) shouldPerformScaleUp(candidateNodeLeases []coordinationv1.Lease) bool {
+	var validNodeLeaseCount, expiredNodeLeaseCount float64
+	for _, lease := range candidateNodeLeases {
+		if p.isLeaseExpired(lease) {
+			expiredNodeLeaseCount++
+		}
+	}
+	validNodeLeaseCount = float64(len(candidateNodeLeases))
+	return expiredNodeLeaseCount/validNodeLeaseCount < *p.config.NodeLeaseFailureFraction
 }
 
 func (p *Prober) setupProbeClient(ctx context.Context, namespace string, kubeConfigSecretName string) (kubernetes.Interface, error) {
@@ -141,32 +158,14 @@ func (p *Prober) probeAPIServer(shootClient kubernetes.Interface) error {
 	return err
 }
 
-func (p *Prober) probeNodeLeases(shootClient kubernetes.Interface) (shouldScale bool, err error) {
-	leaseList, err := shootClient.CoordinationV1().Leases(nodeLeaseNamespace).List(p.ctx, metav1.ListOptions{})
+func (p *Prober) probeNodeLeases(shootClient kubernetes.Interface) ([]coordinationv1.Lease, error) {
+	nodeLeases, err := shootClient.CoordinationV1().Leases(nodeLeaseNamespace).List(p.ctx, metav1.ListOptions{})
 	if err != nil {
 		p.setBackOffIfThrottlingError(err)
 		p.l.Error(err, "Failed to list leases, will retry probe")
-		return false, err
+		return nil, err
 	}
-	// the filtering of leases is done due to an upstream bug in k8s (https://github.com/kubernetes/kubernetes/issues/119660)
-	// because of which there can be leases without owner references for already removed nodes. we need to filter out such leases.
-	var ownedLeaseCount, expiredLeaseCount float64
-	for _, lease := range leaseList.Items {
-		if lease.OwnerReferences != nil {
-			ownedLeaseCount++
-			if p.isLeaseExpired(lease) {
-				expiredLeaseCount++
-			}
-		}
-	}
-	if ownedLeaseCount == 0 {
-		p.l.Info("No owned node leases are present in the cluster, skipping node lease probe and scaling operation")
-		return false, nil
-	}
-	if expiredLeaseCount/ownedLeaseCount > *p.config.LeaseFailureThresholdFraction {
-		return true, fmt.Errorf("leaseFailureThreshold %f breached. %f leases expired out of total %f observed node leases", *p.config.LeaseFailureThresholdFraction, expiredLeaseCount, ownedLeaseCount)
-	}
-	return true, nil
+	return nodeLeases.Items, err
 }
 
 func (p *Prober) isLeaseExpired(lease coordinationv1.Lease) bool {

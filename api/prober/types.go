@@ -35,8 +35,8 @@ type Config struct {
 	DependentResourceInfos []DependentResourceInfo `json:"dependentResourceInfos"`
 	// KCMNodeMonitorGraceDuration is the node-monitor-grace-duration set in the kcm flags
 	KCMNodeMonitorGraceDuration *metav1.Duration `json:"kcmNodeMonitorGraceDuration"`
-	// LeaseFailureThresholdFraction is used to determine the maximum number of leases that can be expired for a lease probe to succeed.
-	LeaseFailureThresholdFraction *float64 `json:"leaseFailureThresholdFraction,omitempty"`
+	// NodeLeaseFailureFraction is used to determine the maximum number of leases that can be expired for a lease probe to succeed.
+	NodeLeaseFailureFraction *float64 `json:"leaseFailureThresholdFraction,omitempty"`
 }
 
 // DependentResourceInfo captures a dependent resource which should be scaled

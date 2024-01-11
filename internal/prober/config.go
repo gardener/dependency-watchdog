@@ -36,12 +36,12 @@ const (
 	DefaultBackoffJitterFactor = 0.2
 	// DefaultScaleUpdateTimeout is the default duration representing a timeout for the scale operation to complete.
 	DefaultScaleUpdateTimeout = 30 * time.Second
-	// DefaultLeaseFailureThresholdFraction is used to determine the maximum number of leases that can be expired for a lease probe to succeed.
+	// DefaultNodeLeaseFailureFraction is used to determine the maximum number of node leases that can be expired for a node lease probe to succeed.
 	// Eg:- 1. numberOfOwnedLeases = 10, numberOfExpiredLeases = 6.
-	// 		   numberOfExpiredLeases/numberOfOwnedLeases = 0.6, which is >= DefaultLeaseFailureThresholdFraction and so the lease probe will fail.
+	// 		   numberOfExpiredLeases/numberOfOwnedLeases = 0.6, which is >= DefaultNodeLeaseFailureFraction and so the lease probe will fail.
 	//		2. numberOfOwnedLeases = 10, numberOfExpiredLeases = 5.
-	//	 	   numberOfExpiredLeases/numberOfOwnedLeases = 0.5, which is < DefaultLeaseFailureThresholdFraction and so the lease probe will succeed.
-	DefaultLeaseFailureThresholdFraction = 0.60
+	//	 	   numberOfExpiredLeases/numberOfOwnedLeases = 0.5, which is < DefaultNodeLeaseFailureFraction and so the lease probe will succeed.
+	DefaultNodeLeaseFailureFraction = 0.60
 )
 
 // LoadConfig reads the prober configuration from a file, unmarshalls it, fills in the default values and
@@ -81,7 +81,7 @@ func fillDefaultValues(c *papi.Config) {
 	c.InitialDelay = util.GetValOrDefault(c.InitialDelay, metav1.Duration{Duration: DefaultProbeInitialDelay})
 	c.ProbeTimeout = util.GetValOrDefault(c.ProbeTimeout, metav1.Duration{Duration: DefaultProbeTimeout})
 	c.BackoffJitterFactor = util.GetValOrDefault(c.BackoffJitterFactor, DefaultBackoffJitterFactor)
-	c.LeaseFailureThresholdFraction = util.GetValOrDefault(c.LeaseFailureThresholdFraction, DefaultLeaseFailureThresholdFraction)
+	c.NodeLeaseFailureFraction = util.GetValOrDefault(c.NodeLeaseFailureFraction, DefaultNodeLeaseFailureFraction)
 	fillDefaultValuesForResourceInfos(c.DependentResourceInfos)
 }
 
