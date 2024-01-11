@@ -19,15 +19,16 @@ package prober
 import (
 	"context"
 	"errors"
+	"math"
+	"strconv"
+	"testing"
+	"time"
+
 	mockcoordinationv1 "github.com/gardener/dependency-watchdog/internal/mock/client-go/kubernetes/coordinationv1"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/pointer"
-	"math"
-	"strconv"
-	"testing"
-	"time"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -43,7 +44,7 @@ import (
 )
 
 var (
-	unknownError             = errors.New("unknown error")
+	errFoo                   = errors.New("unknown error")
 	proberTestLogger         = logr.Discard()
 	testProbeTimeout         = metav1.Duration{Duration: 3 * time.Millisecond}
 	testProbeInterval        = metav1.Duration{Duration: 3 * time.Millisecond}
@@ -76,7 +77,7 @@ type probeTestCase struct {
 
 func TestAPIServerProbeFailure(t *testing.T) {
 	testCases := []probeTestCase{
-		{name: "Unknown error is returned by api server", discoveryError: unknownError},
+		{name: "Unknown error is returned by api server", discoveryError: errFoo},
 		{name: "Forbidden request error is returned by api server", discoveryError: apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden"))},
 		{name: "Unauthorized request error is returned by api server", discoveryError: apierrors.NewUnauthorized("unauthorized")},
 		{name: "Throttling error is returned by api server", discoveryError: apierrors.NewTooManyRequests("Too many requests", 10)},

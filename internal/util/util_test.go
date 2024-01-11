@@ -18,11 +18,12 @@ package util
 
 import (
 	"context"
-	"k8s.io/utils/pointer"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
+
+	"k8s.io/utils/pointer"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	. "github.com/onsi/gomega"
@@ -85,9 +86,9 @@ func TestReadAndUnmarshall(t *testing.T) {
 
 func TestEqualOrBeforeNow(t *testing.T) {
 	g := NewWithT(t)
-	g.Expect(EqualOrBeforeNow(time.Now())).To(Equal(true))
-	g.Expect(EqualOrBeforeNow(time.Now().Add(-time.Millisecond))).To(Equal(true))
-	g.Expect(EqualOrBeforeNow(time.Now().Add(time.Millisecond))).To(Equal(false))
+	g.Expect(EqualOrBeforeNow(time.Now())).To(BeTrue())
+	g.Expect(EqualOrBeforeNow(time.Now().Add(-time.Millisecond))).To(BeTrue())
+	g.Expect(EqualOrBeforeNow(time.Now().Add(time.Millisecond))).To(BeFalse())
 }
 
 func TestFillDefaultIfNil(t *testing.T) {

@@ -16,10 +16,11 @@ package prober
 
 import (
 	"context"
+	"time"
+
 	coordinationv1 "k8s.io/api/coordination/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"time"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	dwdScaler "github.com/gardener/dependency-watchdog/internal/prober/scaler"
@@ -192,7 +193,7 @@ func (p *Prober) doProbe(client kubernetes.Interface) error {
 
 func (p *Prober) setBackOffIfThrottlingError(err error) {
 	if apierrors.IsTooManyRequests(err) {
-		p.l.V(4).Info("API server is throttled, backing off for %v seconds", backOffDurationForThrottledRequests.Seconds())
+		p.l.V(4).Info("API server is throttled, backing off", "backOffDuration", backOffDurationForThrottledRequests.Seconds())
 		p.resetBackoff(backOffDurationForThrottledRequests)
 	}
 }
