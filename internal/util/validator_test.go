@@ -23,6 +23,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -46,6 +47,27 @@ func TestMustNotBeEmpty(t *testing.T) {
 	for _, entry := range tests {
 		v := Validator{}
 		actualResult := v.MustNotBeEmpty(entry.key, entry.value)
+		g.Expect(entry.result).To(Equal(actualResult))
+		if !actualResult {
+			g.Expect(v.Error).To(HaveOccurred())
+		}
+	}
+}
+
+func TestMustNotBeZeroDuration(t *testing.T) {
+	g := NewWithT(t)
+	tests := []struct {
+		key    string
+		value  metav1.Duration
+		result bool
+	}{
+		{"k1", metav1.Duration{}, false},
+		{"k2", metav1.Duration{Duration: 100}, true},
+		{"k3", metav1.Duration{Duration: 0}, false},
+	}
+	for _, entry := range tests {
+		v := Validator{}
+		actualResult := v.MustNotBeZeroDuration(entry.key, entry.value)
 		g.Expect(entry.result).To(Equal(actualResult))
 		if !actualResult {
 			g.Expect(v.Error).To(HaveOccurred())
@@ -100,5 +122,4 @@ func TestResourceRefMustBeValid(t *testing.T) {
 		actualResult := v.ResourceRefMustBeValid(&entry.resourceRef, scheme)
 		g.Expect(entry.result).To(Equal(actualResult))
 	}
-
 }

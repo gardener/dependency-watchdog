@@ -35,14 +35,14 @@ type ShootClientCreator interface {
 
 // NewShootClientCreator creates an instance of ShootClientCreator.
 func NewShootClientCreator(client client.Client) ShootClientCreator {
-	return &shootclientCreator{client}
+	return &shootClientCreator{client}
 }
 
-type shootclientCreator struct {
+type shootClientCreator struct {
 	client.Client
 }
 
-func (s *shootclientCreator) CreateClient(ctx context.Context, logger logr.Logger, namespace string, secretName string, connectionTimeout time.Duration) (kubernetes.Interface, error) {
+func (s *shootClientCreator) CreateClient(ctx context.Context, logger logr.Logger, namespace string, secretName string, connectionTimeout time.Duration) (kubernetes.Interface, error) {
 	operation := fmt.Sprintf("get-secret-%s-for-namespace-%s", secretName, namespace)
 	retryResult := util.Retry(ctx, logger,
 		operation,

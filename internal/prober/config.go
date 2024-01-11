@@ -63,7 +63,7 @@ func validate(c *papi.Config, scheme *runtime.Scheme) error {
 	v := new(util.Validator)
 	// Check the mandatory config parameters for which a default will not be set
 	v.MustNotBeEmpty("KubeConfigSecretName", c.KubeConfigSecretName)
-	v.MustNotBeNil("KCMNodeMonitorGraceDuration", c.KCMNodeMonitorGraceDuration)
+	v.MustNotBeZeroDuration("KCMNodeMonitorGraceDuration", c.KCMNodeMonitorGraceDuration)
 	v.MustNotBeEmpty("ScaleResourceInfos", c.DependentResourceInfos)
 	for _, resInfo := range c.DependentResourceInfos {
 		v.ResourceRefMustBeValid(resInfo.Ref, scheme)

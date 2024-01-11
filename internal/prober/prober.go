@@ -118,31 +118,28 @@ func (p *Prober) probe(ctx context.Context) {
 	}
 	if p.shouldPerformScaleUp(candidateNodeLeases) {
 		p.l.Info("Lease probe succeeded, performing scale up operation if required")
-		err := p.scaler.ScaleUp(ctx)
-		if err != nil {
+		if err = p.scaler.ScaleUp(ctx); err != nil {
 			p.l.Error(err, "Failed to scale up resources")
 		}
 	} else {
 		p.l.Info("Lease probe failed, performing scale down operation if required")
-		err := p.scaler.ScaleDown(ctx)
-		if err != nil {
+		if err = p.scaler.ScaleDown(ctx); err != nil {
 			p.l.Error(err, "Failed to scale down resources")
 		}
 		return
 	}
 }
 
-// shouldPerformScaleUp returns true if the ratio of expired node leases to valid node leases is less than or equal to
+// shouldPerformScaleUp returns true if the ratio of expired node leases to valid node leases is less than
 // the NodeLeaseFailureFraction set in the prober config
 func (p *Prober) shouldPerformScaleUp(candidateNodeLeases []coordinationv1.Lease) bool {
-	var validNodeLeaseCount, expiredNodeLeaseCount float64
+	var expiredNodeLeaseCount float64
 	for _, lease := range candidateNodeLeases {
 		if p.isLeaseExpired(lease) {
 			expiredNodeLeaseCount++
 		}
 	}
-	validNodeLeaseCount = float64(len(candidateNodeLeases))
-	return expiredNodeLeaseCount/validNodeLeaseCount < *p.config.NodeLeaseFailureFraction
+	return expiredNodeLeaseCount/float64(len(candidateNodeLeases)) < *p.config.NodeLeaseFailureFraction
 }
 
 func (p *Prober) setupProbeClient(ctx context.Context, namespace string, kubeConfigSecretName string) (kubernetes.Interface, error) {
