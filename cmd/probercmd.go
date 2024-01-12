@@ -17,6 +17,7 @@ package cmd
 import (
 	"flag"
 	"fmt"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/gardener/dependency-watchdog/controllers/cluster"
 	"github.com/gardener/dependency-watchdog/internal/prober"
@@ -106,7 +107,7 @@ func startClusterControllerMgr(logger logr.Logger) (manager.Manager, error) {
 
 	mgr, err := ctrl.NewManager(restConf, ctrl.Options{
 		Scheme:                     scheme,
-		MetricsBindAddress:         proberOpts.SharedOpts.MetricsBindAddress,
+		Metrics:                    server.Options{BindAddress: proberOpts.SharedOpts.MetricsBindAddress},
 		HealthProbeBindAddress:     proberOpts.SharedOpts.HealthBindAddress,
 		LeaderElection:             proberOpts.SharedOpts.LeaderElection.Enable,
 		LeaseDuration:              &proberOpts.SharedOpts.LeaderElection.LeaseDuration,
