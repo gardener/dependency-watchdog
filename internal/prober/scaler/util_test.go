@@ -151,7 +151,7 @@ func TestMapToCrossVersionObjectRef(t *testing.T) {
 func TestMapToCrossVersionObjectRefForEmptyResInfos(t *testing.T) {
 	g := NewWithT(t)
 	objRefs := mapToCrossVersionObjectRef([]scalableResourceInfo{})
-	g.Expect(objRefs).To(HaveLen(0))
+	g.Expect(objRefs).To(BeEmpty())
 }
 
 func TestCreateTaskName(t *testing.T) {

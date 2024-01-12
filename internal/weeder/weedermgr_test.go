@@ -106,7 +106,7 @@ func TestUnregisterExistingWeederShouldCloseItAndRemoveItFromManager(t *testing.
 	g.Expect(mgr.Unregister(key)).To(BeTrue(), "mgr.Unregister should unregister the existing weeder")
 	_, ok := mgr.GetWeederRegistration(key)
 	g.Expect(ok).To(BeFalse(), "mgr.Unregister should delete the weeder for the corresponding key")
-	g.Eventually(foundWeederRegistration.IsClosed()).Should(BeTrue(), "mgr.Unregister should cancel the unregistered weeder")
+	g.Eventually(foundWeederRegistration.IsClosed).Should(BeTrue(), "mgr.Unregister should cancel the unregistered weeder")
 
 	t.Log("De-registering a existing weeder succeeded")
 }

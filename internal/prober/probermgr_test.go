@@ -91,7 +91,7 @@ func TestUnregisterExistingProberShouldCloseItAndRemoveItFromManager(t *testing.
 	mgr.Unregister(proberMgrTestNamespace)
 	_, ok := mgr.GetProber(proberMgrTestNamespace)
 	g.Expect(ok).Should(BeFalse(), "mgr.Unregister should delete the prober for the corresponding key")
-	g.Eventually(p.IsClosed()).Should(BeTrue(), "mgr.Unregister should cancel the unregistered prober")
+	g.Eventually(p.IsClosed).Should(BeTrue(), "mgr.Unregister should cancel the unregistered prober")
 
 	t.Log("De-registered existing prober and closed it")
 

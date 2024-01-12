@@ -50,7 +50,7 @@ func (l kindLogger) Errorf(format string, args ...interface{}) {
 	l.logger.Error(fmt.Sprintf(format, args...))
 }
 
-func (l kindLogger) V(level kindlog.Level) kindlog.InfoLogger {
+func (l kindLogger) V(_ kindlog.Level) kindlog.InfoLogger {
 	return l
 }
 
