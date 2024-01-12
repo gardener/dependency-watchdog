@@ -12,7 +12,7 @@ GO_STRESS         := $(TOOLS_BIN_DIR)/stress
 SETUP_ENVTEST     := $(TOOLS_BIN_DIR)/setup-envtest
 
 #default tool versions
-GOLANGCI_LINT_VERSION ?= v1.51.2
+GOLANGCI_LINT_VERSION ?= v1.55.2
 GO_VULN_CHECK_VERSION ?= latest
 GOIMPORTS_VERSION ?= latest
 LOGCHECK_VERSION ?= latest

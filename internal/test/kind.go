@@ -161,7 +161,11 @@ func createRestConfig(clusterName string, kubeConfigBytes []byte) (*rest.Config,
 }
 
 func createClient(clusterName string, restConfig *rest.Config) (client.Client, error) {
-	mapper, err := apiutil.NewDynamicRESTMapper(restConfig)
+	httpClient, err := rest.HTTPClientFor(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create http client for KIND cluster %s : %w", clusterName, err)
+	}
+	mapper, err := apiutil.NewDynamicRESTMapper(restConfig, httpClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dynamic REST Mapper for KIND cluster %s : %w", clusterName, err)
 	}

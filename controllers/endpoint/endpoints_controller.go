@@ -81,7 +81,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 	return c.Watch(
-		&source.Kind{Type: &v1.Endpoints{}},
+		source.Kind(mgr.GetCache(), &v1.Endpoints{}),
 		&handler.EnqueueRequestForObject{},
 		predicate.And(
 			predicate.ResourceVersionChangedPredicate{},
