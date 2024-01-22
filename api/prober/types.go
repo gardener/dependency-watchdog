@@ -57,7 +57,7 @@ type ScaleInfo struct {
 	// Level is used to order the dependent resources. Highest level or the first level starts at 0 and increments. Each dependent resource on a level will have to wait for
 	// all resource in a previous level to finish their scaling operation. If there are more than one resource defined with the same level then they will be scaled concurrently.
 	Level int `json:"level"`
-	// InitialDelay is the time to delay (duration) the scale down/up of this resource. If not specified its default value will be 30s.
+	// InitialDelay is the time to delay (duration) the scale down/up of this resource. If not specified its default value will be 0s.
 	InitialDelay *metav1.Duration `json:"initialDelay,omitempty"`
 	// ScaleTimeout is the time timeout duration to wait for when attempting to update the scaling sub-resource.
 	Timeout *metav1.Duration `json:"timeout,omitempty"`
