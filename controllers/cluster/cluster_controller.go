@@ -113,8 +113,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
+	probeConfig := r.getEffectiveProbeConfig(shoot, log)
 	if canStartProber(shoot) {
-		r.startProber(ctx, log, req.Name)
+		r.startProber(ctx, probeConfig, log, req.Name)
 	}
 	return ctrl.Result{}, nil
 }
@@ -152,12 +153,12 @@ func canStartProber(shoot *v1beta1.Shoot) bool {
 
 // startProber sets up a new probe against a given key which uniquely identifies the probe.
 // Typically, the key in case of a shoot cluster is the shoot namespace
-func (r *Reconciler) startProber(ctx context.Context, logger logr.Logger, key string) {
+func (r *Reconciler) startProber(ctx context.Context, probeConfig *papi.Config, logger logr.Logger, key string) {
 	_, ok := r.ProberMgr.GetProber(key)
 	if !ok {
 		deploymentScaler := scaler.NewScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter, logger)
 		shootClientCreator := prober.NewShootClientCreator(r.Client)
-		p := prober.NewProber(ctx, key, r.ProbeConfig, deploymentScaler, shootClientCreator, logger)
+		p := prober.NewProber(ctx, key, probeConfig, deploymentScaler, shootClientCreator, logger)
 		r.ProberMgr.Register(*p)
 		logger.Info("Starting a new prober")
 		go p.Run()
@@ -177,4 +178,16 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 	return c.Watch(source.Kind(mgr.GetCache(), &extensionsv1alpha1.Cluster{}), &handler.EnqueueRequestForObject{}, workerLessShoot(c.GetLogger()))
+}
+
+// getEffectiveProbeConfig returns the updated probe config after checking the shoot KCM configuration for NodeMonitorGracePeriod.
+// If NodeMonitorGracePeriod is not set in the shoot, then the KCMNodeMonitorGraceDuration defined in the configmap of probe config will be used
+func (r *Reconciler) getEffectiveProbeConfig(shoot *v1beta1.Shoot, logger logr.Logger) *papi.Config {
+	probeConfig := *r.ProbeConfig
+	kcmConfig := shoot.Spec.Kubernetes.KubeControllerManager
+	if kcmConfig != nil && kcmConfig.NodeMonitorGracePeriod != nil {
+		logger.Info("Using the NodeMonitorGracePeriod set in the shoot as KCMNodeMonitorGraceDuration in the probe config")
+		probeConfig.KCMNodeMonitorGraceDuration = *kcmConfig.NodeMonitorGracePeriod
+	}
+	return &probeConfig
 }
