@@ -33,7 +33,7 @@ type Config struct {
 	BackoffJitterFactor *float64 `json:"backoffJitterFactor,omitempty"`
 	// DependentResourceInfos are the dependent resources that should be considered for scaling in case the shoot control API server cannot be reached via external domain
 	DependentResourceInfos []DependentResourceInfo `json:"dependentResourceInfos"`
-	// KCMNodeMonitorGraceDuration is the node-monitor-grace-duration set in the kcm flags
+	// KCMNodeMonitorGraceDuration is the node-monitor-grace-period set in the kcm flags
 	KCMNodeMonitorGraceDuration metav1.Duration `json:"kcmNodeMonitorGraceDuration"`
 	// NodeLeaseFailureFraction is used to determine the maximum number of leases that can be expired for a lease probe to succeed.
 	NodeLeaseFailureFraction *float64 `json:"nodeLeaseFailureFraction,omitempty"`

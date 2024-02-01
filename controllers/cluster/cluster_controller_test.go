@@ -82,7 +82,7 @@ func setupProberEnv(ctx context.Context, g *WithT) (client.Client, *envtest.Envi
 		Scheme:                  mgr.GetScheme(),
 		ScaleGetter:             scalesGetter,
 		ProberMgr:               proberpackage.NewManager(),
-		ProbeConfig:             proberConfig,
+		DefaultProbeConfig:      proberConfig,
 		MaxConcurrentReconciles: maxConcurrentReconcilesProber,
 	}
 	err = clusterReconciler.SetupWithManager(mgr)
@@ -356,7 +356,7 @@ func TestGetEffectiveProbeConfig(t *testing.T) {
 		expectedKCMNodeMonitorGraceDuration *metav1.Duration
 	}{
 		{&metav1.Duration{Duration: 40 * time.Second}, &metav1.Duration{Duration: 40 * time.Second}},
-		{nil, &reconciler.ProbeConfig.KCMNodeMonitorGraceDuration},
+		{nil, &reconciler.DefaultProbeConfig.KCMNodeMonitorGraceDuration},
 	}
 	for _, testCase := range testCases {
 		shoot := testutil.CreateShoot("aws-seed", 1, testCase.shootNodeMonitorGracePeriod)

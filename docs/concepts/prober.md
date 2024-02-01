@@ -3,7 +3,9 @@
 
 ## Overview
 
-Prober starts asynchronous and periodic probes for every shoot cluster's Kube ApiServer. Each probe detects the reachability of Kube Apiserver and if the Kube Apiserver is not reachable it will scale down the dependent kubernetes resources which are given as [configuration](/example/04-dwd-prober-configmap.yaml) to the prober. Once the connectivity to `kube-apiserver` is reestablished, the prober will then proactively scale up the dependent kubernetes resources it had scaled down earlier. 
+Prober starts asynchronous and periodic probes for every shoot cluster. The first probe is the api-server probe which checks the reachability of the API Server from the control plane. The second probe is the lease probe which is done after the api server probe is successful and checks if the number of expired node leases is below a certain threshold. 
+If the lease probe fails, it will scale down the dependent kubernetes resources. Once the connectivity to `kube-apiserver` is reestablished and the number of expired node leases are within the accepted threshold, the prober will then proactively scale up the dependent kubernetes resources it had scaled down earlier. The failure threshold fraction for lease probe
+and dependent kubernetes resources are defined in [configuration](/example/04-dwd-prober-configmap.yaml) that is passed to the prober.
 
 ### Origin
 
@@ -24,17 +26,17 @@ Prober is a central component which is deployed in the `garden` namespace in the
 > NOTE: If you are not familiar with what gardener components like seed, shoot then please see the [appendix](#appendix) for links.
 
 Prober periodically probes Kube ApiServer via two separate probes:
-1.  Internal Probe: Local cluster DNS name which resolves to the ClusterIP of the Kube Apiserver
-2.  External Probe: DNS name via which the kubelet running in each node in the data plane (a.k.a shoot in gardener terminology) communicates to the Kube Apiserver running in its control plane (a.k.a seed in gardener terminology)
+1.  API Server Probe: Local cluster DNS name which resolves to the ClusterIP of the Kube Apiserver
+2.  Lease Probe: Checks for number of expired leases to be within the specified threshold. The threshold defines the limit after which DWD can say that the kubelets are not able to reach the API server.
 
 ## Behind the scene
 
 For all active shoot clusters (which have not been hibernated or deleted or moved to another seed via control-plane-migration), prober will schedule a probe to run periodically. During each run of a probe it will do the following:
 1. Checks if the Kube ApiServer is reachable via local cluster DNS. This should always succeed and will fail only when the Kube ApiServer has gone down. If the Kube ApiServer is down then there can be no further damage to the existing shoot cluster (barring new requests to the Kube Api Server).
-2. Only if the probe is able to reach the Kube ApiServer via local cluster DNS, will it attempt to reach the Kube ApiServer via internal DNS route. This is the same DNS used by the kubelet. This is not an exact replication of how the kubelet would reach its Kube ApiServer but it is close enough. The result of the attempt to reach the Kube ApiServer is recorded in the probe status.
-3. If a probe fails to successfully reach the Kube ApiServer via interal DNS route `failureThreshold` times consecutively then it transitions the probe to `Failed` state.
-4. If and when a probe status transitions to `Failed` then it will initiate a scale-down operation for dependent resources as defined in the prober configuration.
-5. In subsequent runs it will keep checking if it is able to reach the Kube ApiServer via internal DNS route. If it is able to successfully reach it `successThreshold` times consecutively as defined in the prober configuration, then it will start the scale-up operation for dependent resources as defined in the configuration.
+2. Only if the probe is able to reach the Kube ApiServer via local cluster DNS, will it attempt to check the number of expired node leases in the shoot. The node lease renewal is done by the Kubelet, and so we can say that the lease probe is checking if the kubelet is able to reach the API server. If the number of expired node leases reaches 
+ the threshold, then the probe fails.
+3. If and when a lease probe fails, then it will initiate a scale-down operation for dependent resources as defined in the prober configuration.
+4. In subsequent runs it will keep performing the lease probe. If it is successful, then it will start the scale-up operation for dependent resources as defined in the configuration.
 
 ### Prober lifecycle
 
@@ -51,7 +53,15 @@ In the following cases it will either remove an existing probe for this cluster 
 
 If none of the above conditions are true and there is no existing probe for this cluster then a new probe will be created, registered and started.
 
-For details on transitions of a probe see [probe-state-transition](probestatus.md).
+### Probe failure identification
+
+DWD probe can either be a success or it could return an error. If the API server probe fails, the lease probe is not done and the probes will be retried. If the error is a `TooManyRequests` error due to requests to the Kube-API-Server being throttled,
+then the probes are retried after a backOff of `backOffDurationForThrottledRequests`. 
+
+If the lease probe fails, then the error could be due to failure in listing the leases. In this case, no scaling operations are performed. If the error in listing the leases is a `TooManyRequests` error due to requests to the Kube-API-Server being throttled,
+then the probes are retried after a backOff of `backOffDurationForThrottledRequests`.
+
+If there is no error in listing the leases and the lease probe fails, then a scale down of dependent resources based on the provided configuration is done.
 
 ## Appendix
 

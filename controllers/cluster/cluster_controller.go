@@ -50,7 +50,7 @@ type Reconciler struct {
 	Scheme                  *runtime.Scheme
 	ProberMgr               prober.Manager
 	ScaleGetter             scale.ScalesGetter
-	ProbeConfig             *papi.Config
+	DefaultProbeConfig      *papi.Config
 	MaxConcurrentReconciles int
 }
 
@@ -156,7 +156,7 @@ func canStartProber(shoot *v1beta1.Shoot) bool {
 func (r *Reconciler) startProber(ctx context.Context, probeConfig *papi.Config, logger logr.Logger, key string) {
 	_, ok := r.ProberMgr.GetProber(key)
 	if !ok {
-		deploymentScaler := scaler.NewScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter, logger)
+		deploymentScaler := scaler.NewScaler(key, r.DefaultProbeConfig, r.Client, r.ScaleGetter, logger)
 		shootClientCreator := prober.NewShootClientCreator(r.Client)
 		p := prober.NewProber(ctx, key, probeConfig, deploymentScaler, shootClientCreator, logger)
 		r.ProberMgr.Register(*p)
@@ -183,7 +183,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 // getEffectiveProbeConfig returns the updated probe config after checking the shoot KCM configuration for NodeMonitorGracePeriod.
 // If NodeMonitorGracePeriod is not set in the shoot, then the KCMNodeMonitorGraceDuration defined in the configmap of probe config will be used
 func (r *Reconciler) getEffectiveProbeConfig(shoot *v1beta1.Shoot, logger logr.Logger) *papi.Config {
-	probeConfig := *r.ProbeConfig
+	probeConfig := *r.DefaultProbeConfig
 	kcmConfig := shoot.Spec.Kubernetes.KubeControllerManager
 	if kcmConfig != nil && kcmConfig.NodeMonitorGracePeriod != nil {
 		logger.Info("Using the NodeMonitorGracePeriod set in the shoot as KCMNodeMonitorGraceDuration in the probe config")

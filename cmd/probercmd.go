@@ -132,7 +132,7 @@ func startClusterControllerMgr(logger logr.Logger) (manager.Manager, error) {
 		Scheme:                  mgr.GetScheme(),
 		ScaleGetter:             scalesGetter,
 		ProberMgr:               prober.NewManager(),
-		ProbeConfig:             proberConfig,
+		DefaultProbeConfig:      proberConfig,
 		MaxConcurrentReconciles: proberOpts.ConcurrentReconciles,
 	}).SetupWithManager(mgr); err != nil {
 		return nil, fmt.Errorf("failed to register cluster reconciler with the prober controller manager %w", err)
