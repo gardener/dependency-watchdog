@@ -94,6 +94,11 @@ func (p *Prober) Run() {
 	wait.JitterUntilWithContext(p.ctx, p.probe, p.config.ProbeInterval.Duration, *p.config.BackoffJitterFactor, true)
 }
 
+// GetConfig returns the probe config for the prober.
+func (p *Prober) GetConfig() *papi.Config {
+	return p.config
+}
+
 func (p *Prober) probe(ctx context.Context) {
 	p.backOffIfNeeded()
 	shootClient, err := p.setupProbeClient(ctx, p.namespace, p.config.KubeConfigSecretName)

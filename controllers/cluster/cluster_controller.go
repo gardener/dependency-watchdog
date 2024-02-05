@@ -47,10 +47,17 @@ const controllerName = "cluster"
 // Reconciler reconciles a Cluster object
 type Reconciler struct {
 	client.Client
-	Scheme                  *runtime.Scheme
-	ProberMgr               prober.Manager
-	ScaleGetter             scale.ScalesGetter
-	DefaultProbeConfig      *papi.Config
+	// Scheme is the controller-runtime scheme used to initialize the controller manager and to validate the probe config
+	Scheme *runtime.Scheme
+	// ProberMgr is interface to manage lifecycle of probers.
+	ProberMgr prober.Manager
+	// ScaleGetter is used to produce a ScaleInterface
+	ScaleGetter scale.ScalesGetter
+	// DefaultProbeConfig is the seed level config inherited by all shoots whose control plane is hosted in the seed. The default config is used
+	// when the shoot's spec.Kubernetes.KubeControllerManager.NodeMonitorGracePeriod is not set. If it is set, then a new config is generated from
+	// the default config with the updated KCMNodeMonitorGraceDuration.
+	DefaultProbeConfig *papi.Config
+	// MaxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
 	MaxConcurrentReconciles int
 }
 
@@ -156,7 +163,7 @@ func (r *Reconciler) startProber(ctx context.Context, shoot *v1beta1.Shoot, logg
 	_, ok := r.ProberMgr.GetProber(key)
 	if !ok {
 		probeConfig := r.getEffectiveProbeConfig(shoot, logger)
-		deploymentScaler := scaler.NewScaler(key, r.DefaultProbeConfig, r.Client, r.ScaleGetter, logger)
+		deploymentScaler := scaler.NewScaler(key, probeConfig.DependentResourceInfos, r.Client, r.ScaleGetter, logger)
 		shootClientCreator := prober.NewShootClientCreator(r.Client)
 		p := prober.NewProber(ctx, key, probeConfig, deploymentScaler, shootClientCreator, logger)
 		r.ProberMgr.Register(*p)

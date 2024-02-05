@@ -81,7 +81,7 @@ func TestScalerSuite(t *testing.T) {
 func testScaleDownThenScaleUpWhenIgnoreScalingAnnotationIsNotPresent(t *testing.T) {
 	g := NewWithT(t)
 	probeCfg := createProbeConfig(nil)
-	ds := createDefaultScaler(g, probeCfg)
+	ds := createDefaultScaler(g, probeCfg.DependentResourceInfos)
 
 	table := []struct {
 		mcmReplicas                 int32
@@ -123,7 +123,7 @@ func testScaleDownThenScaleUpWhenIgnoreScalingAnnotationIsNotPresent(t *testing.
 func testScaleDownThenScaleUpWhenIgnoreScalingAnnotationIsPresent(t *testing.T) {
 	g := NewWithT(t)
 	probeCfg := createProbeConfig(nil)
-	ds := createDefaultScaler(g, probeCfg)
+	ds := createDefaultScaler(g, probeCfg.DependentResourceInfos)
 	validIgnoreScalingAnnotationMap := map[string]string{ignoreScaleAnnotationKey: "true"}
 	invalidIgnoreScalingAnnotationMap := map[string]string{ignoreScaleAnnotationKey: "foo"}
 
@@ -177,7 +177,7 @@ func testScaleDownThenScaleUpWhenIgnoreScalingAnnotationIsPresent(t *testing.T) 
 func testScalingWhenMandatoryResourceNotFound(t *testing.T) {
 	g := NewWithT(t)
 	probeCfg := createProbeConfig(nil)
-	ds := createDefaultScaler(g, probeCfg)
+	ds := createDefaultScaler(g, probeCfg.DependentResourceInfos)
 	table := []struct {
 		mcmReplicas                          int32
 		caReplicas                           int32
@@ -210,7 +210,7 @@ func testScalingWhenMandatoryResourceNotFound(t *testing.T) {
 func testScalingWhenOptionalResourceNotFound(t *testing.T) {
 	g := NewWithT(t)
 	probeCfg := createProbeConfig(nil)
-	ds := createDefaultScaler(g, probeCfg)
+	ds := createDefaultScaler(g, probeCfg.DependentResourceInfos)
 	table := []struct {
 		mcmReplicas               int32
 		kcmReplicas               int32
@@ -241,7 +241,7 @@ func testGettingScaleSubResourceTimesOut(t *testing.T) {
 	g := NewWithT(t)
 	timeout := time.Nanosecond
 	probeCfg := createProbeConfig(&timeout)
-	ds := createDefaultScaler(g, probeCfg)
+	ds := createDefaultScaler(g, probeCfg.DependentResourceInfos)
 
 	table := []struct {
 		mcmReplicas               int32
@@ -279,7 +279,7 @@ func testScalingWhenKindOfResourceIsInvalid(t *testing.T) {
 	g := NewWithT(t)
 	probeCfg := createProbeConfig(nil)
 	probeCfg.DependentResourceInfos[1].Ref.Kind = "Depoyment" // "Depoyment" is misspelled intentionally
-	ds := createDefaultScaler(g, probeCfg)
+	ds := createDefaultScaler(g, probeCfg.DependentResourceInfos)
 
 	table := []struct {
 		mcmReplicas                          int32
@@ -358,7 +358,7 @@ func testScalingWhenKindOfResourceIsInvalid(t *testing.T) {
 func testResourceShouldNotScaleUpIfCurrentReplicaCountIsPositive(t *testing.T) {
 	g := NewWithT(t)
 	probeCfg := createProbeConfig(nil)
-	ds := createDefaultScaler(g, probeCfg)
+	ds := createDefaultScaler(g, probeCfg.DependentResourceInfos)
 	createDeployment(g, namespace, mcmObjectRef.Name, deploymentImageName, 0, nil)
 	createDeployment(g, namespace, caObjectRef.Name, deploymentImageName, 0, nil)
 	createDeployment(g, namespace, kcmObjectRef.Name, deploymentImageName, 1, map[string]string{replicasAnnotationKey: "2"})
@@ -377,7 +377,7 @@ func testResourceShouldNotScaleUpIfCurrentReplicaCountIsPositive(t *testing.T) {
 func testScaleUpShouldReturnErrorWhenReplicasAnnotationsHasInvalidValue(t *testing.T) {
 	g := NewWithT(t)
 	probeCfg := createProbeConfig(nil)
-	ds := createDefaultScaler(g, probeCfg)
+	ds := createDefaultScaler(g, probeCfg.DependentResourceInfos)
 	createDeployment(g, namespace, mcmObjectRef.Name, deploymentImageName, 0, nil)
 	createDeployment(g, namespace, caObjectRef.Name, deploymentImageName, 0, nil)
 	createDeployment(g, namespace, kcmObjectRef.Name, deploymentImageName, 0, map[string]string{replicasAnnotationKey: "foo"})
@@ -406,15 +406,15 @@ func setUpScalerTests(g *WithT) func(g *WithT) {
 	}
 }
 
-func createDefaultScaler(g *WithT, probeCfg *papi.Config) Scaler {
-	return createScaler(g, probeCfg, defaultTestResourceCheckTimeout, defaultTestResourceCheckInterval, defaultTestScaleResourceBackoff)
+func createDefaultScaler(g *WithT, dependentResourceInfos []papi.DependentResourceInfo) Scaler {
+	return createScaler(g, dependentResourceInfos, defaultTestResourceCheckTimeout, defaultTestResourceCheckInterval, defaultTestScaleResourceBackoff)
 }
 
-func createScaler(g *WithT, probeCfg *papi.Config, resCheckTimeout time.Duration, resCheckInterval time.Duration, scaleResBackoff time.Duration) Scaler {
+func createScaler(g *WithT, dependentResourceInfos []papi.DependentResourceInfo, resCheckTimeout time.Duration, resCheckInterval time.Duration, scaleResBackoff time.Duration) Scaler {
 	cfg := kindTestEnv.GetRestConfig()
 	scalesGetter, err := util.CreateScalesGetter(cfg)
 	g.Expect(err).ToNot(HaveOccurred())
-	ds := NewScaler(namespace, probeCfg, kindTestEnv.GetClient(), scalesGetter, scalerTestLogger,
+	ds := NewScaler(namespace, dependentResourceInfos, kindTestEnv.GetClient(), scalesGetter, scalerTestLogger,
 		withResourceCheckTimeout(resCheckTimeout), withResourceCheckInterval(resCheckInterval), withScaleResourceBackOff(scaleResBackoff))
 	return ds
 }
