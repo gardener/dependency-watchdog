@@ -17,6 +17,7 @@ package cmd
 import (
 	"flag"
 	"fmt"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/gardener/dependency-watchdog/controllers/endpoint"
 	internalutils "github.com/gardener/dependency-watchdog/internal/util"
@@ -89,7 +90,7 @@ func startEndpointsControllerMgr(logger logr.Logger) (manager.Manager, error) {
 	restConf.Burst = proberOpts.KubeApiBurst
 	mgr, err := ctrl.NewManager(restConf, ctrl.Options{
 		Scheme:                     scheme,
-		MetricsBindAddress:         weederOpts.SharedOpts.MetricsBindAddress,
+		Metrics:                    server.Options{BindAddress: weederOpts.SharedOpts.MetricsBindAddress},
 		HealthProbeBindAddress:     weederOpts.SharedOpts.HealthBindAddress,
 		LeaderElection:             weederOpts.SharedOpts.LeaderElection.Enable,
 		LeaseDuration:              &weederOpts.SharedOpts.LeaderElection.LeaseDuration,

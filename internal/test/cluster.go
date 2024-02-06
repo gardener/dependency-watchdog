@@ -28,7 +28,7 @@ import (
 
 // CreateClusterResource creates a test cluster and shoot resources.
 // This should only be used for unit testing.
-func CreateClusterResource(numWorkers int, rawShoot bool) (*gardenerv1alpha1.Cluster, *gardencorev1beta1.Shoot, error) {
+func CreateClusterResource(numWorkers int, nodeMonitorGracePeriod *metav1.Duration, rawShoot bool) (*gardenerv1alpha1.Cluster, *gardencorev1beta1.Shoot, error) {
 	cloudProfile := gardencorev1beta1.CloudProfile{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "aws",
@@ -52,7 +52,7 @@ func CreateClusterResource(numWorkers int, rawShoot bool) (*gardenerv1alpha1.Clu
 			},
 		},
 	}
-	shoot := createShoot(seed.Name, numWorkers)
+	shoot := CreateShoot(seed.Name, numWorkers, nodeMonitorGracePeriod)
 	if rawShoot {
 		shootBytes, err := json.Marshal(shoot)
 		if err != nil {
@@ -65,7 +65,9 @@ func CreateClusterResource(numWorkers int, rawShoot bool) (*gardenerv1alpha1.Clu
 	return &cluster, &shoot, nil
 }
 
-func createShoot(seedName string, numWorkers int) gardencorev1beta1.Shoot {
+// CreateShoot creates a shoot resources.
+// This should only be used for unit testing.
+func CreateShoot(seedName string, numWorkers int, nodeMonitorGracePeriod *metav1.Duration) gardencorev1beta1.Shoot {
 	end := "00 08 * * 1,2,3,4,5"
 	start := "30 19 * * 1,2,3,4,5"
 	location := "Asia/Calcutta"
@@ -79,6 +81,11 @@ func createShoot(seedName string, numWorkers int) gardencorev1beta1.Shoot {
 				Enabled: pointer.Bool(false),
 				Schedules: []gardencorev1beta1.HibernationSchedule{
 					{End: &end, Start: &start, Location: &location},
+				},
+			},
+			Kubernetes: gardencorev1beta1.Kubernetes{
+				KubeControllerManager: &gardencorev1beta1.KubeControllerManagerConfig{
+					NodeMonitorGracePeriod: nodeMonitorGracePeriod,
 				},
 			},
 			Provider: gardencorev1beta1.Provider{

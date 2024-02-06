@@ -6,8 +6,9 @@ metadata:
   name: dependency-watchdog-prober-config
 data:
   dep-config.yaml: |
-    internalKubeConfigSecretName: "shoot-access-dependency-watchdog-internal-probe"
-    externalKubeConfigSecretName: "shoot-access-dependency-watchdog-external-probe"
+    kubeConfigSecretName: "dwd-api-server-probe-secret"
+    kcmNodeMonitorGraceDuration: 40s
+    nodeLeaseFailureFraction: 0.6
     dependentResourceInfos:
       - ref:
           kind: "Deployment"

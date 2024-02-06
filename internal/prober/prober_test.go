@@ -19,8 +19,16 @@ package prober
 import (
 	"context"
 	"errors"
+	"math"
+	"strconv"
 	"testing"
 	"time"
+
+	mockcoordinationv1 "github.com/gardener/dependency-watchdog/internal/mock/client-go/kubernetes/coordinationv1"
+	coordinationv1 "k8s.io/api/coordination/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/utils/pointer"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,192 +41,137 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/gomega"
-
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/version"
-	"k8s.io/client-go/kubernetes"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 var (
-	config                              *papi.Config
-	ctrl                                *gomock.Controller
-	mds                                 *mockscaler.MockScaler
-	msc                                 *mockprober.MockShootClientCreator
-	clientBuilder                       *fake.ClientBuilder
-	fakeClient                          client.WithWatch
-	mki                                 *mockinterface.MockInterface
-	mdi                                 *mockdiscovery.MockDiscoveryInterface
-	errNotIgnorable                     = errors.New("not Ignorable error")
-	internalProbeFailureBackoffDuration = metav1.Duration{Duration: time.Millisecond}
-	proberTestLogger                    = logr.Discard()
-	defaultProbeTimeout                 = metav1.Duration{Duration: 40 * time.Second}
+	errFoo                   = errors.New("unknown error")
+	proberTestLogger         = logr.Discard()
+	testProbeTimeout         = metav1.Duration{Duration: 3 * time.Millisecond}
+	testProbeInterval        = metav1.Duration{Duration: 3 * time.Millisecond}
+	expiredLeaseRenewTime    = metav1.NewMicroTime(time.Now().Add(-(2 * time.Minute)))
+	nonExpiredLeaseRenewTime = metav1.NewMicroTime(time.Now().Add(-time.Second))
 )
 
-type probeStatusEntry struct {
-	name                              string
-	err                               error
-	expectedInternalProbeSuccessCount int
-	expectedInternalProbeErrorCount   int
-	expectedExternalProbeSuccessCount int
-	expectedExternalProbeErrorCount   int
+type probeTestMocks struct {
+	scaler             *mockscaler.MockScaler
+	shootClientCreator *mockprober.MockShootClientCreator
+	kubernetes         *mockinterface.MockInterface
+	discovery          *mockdiscovery.MockDiscoveryInterface
+	coordinationV1     *mockcoordinationv1.MockCoordinationV1Interface
+	lease              *mockcoordinationv1.MockLeaseInterface
 }
 
-func TestInternalProbeErrorCount(t *testing.T) {
-	table := []probeStatusEntry{
-		{"Success Count is incremented", nil, 1, 0, 1, 0},
-		{"Unignorable error is returned by pingKubeApiServer", errNotIgnorable, 0, 1, 0, 0},
-		{"Forbidden request error is returned by pingKubeApiServer", apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden")), 0, 0, 0, 0},
-		{"Unauthorized request error is returned by pingKubeApiServer", apierrors.NewUnauthorized("unauthorized"), 0, 0, 0, 0},
-		{"Throttling error is returned by pingKubeApiServer", apierrors.NewTooManyRequests("Too many requests", 10), 0, 0, 0, 0},
+type probeTestCase struct {
+	name                    string
+	leaseList               *coordinationv1.LeaseList
+	shootClientCreatorError error
+	discoveryError          error
+	leaseListError          error
+	scaleUpError            error
+	scaleDownError          error
+	minScaleUpCount         int
+	maxScaleUpCount         int
+	minScaleDownCount       int
+	maxScaleDownCount       int
+}
+
+func TestAPIServerProbeFailure(t *testing.T) {
+	testCases := []probeTestCase{
+		{name: "Unknown error is returned by api server", discoveryError: errFoo},
+		{name: "Forbidden request error is returned by api server", discoveryError: apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden"))},
+		{name: "Unauthorized request error is returned by api server", discoveryError: apierrors.NewUnauthorized("unauthorized")},
+		{name: "Throttling error is returned by api server", discoveryError: apierrors.NewTooManyRequests("Too many requests", 10)},
 	}
 
-	for _, entry := range table {
+	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
-			setupProberTest(t)
-			config = createConfig(1, 1, metav1.Duration{Duration: 4 * time.Millisecond}, metav1.Duration{Duration: time.Microsecond}, 0.2)
-
-			msc.EXPECT().CreateClient(gomock.Any(), proberTestLogger, gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).AnyTimes()
-			mki.EXPECT().Discovery().Return(mdi).AnyTimes()
-			mdi.EXPECT().ServerVersion().Return(nil, entry.err).AnyTimes()
-			mds.EXPECT().ScaleUp(gomock.Any()).Return(nil).AnyTimes()
-
-			runProberAndCheckStatus(t, 12*time.Millisecond, entry)
+			mocks := createAndInitializeMocks(t, entry)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+			createAndRunProber(t, testProbeInterval.Duration, config, mocks)
 		})
 	}
 }
 
-func TestHealthyProbesShouldRunScaleUp(t *testing.T) {
-	table := []probeStatusEntry{
-		{"Scale Up Succeeds", nil, 1, 0, 1, 0},
-		{"Scale Up Fails", errors.New("scale Up failed"), 1, 0, 1, 0},
+func TestSuccessfulProbesShouldRunScaleUp(t *testing.T) {
+	leaseList := createNodeLeases([]metav1.MicroTime{nonExpiredLeaseRenewTime, nonExpiredLeaseRenewTime, expiredLeaseRenewTime, expiredLeaseRenewTime})
+
+	testCases := []probeTestCase{
+		{name: "Scale Up Succeeds", leaseList: leaseList, minScaleUpCount: 1, maxScaleUpCount: math.MaxInt8},
+		{name: "Scale Up Fails", leaseList: leaseList, scaleUpError: errors.New("scale Up failed"), minScaleUpCount: 1, maxScaleUpCount: math.MaxInt8},
 	}
 
-	for _, probeStatusEntry := range table {
-		t.Run(probeStatusEntry.name, func(t *testing.T) {
-			setupProberTest(t)
-			config = createConfig(1, 1, metav1.Duration{Duration: 4 * time.Millisecond}, metav1.Duration{Duration: time.Microsecond}, 0.2)
-
-			msc.EXPECT().CreateClient(gomock.Any(), proberTestLogger, gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).AnyTimes()
-			mki.EXPECT().Discovery().Return(mdi).AnyTimes().AnyTimes()
-			mdi.EXPECT().ServerVersion().Return(nil, nil).AnyTimes()
-			mds.EXPECT().ScaleUp(gomock.Any()).Return(probeStatusEntry.err).AnyTimes()
-
-			runProberAndCheckStatus(t, 12*time.Millisecond, probeStatusEntry)
+	for _, entry := range testCases {
+		t.Run(entry.name, func(t *testing.T) {
+			mocks := createAndInitializeMocks(t, entry)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+			createAndRunProber(t, testProbeInterval.Duration, config, mocks)
 		})
 	}
 }
 
-func TestExternalProbeFailingShouldRunScaleDown(t *testing.T) {
-	table := []probeStatusEntry{
-		{"Scale Down Succeeds", nil, 1, 0, 0, 2},
-		{"Scale Down Fails", errors.New("scale Down failed"), 1, 0, 0, 2},
+func TestLeaseProbeFailureShouldRunScaleDown(t *testing.T) {
+	leaseList := createNodeLeases([]metav1.MicroTime{nonExpiredLeaseRenewTime, expiredLeaseRenewTime, expiredLeaseRenewTime, expiredLeaseRenewTime})
+
+	testCases := []probeTestCase{
+		{name: "Scale Down Succeeds", leaseList: leaseList, minScaleDownCount: 1, maxScaleDownCount: math.MaxInt8},
+		{name: "Scale Down Fails", leaseList: leaseList, scaleDownError: errors.New("scale Down failed"), minScaleDownCount: 1, maxScaleDownCount: math.MaxInt8},
 	}
 
-	for _, probeStatusEntry := range table {
-		t.Run(probeStatusEntry.name, func(t *testing.T) {
-			setupProberTest(t)
-			config = createConfig(1, 2, metav1.Duration{Duration: 5 * time.Millisecond}, metav1.Duration{Duration: time.Microsecond}, 0.2)
-			runCounter := 0
-
-			msc.EXPECT().CreateClient(gomock.Any(), proberTestLogger, gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).AnyTimes()
-			mki.EXPECT().Discovery().Return(mdi).AnyTimes()
-			mdi.EXPECT().ServerVersion().DoAndReturn(func() (*version.Info, error) {
-				runCounter++
-				if runCounter%2 == 1 {
-					return nil, nil
-				}
-				return nil, errNotIgnorable
-			}).AnyTimes()
-			mds.EXPECT().ScaleDown(gomock.Any()).Return(probeStatusEntry.err).AnyTimes()
-
-			runProberAndCheckStatus(t, 20*time.Millisecond, probeStatusEntry)
+	for _, entry := range testCases {
+		t.Run(entry.name, func(t *testing.T) {
+			mocks := createAndInitializeMocks(t, entry)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: time.Minute}, 0.2)
+			createAndRunProber(t, testProbeInterval.Duration, config, mocks)
 		})
 	}
 }
 
-func TestUnchangedExternalErrorCountForIgnorableErrors(t *testing.T) {
-	table := []probeStatusEntry{
-		{"Forbidden request error is returned by pingKubeApiServer", apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden")), 1, 0, 0, 0},
-		{"Unauthorized request error is returned by pingKubeApiServer", apierrors.NewUnauthorized("unauthorized"), 1, 0, 0, 0},
-		{"Throttling error is returned by pingKubeApiServer", apierrors.NewTooManyRequests("Too many requests", 10), 1, 0, 0, 0},
+func TestLeaseProbeListCallFailureShouldSkipScaling(t *testing.T) {
+	leaseList := createNodeLeases([]metav1.MicroTime{nonExpiredLeaseRenewTime, nonExpiredLeaseRenewTime, nonExpiredLeaseRenewTime})
+
+	testCases := []probeTestCase{
+		{name: "Forbidden request error is returned by lease list call", leaseList: leaseList, leaseListError: apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden"))},
+		{name: "Unauthorized request error is returned by lease list call", leaseList: leaseList, leaseListError: apierrors.NewUnauthorized("unauthorized")},
+		{name: "Throttling error is returned by lease list call", leaseList: leaseList, leaseListError: apierrors.NewTooManyRequests("Too many requests", 10)},
 	}
 
-	for _, probeStatusEntry := range table {
-		t.Run(probeStatusEntry.name, func(t *testing.T) {
-			setupProberTest(t)
-			config = createConfig(1, 2, metav1.Duration{Duration: 5 * time.Millisecond}, metav1.Duration{Duration: time.Microsecond}, 0.2)
-			runCounter := 0
-
-			msc.EXPECT().CreateClient(gomock.Any(), proberTestLogger, gomock.Any(), gomock.Any(), gomock.Any()).Return(mki, nil).AnyTimes()
-			mki.EXPECT().Discovery().Return(mdi).AnyTimes()
-			mdi.EXPECT().ServerVersion().DoAndReturn(func() (*version.Info, error) {
-				runCounter++
-				if runCounter%2 == 1 {
-					return nil, nil
-				}
-				return nil, probeStatusEntry.err
-			}).AnyTimes()
-
-			runProberAndCheckStatus(t, 12*time.Millisecond, probeStatusEntry)
+	for _, entry := range testCases {
+		t.Run(entry.name, func(t *testing.T) {
+			mocks := createAndInitializeMocks(t, entry)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+			createAndRunProber(t, testProbeInterval.Duration, config, mocks)
 		})
 	}
 }
 
-func TestInternalProbeShouldNotRunIfClientNotCreated(t *testing.T) {
+func TestAPIServerProbeShouldNotRunIfClientNotCreated(t *testing.T) {
 	err := errors.New("cannot create kubernetes client")
-	setupProberTest(t)
-	entry := probeStatusEntry{
-		name:                              "internal probe should not run if client to access it is not created",
-		err:                               err,
-		expectedInternalProbeSuccessCount: 0,
-		expectedInternalProbeErrorCount:   0,
-		expectedExternalProbeSuccessCount: 0,
-		expectedExternalProbeErrorCount:   0,
+	entry := probeTestCase{
+		name:                    "api server probe should not run if client to access it is not created",
+		shootClientCreatorError: err,
 	}
-	config = createConfig(1, 2, metav1.Duration{Duration: 5 * time.Millisecond}, metav1.Duration{Duration: time.Microsecond}, 0.2)
-	msc.EXPECT().CreateClient(gomock.Any(), proberTestLogger, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, err).AnyTimes()
-	runProberAndCheckStatus(t, 12*time.Millisecond, entry)
+	mocks := createAndInitializeMocks(t, entry)
+	config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+	createAndRunProber(t, testProbeInterval.Duration, config, mocks)
 }
 
-func TestExternalProbeShouldNotRunIfClientNotCreated(t *testing.T) {
-	err := errors.New("cannot create kubernetes client")
-	setupProberTest(t)
-	counter := 0
-	entry := probeStatusEntry{
-		name:                              "external probe should not run if client to access it is not created",
-		err:                               err,
-		expectedInternalProbeSuccessCount: 1,
-		expectedInternalProbeErrorCount:   0,
-		expectedExternalProbeSuccessCount: 0,
-		expectedExternalProbeErrorCount:   0,
+func TestScalingShouldNotHappenIfNoOwnedLeasesPresent(t *testing.T) {
+	entry := probeTestCase{
+		name:      "lease probe should reset if no owned lease is present",
+		leaseList: createNodeLeases(nil),
 	}
-	config = createConfig(1, 2, metav1.Duration{Duration: 5 * time.Millisecond}, metav1.Duration{Duration: time.Microsecond}, 0.2)
-	msc.EXPECT().CreateClient(gomock.Any(), proberTestLogger, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(context.Context, logr.Logger, string, string, time.Duration) (kubernetes.Interface, error) {
-		counter++
-		if counter%2 == 1 {
-			return mki, nil
-		} else {
-			return nil, err
-		}
-	}).AnyTimes()
-	mki.EXPECT().Discovery().Return(mdi).AnyTimes()
-	mdi.EXPECT().ServerVersion().Return(nil, nil).AnyTimes()
-	runProberAndCheckStatus(t, 12*time.Millisecond, entry)
+	mocks := createAndInitializeMocks(t, entry)
+	config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+	createAndRunProber(t, testProbeInterval.Duration, config, mocks)
 }
 
-func runProberAndCheckStatus(t *testing.T, duration time.Duration, probeStatusEntry probeStatusEntry) {
+func createAndRunProber(t *testing.T, duration time.Duration, config *papi.Config, interfaces probeTestMocks) {
 	g := NewWithT(t)
-	p := NewProber(context.Background(), "default", config, fakeClient, mds, msc, proberTestLogger)
+	p := NewProber(context.Background(), "default", config, interfaces.scaler, interfaces.shootClientCreator, proberTestLogger)
 	g.Expect(p.IsClosed()).To(BeFalse())
 
 	runProber(p, duration)
-
 	g.Expect(p.IsClosed()).To(BeTrue())
-	checkProbeStatus(t, p.internalProbeStatus, probeStatusEntry.expectedInternalProbeSuccessCount, probeStatusEntry.expectedInternalProbeErrorCount)
-	checkProbeStatus(t, p.externalProbeStatus, probeStatusEntry.expectedExternalProbeSuccessCount, probeStatusEntry.expectedExternalProbeErrorCount)
 }
 
 func runProber(p *Prober, d time.Duration) {
@@ -235,38 +188,68 @@ func runProber(p *Prober, d time.Duration) {
 	}
 }
 
-func checkProbeStatus(t *testing.T, ps probeStatus, successCount int, errCount int) {
-	g := NewWithT(t)
-	if successCount == 0 {
-		g.Expect(ps.successCount).To(Equal(successCount))
-	} else {
-		g.Expect(ps.successCount).To(BeNumerically(">=", successCount))
+func createAndInitializeMocks(t *testing.T, testCase probeTestCase) probeTestMocks {
+	ctrl := gomock.NewController(t)
+	mocks := probeTestMocks{
+		scaler:             mockscaler.NewMockScaler(ctrl),
+		shootClientCreator: mockprober.NewMockShootClientCreator(ctrl),
+		kubernetes:         mockinterface.NewMockInterface(ctrl),
+		discovery:          mockdiscovery.NewMockDiscoveryInterface(ctrl),
+		coordinationV1:     mockcoordinationv1.NewMockCoordinationV1Interface(ctrl),
+		lease:              mockcoordinationv1.NewMockLeaseInterface(ctrl),
 	}
-	if errCount == 0 {
-		g.Expect(ps.errorCount).To(Equal(errCount))
-	} else {
-		g.Expect(ps.errorCount).To(BeNumerically(">=", errCount))
-	}
+	initializeMocks(mocks, testCase)
+	return mocks
 }
 
-func setupProberTest(t *testing.T) {
-	ctrl = gomock.NewController(t)
-	mds = mockscaler.NewMockScaler(ctrl)
-	msc = mockprober.NewMockShootClientCreator(ctrl)
-	clientBuilder = fake.NewClientBuilder()
-	fakeClient = clientBuilder.Build()
-	mki = mockinterface.NewMockInterface(ctrl)
-	mdi = mockdiscovery.NewMockDiscoveryInterface(ctrl)
+func initializeMocks(mocks probeTestMocks, testCase probeTestCase) {
+	mocks.shootClientCreator.EXPECT().CreateClient(gomock.Any(), proberTestLogger, gomock.Any(), gomock.Any(), gomock.Any()).Return(mocks.kubernetes, testCase.shootClientCreatorError).AnyTimes()
+	mocks.kubernetes.EXPECT().Discovery().Return(mocks.discovery).AnyTimes()
+	mocks.kubernetes.EXPECT().CoordinationV1().Return(mocks.coordinationV1).AnyTimes()
+	mocks.coordinationV1.EXPECT().Leases(nodeLeaseNamespace).Return(mocks.lease).AnyTimes()
+	mocks.lease.EXPECT().List(gomock.Any(), gomock.Any()).Return(testCase.leaseList, testCase.leaseListError).AnyTimes()
+	mocks.discovery.EXPECT().ServerVersion().Return(nil, testCase.discoveryError).AnyTimes()
+	mocks.scaler.EXPECT().ScaleUp(gomock.Any()).Return(testCase.scaleUpError).MaxTimes(testCase.maxScaleUpCount).MinTimes(testCase.minScaleUpCount)
+	mocks.scaler.EXPECT().ScaleDown(gomock.Any()).Return(testCase.scaleDownError).MaxTimes(testCase.maxScaleDownCount).MinTimes(testCase.minScaleDownCount)
 }
 
-func createConfig(successThreshold int, failureThreshold int, probeInterval metav1.Duration, initialDelay metav1.Duration, backoffJitterFactor float64) *papi.Config {
+func createConfig(probeInterval metav1.Duration, initialDelay metav1.Duration, kcmNodeMonitorGraceDuration metav1.Duration, backoffJitterFactor float64) *papi.Config {
 	return &papi.Config{
-		SuccessThreshold:                    &successThreshold,
-		FailureThreshold:                    &failureThreshold,
-		ProbeInterval:                       &probeInterval,
-		BackoffJitterFactor:                 &backoffJitterFactor,
-		InternalProbeFailureBackoffDuration: &internalProbeFailureBackoffDuration,
-		InitialDelay:                        &initialDelay,
-		ProbeTimeout:                        &defaultProbeTimeout,
+		ProbeInterval:               &probeInterval,
+		BackoffJitterFactor:         &backoffJitterFactor,
+		InitialDelay:                &initialDelay,
+		ProbeTimeout:                &testProbeTimeout,
+		KCMNodeMonitorGraceDuration: kcmNodeMonitorGraceDuration,
+		NodeLeaseFailureFraction:    pointer.Float64(DefaultNodeLeaseFailureFraction),
+	}
+}
+
+func createNodeLeases(renewTimes []metav1.MicroTime) (leaseList *coordinationv1.LeaseList) {
+	var items []coordinationv1.Lease
+	for i, renewTime := range renewTimes {
+		items = append(items, createNodeLease("lease-"+strconv.Itoa(i), "node-"+strconv.Itoa(i), renewTime))
+	}
+	return &coordinationv1.LeaseList{
+		Items: items,
+	}
+}
+
+func createNodeLease(name, ownerNode string, renewTime metav1.MicroTime) coordinationv1.Lease {
+	return coordinationv1.Lease{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: "kube-node-lease",
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "v1",
+					Kind:       "Node",
+					Name:       ownerNode,
+				},
+			},
+		},
+		Spec: coordinationv1.LeaseSpec{
+			HolderIdentity: &name,
+			RenewTime:      &renewTime,
+		},
 	}
 }

@@ -32,16 +32,16 @@ const (
 	DefaultScaleInitialDelay = 0 * time.Second
 	// DefaultProbeTimeout is the default duration representing total timeout for a probe to complete.
 	DefaultProbeTimeout = 30 * time.Second
-	// DefaultInternalProbeFailureBackoffDuration is the default duration representing a backOff duration in the event the internal probe transitions to failed state.
-	DefaultInternalProbeFailureBackoffDuration = 30 * time.Second
-	// DefaultSuccessThreshold is the default value for consecutive successful probes required to transition a probe status to success.
-	DefaultSuccessThreshold = 1
-	// DefaultFailureThreshold is the default value for consecutive erroneous probes required to transition a probe status to failed.
-	DefaultFailureThreshold = 3
 	// DefaultBackoffJitterFactor is the default jitter value with which successive probe runs are scheduled.
 	DefaultBackoffJitterFactor = 0.2
 	// DefaultScaleUpdateTimeout is the default duration representing a timeout for the scale operation to complete.
 	DefaultScaleUpdateTimeout = 30 * time.Second
+	// DefaultNodeLeaseFailureFraction is used to determine the maximum number of node leases that can be expired for a node lease probe to succeed.
+	// Eg:- 1. numberOfOwnedLeases = 10, numberOfExpiredLeases = 6.
+	// 		   numberOfExpiredLeases/numberOfOwnedLeases = 0.6, which is >= DefaultNodeLeaseFailureFraction and so the lease probe will fail.
+	//		2. numberOfOwnedLeases = 10, numberOfExpiredLeases = 5.
+	//	 	   numberOfExpiredLeases/numberOfOwnedLeases = 0.5, which is < DefaultNodeLeaseFailureFraction and so the lease probe will succeed.
+	DefaultNodeLeaseFailureFraction = 0.60
 )
 
 // LoadConfig reads the prober configuration from a file, unmarshalls it, fills in the default values and
@@ -62,8 +62,8 @@ func LoadConfig(file string, scheme *runtime.Scheme) (*papi.Config, error) {
 func validate(c *papi.Config, scheme *runtime.Scheme) error {
 	v := new(util.Validator)
 	// Check the mandatory config parameters for which a default will not be set
-	v.MustNotBeEmpty("InternalKubeConfigSecretName", c.InternalKubeConfigSecretName)
-	v.MustNotBeEmpty("ExternalKubeConfigSecretName", c.ExternalKubeConfigSecretName)
+	v.MustNotBeEmpty("KubeConfigSecretName", c.KubeConfigSecretName)
+	v.MustNotBeZeroDuration("KCMNodeMonitorGraceDuration", c.KCMNodeMonitorGraceDuration)
 	v.MustNotBeEmpty("ScaleResourceInfos", c.DependentResourceInfos)
 	for _, resInfo := range c.DependentResourceInfos {
 		v.ResourceRefMustBeValid(resInfo.Ref, scheme)
@@ -77,38 +77,11 @@ func validate(c *papi.Config, scheme *runtime.Scheme) error {
 }
 
 func fillDefaultValues(c *papi.Config) {
-	if c.ProbeInterval == nil {
-		c.ProbeInterval = &metav1.Duration{
-			Duration: DefaultProbeInterval,
-		}
-	}
-	if c.InitialDelay == nil {
-		c.InitialDelay = &metav1.Duration{
-			Duration: DefaultProbeInitialDelay,
-		}
-	}
-	if c.ProbeTimeout == nil {
-		c.ProbeTimeout = &metav1.Duration{
-			Duration: DefaultProbeTimeout,
-		}
-	}
-	if c.InternalProbeFailureBackoffDuration == nil {
-		c.InternalProbeFailureBackoffDuration = &metav1.Duration{
-			Duration: DefaultInternalProbeFailureBackoffDuration,
-		}
-	}
-	if c.SuccessThreshold == nil {
-		c.SuccessThreshold = new(int)
-		*c.SuccessThreshold = DefaultSuccessThreshold
-	}
-	if c.FailureThreshold == nil {
-		c.FailureThreshold = new(int)
-		*c.FailureThreshold = DefaultFailureThreshold
-	}
-	if c.BackoffJitterFactor == nil {
-		c.BackoffJitterFactor = new(float64)
-		*c.BackoffJitterFactor = DefaultBackoffJitterFactor
-	}
+	c.ProbeInterval = util.GetValOrDefault(c.ProbeInterval, metav1.Duration{Duration: DefaultProbeInterval})
+	c.InitialDelay = util.GetValOrDefault(c.InitialDelay, metav1.Duration{Duration: DefaultProbeInitialDelay})
+	c.ProbeTimeout = util.GetValOrDefault(c.ProbeTimeout, metav1.Duration{Duration: DefaultProbeTimeout})
+	c.BackoffJitterFactor = util.GetValOrDefault(c.BackoffJitterFactor, DefaultBackoffJitterFactor)
+	c.NodeLeaseFailureFraction = util.GetValOrDefault(c.NodeLeaseFailureFraction, DefaultNodeLeaseFailureFraction)
 	fillDefaultValuesForResourceInfos(c.DependentResourceInfos)
 }
 
@@ -121,15 +94,7 @@ func fillDefaultValuesForResourceInfos(resourceInfos []papi.DependentResourceInf
 
 func fillDefaultValuesForScaleInfo(scaleInfo *papi.ScaleInfo) {
 	if scaleInfo != nil {
-		if scaleInfo.Timeout == nil {
-			scaleInfo.Timeout = &metav1.Duration{
-				Duration: DefaultScaleUpdateTimeout,
-			}
-		}
-		if scaleInfo.InitialDelay == nil {
-			scaleInfo.InitialDelay = &metav1.Duration{
-				Duration: DefaultScaleInitialDelay,
-			}
-		}
+		scaleInfo.Timeout = util.GetValOrDefault(scaleInfo.Timeout, metav1.Duration{Duration: DefaultScaleUpdateTimeout})
+		scaleInfo.InitialDelay = util.GetValOrDefault(scaleInfo.InitialDelay, metav1.Duration{Duration: DefaultScaleInitialDelay})
 	}
 }

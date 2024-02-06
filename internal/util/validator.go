@@ -19,6 +19,8 @@ import (
 	"reflect"
 	"strings"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	multierr "github.com/hashicorp/go-multierror"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -55,6 +57,15 @@ func (v *Validator) MustNotBeEmpty(key string, value interface{}) bool {
 		}
 	default:
 		v.Error = multierr.Append(v.Error, fmt.Errorf("unsupported type of value for key %s. do not know how to check if it is empty", key))
+		return false
+	}
+	return true
+}
+
+// MustNotBeZeroDuration checks whether the given duration is zero. It returns false if it is zero.
+func (v *Validator) MustNotBeZeroDuration(key string, duration metav1.Duration) bool {
+	if duration.Seconds() == 0 {
+		v.Error = multierr.Append(v.Error, fmt.Errorf("value for key %s must not be zero", key))
 		return false
 	}
 	return true

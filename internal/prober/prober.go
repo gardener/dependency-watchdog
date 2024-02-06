@@ -18,6 +18,10 @@ import (
 	"context"
 	"time"
 
+	coordinationv1 "k8s.io/api/coordination/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	dwdScaler "github.com/gardener/dependency-watchdog/internal/prober/scaler"
 	"github.com/gardener/dependency-watchdog/internal/util"
@@ -26,37 +30,41 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
 	defaultGetSecretBackoff             = 100 * time.Millisecond
 	defaultGetSecretMaxAttempts         = 3
 	backOffDurationForThrottledRequests = 10 * time.Second
+	// expiryBufferFraction is used to compute a revised expiry time used by the prober to determine expired leases
+	// Using a fraction allows the prober to intervene before KCM marks a node as unknown, but at the same time allowing
+	// kubelet sufficient retries to renew the node lease.
+	// Eg:- nodeLeaseDuration = 40s, kcmNodeMonitorGraceDuration = 40s, kubeletRenewTime = 10s.
+	// 		The node lease will be considered expired by the prober at 30s. This allows kubelet 3 attempts instead of 4
+	// 		to renew the node lease.
+	expiryBufferFraction = 0.75
+	nodeLeaseNamespace   = "kube-node-lease"
 )
 
 // Prober represents a probe to the Kube ApiServer of a shoot
 type Prober struct {
-	namespace           string
-	config              *papi.Config
-	client              client.Client
-	scaler              dwdScaler.Scaler
-	shootClientCreator  ShootClientCreator
-	internalProbeStatus probeStatus
-	externalProbeStatus probeStatus
-	ctx                 context.Context
-	cancelFn            context.CancelFunc
-	l                   logr.Logger
+	namespace          string
+	config             *papi.Config
+	scaler             dwdScaler.Scaler
+	shootClientCreator ShootClientCreator
+	backOff            *time.Timer
+	ctx                context.Context
+	cancelFn           context.CancelFunc
+	l                  logr.Logger
 }
 
 // NewProber creates a new Prober
-func NewProber(parentCtx context.Context, namespace string, config *papi.Config, ctrlClient client.Client, scaler dwdScaler.Scaler, shootClientCreator ShootClientCreator, logger logr.Logger) *Prober {
+func NewProber(parentCtx context.Context, namespace string, config *papi.Config, scaler dwdScaler.Scaler, shootClientCreator ShootClientCreator, logger logr.Logger) *Prober {
 	pLogger := logger.WithValues("shootNamespace", namespace)
 	ctx, cancelFn := context.WithCancel(parentCtx)
 	return &Prober{
 		namespace:          namespace,
 		config:             config,
-		client:             ctrlClient,
 		scaler:             scaler,
 		shootClientCreator: shootClientCreator,
 		ctx:                ctx,
@@ -86,37 +94,57 @@ func (p *Prober) Run() {
 	wait.JitterUntilWithContext(p.ctx, p.probe, p.config.ProbeInterval.Duration, *p.config.BackoffJitterFactor, true)
 }
 
+// GetConfig returns the probe config for the prober.
+func (p *Prober) GetConfig() *papi.Config {
+	return p.config
+}
+
 func (p *Prober) probe(ctx context.Context) {
-	internalShootClient, err := p.setupProbeClient(ctx, p.namespace, p.config.InternalKubeConfigSecretName)
+	p.backOffIfNeeded()
+	shootClient, err := p.setupProbeClient(ctx, p.namespace, p.config.KubeConfigSecretName)
 	if err != nil {
-		p.l.Error(err, "Failed to create shoot client using internal secret, ignoring error, internal probe will be re-attempted")
+		p.l.Error(err, "Failed to create shoot client using the KubeConfig secret, ignoring error, probe will be re-attempted")
 		return
 	}
-	p.probeInternal(internalShootClient)
-	if p.internalProbeStatus.isHealthy(*p.config.SuccessThreshold) {
-		externalShootClient, err := p.setupProbeClient(ctx, p.namespace, p.config.ExternalKubeConfigSecretName)
-		if err != nil {
-			p.l.Error(err, "Failed to create shoot client using external secret, ignoring error, probe will be re-attempted")
-			return
+	err = p.probeAPIServer(shootClient)
+	if err != nil {
+		p.l.Info("API server probe failed, Skipping lease probe and scaling operation", "err", err.Error())
+		return
+	}
+	p.l.Info("API server probe is successful, will conduct node lease probe")
+
+	candidateNodeLeases, err := p.probeNodeLeases(shootClient)
+	if err != nil {
+		return
+	}
+	if len(candidateNodeLeases) == 0 {
+		p.l.Info("No owned node leases are present in the cluster, skipping scaling operation")
+		return
+	}
+	if p.shouldPerformScaleUp(candidateNodeLeases) {
+		p.l.Info("Lease probe succeeded, performing scale up operation if required")
+		if err = p.scaler.ScaleUp(ctx); err != nil {
+			p.l.Error(err, "Failed to scale up resources")
 		}
-		p.probeExternal(externalShootClient)
-		// based on the external probe result it will either scale up or scale down
-		if p.externalProbeStatus.isUnhealthy(*p.config.FailureThreshold) {
-			p.l.Info("External probe is un-healthy, checking if scale down is already done or is still pending")
-			err := p.scaler.ScaleDown(ctx)
-			if err != nil {
-				p.l.Error(err, "Failed to scale down resources")
-			}
-			return
+	} else {
+		p.l.Info("Lease probe failed, performing scale down operation if required")
+		if err = p.scaler.ScaleDown(ctx); err != nil {
+			p.l.Error(err, "Failed to scale down resources")
 		}
-		if p.externalProbeStatus.isHealthy(*p.config.SuccessThreshold) {
-			p.l.Info("External probe is healthy, checking if scale up is already done or is still pending")
-			err := p.scaler.ScaleUp(ctx)
-			if err != nil {
-				p.l.Error(err, "Failed to scale up resources")
-			}
+		return
+	}
+}
+
+// shouldPerformScaleUp returns true if the ratio of expired node leases to valid node leases is less than
+// the NodeLeaseFailureFraction set in the prober config
+func (p *Prober) shouldPerformScaleUp(candidateNodeLeases []coordinationv1.Lease) bool {
+	var expiredNodeLeaseCount float64
+	for _, lease := range candidateNodeLeases {
+		if p.isLeaseExpired(lease) {
+			expiredNodeLeaseCount++
 		}
 	}
+	return expiredNodeLeaseCount/float64(len(candidateNodeLeases)) < *p.config.NodeLeaseFailureFraction
 }
 
 func (p *Prober) setupProbeClient(ctx context.Context, namespace string, kubeConfigSecretName string) (kubernetes.Interface, error) {
@@ -127,45 +155,33 @@ func (p *Prober) setupProbeClient(ctx context.Context, namespace string, kubeCon
 	return shootClient, nil
 }
 
-func (p *Prober) probeInternal(shootClient kubernetes.Interface) {
-	backOffIfNeeded(&p.internalProbeStatus)
-	err := p.doProbe(shootClient)
-	if err != nil {
-		if !p.internalProbeStatus.canIgnoreProbeError(err) {
-			p.internalProbeStatus.recordFailure(err, *p.config.FailureThreshold, p.config.InternalProbeFailureBackoffDuration.Duration)
-			p.l.Info("Recording internal probe failure, Skipping external probe and scaling operation", "err", err.Error(), "failedAttempts", p.internalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
-		} else {
-			p.internalProbeStatus.handleIgnorableError(err)
-			p.l.Info("Internal probe was not successful. ignoring this error", "err", err.Error())
-		}
-		return
-	}
-	p.internalProbeStatus.recordSuccess(*p.config.SuccessThreshold)
-	p.l.Info("Internal probe is successful", "successfulAttempts", p.internalProbeStatus.successCount, "successThreshold", p.config.SuccessThreshold)
+func (p *Prober) probeAPIServer(shootClient kubernetes.Interface) error {
+	_, err := shootClient.Discovery().ServerVersion()
+	p.setBackOffIfThrottlingError(err)
+	return err
 }
 
-func (p *Prober) probeExternal(shootClient kubernetes.Interface) {
-	backOffIfNeeded(&p.externalProbeStatus)
-	err := p.doProbe(shootClient)
+func (p *Prober) probeNodeLeases(shootClient kubernetes.Interface) ([]coordinationv1.Lease, error) {
+	nodeLeases, err := shootClient.CoordinationV1().Leases(nodeLeaseNamespace).List(p.ctx, metav1.ListOptions{})
 	if err != nil {
-		if !p.externalProbeStatus.canIgnoreProbeError(err) {
-			p.externalProbeStatus.recordFailure(err, *p.config.FailureThreshold, 0)
-			p.l.Info("Recording external probe failure", "err", err.Error(), "failedAttempts", p.externalProbeStatus.errorCount, "failureThreshold", p.config.FailureThreshold)
-			return
-		}
-		p.externalProbeStatus.handleIgnorableError(err)
-		p.l.Info("External probe was not successful. ignoring this error", "err", err.Error())
-		return
+		p.setBackOffIfThrottlingError(err)
+		p.l.Error(err, "Failed to list leases, will retry probe")
+		return nil, err
 	}
-	p.externalProbeStatus.recordSuccess(*p.config.SuccessThreshold)
-	p.l.Info("External probe is successful", "successfulAttempts", p.externalProbeStatus.successCount, "successThreshold", p.config.SuccessThreshold)
+	return nodeLeases.Items, err
 }
 
-func backOffIfNeeded(ps *probeStatus) {
-	if ps.backOff != nil {
-		<-ps.backOff.C
-		ps.backOff.Stop()
-		ps.backOff = nil
+func (p *Prober) isLeaseExpired(lease coordinationv1.Lease) bool {
+	revisedNodeLeaseExpiryTime := float64(p.config.KCMNodeMonitorGraceDuration.Duration) * expiryBufferFraction
+	expiryTime := lease.Spec.RenewTime.Add(time.Duration(revisedNodeLeaseExpiryTime))
+	return util.EqualOrBeforeNow(expiryTime)
+}
+
+func (p *Prober) backOffIfNeeded() {
+	if p.backOff != nil {
+		<-p.backOff.C
+		p.backOff.Stop()
+		p.backOff = nil
 	}
 }
 
@@ -175,4 +191,18 @@ func (p *Prober) doProbe(client kubernetes.Interface) error {
 		return err
 	}
 	return nil
+}
+
+func (p *Prober) setBackOffIfThrottlingError(err error) {
+	if apierrors.IsTooManyRequests(err) {
+		p.l.V(4).Info("API server is throttled, backing off", "backOffDuration", backOffDurationForThrottledRequests.Seconds())
+		p.resetBackoff(backOffDurationForThrottledRequests)
+	}
+}
+
+func (p *Prober) resetBackoff(d time.Duration) {
+	if p.backOff != nil {
+		p.backOff.Stop()
+	}
+	p.backOff = time.NewTimer(d)
 }

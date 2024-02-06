@@ -47,10 +47,17 @@ const controllerName = "cluster"
 // Reconciler reconciles a Cluster object
 type Reconciler struct {
 	client.Client
-	Scheme                  *runtime.Scheme
-	ProberMgr               prober.Manager
-	ScaleGetter             scale.ScalesGetter
-	ProbeConfig             *papi.Config
+	// Scheme is the controller-runtime scheme used to initialize the controller manager and to validate the probe config
+	Scheme *runtime.Scheme
+	// ProberMgr is interface to manage lifecycle of probers.
+	ProberMgr prober.Manager
+	// ScaleGetter is used to produce a ScaleInterface
+	ScaleGetter scale.ScalesGetter
+	// DefaultProbeConfig is the seed level config inherited by all shoots whose control plane is hosted in the seed. The default config is used
+	// when the shoot's spec.Kubernetes.KubeControllerManager.NodeMonitorGracePeriod is not set. If it is set, then a new config is generated from
+	// the default config with the updated KCMNodeMonitorGraceDuration.
+	DefaultProbeConfig *papi.Config
+	// MaxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
 	MaxConcurrentReconciles int
 }
 
@@ -114,7 +121,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	if canStartProber(shoot) {
-		r.startProber(ctx, log, req.Name)
+		r.startProber(ctx, shoot, log, req.Name)
 	}
 	return ctrl.Result{}, nil
 }
@@ -152,12 +159,13 @@ func canStartProber(shoot *v1beta1.Shoot) bool {
 
 // startProber sets up a new probe against a given key which uniquely identifies the probe.
 // Typically, the key in case of a shoot cluster is the shoot namespace
-func (r *Reconciler) startProber(ctx context.Context, logger logr.Logger, key string) {
+func (r *Reconciler) startProber(ctx context.Context, shoot *v1beta1.Shoot, logger logr.Logger, key string) {
 	_, ok := r.ProberMgr.GetProber(key)
 	if !ok {
-		deploymentScaler := scaler.NewScaler(key, r.ProbeConfig, r.Client, r.ScaleGetter, logger)
+		probeConfig := r.getEffectiveProbeConfig(shoot, logger)
+		deploymentScaler := scaler.NewScaler(key, probeConfig.DependentResourceInfos, r.Client, r.ScaleGetter, logger)
 		shootClientCreator := prober.NewShootClientCreator(r.Client)
-		p := prober.NewProber(ctx, key, r.ProbeConfig, r.Client, deploymentScaler, shootClientCreator, logger)
+		p := prober.NewProber(ctx, key, probeConfig, deploymentScaler, shootClientCreator, logger)
 		r.ProberMgr.Register(*p)
 		logger.Info("Starting a new prober")
 		go p.Run()
@@ -176,5 +184,17 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return err
 	}
-	return c.Watch(&source.Kind{Type: &extensionsv1alpha1.Cluster{}}, &handler.EnqueueRequestForObject{}, workerLessShoot(c.GetLogger()))
+	return c.Watch(source.Kind(mgr.GetCache(), &extensionsv1alpha1.Cluster{}), &handler.EnqueueRequestForObject{}, workerLessShoot(c.GetLogger()))
+}
+
+// getEffectiveProbeConfig returns the updated probe config after checking the shoot KCM configuration for NodeMonitorGracePeriod.
+// If NodeMonitorGracePeriod is not set in the shoot, then the KCMNodeMonitorGraceDuration defined in the configmap of probe config will be used
+func (r *Reconciler) getEffectiveProbeConfig(shoot *v1beta1.Shoot, logger logr.Logger) *papi.Config {
+	probeConfig := *r.DefaultProbeConfig
+	kcmConfig := shoot.Spec.Kubernetes.KubeControllerManager
+	if kcmConfig != nil && kcmConfig.NodeMonitorGracePeriod != nil {
+		logger.Info("Using the NodeMonitorGracePeriod set in the shoot as KCMNodeMonitorGraceDuration in the probe config", "nodeMonitorGraceDuration", *kcmConfig.NodeMonitorGracePeriod)
+		probeConfig.KCMNodeMonitorGraceDuration = *kcmConfig.NodeMonitorGracePeriod
+	}
+	return &probeConfig
 }

@@ -119,6 +119,7 @@ func (r *resScaler) waitTillMinTargetReplicasReached(ctx context.Context) error 
 	if r.resourceInfo.operation == scaleUp {
 		minTargetReplicas = 1
 	}
+	r.logger.Info("Waiting for resource to reach minimum target replicas", "minTargetReplicas", minTargetReplicas)
 	opDesc := fmt.Sprintf("wait for resource to reach minimum required target replicas %d", minTargetReplicas)
 	resMinTargetReached := util.RetryUntilPredicate(ctx, r.logger, opDesc, func() bool {
 		readyReplicas, err := util.GetResourceReadyReplicas(ctx, r.client, r.namespace, r.resourceInfo.ref)
@@ -172,7 +173,6 @@ func (r *resScaler) updateResourceAndScale(ctx context.Context, scaleSubRes *aut
 	if _, err = r.scaler.Update(childCtx, *gr, scaleSubRes, metav1.UpdateOptions{}); err != nil {
 		return err
 	}
-	r.logger.Info("Waiting for resource readiness")
 	return nil
 }
 

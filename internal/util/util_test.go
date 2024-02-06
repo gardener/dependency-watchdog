@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/utils/pointer"
+
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	. "github.com/onsi/gomega"
 )
@@ -80,4 +82,22 @@ func TestReadAndUnmarshall(t *testing.T) {
 	for k, v := range c.Data {
 		g.Expect(expectedData).To(HaveKeyWithValue(k, v))
 	}
+}
+
+func TestEqualOrBeforeNow(t *testing.T) {
+	g := NewWithT(t)
+	g.Expect(EqualOrBeforeNow(time.Now())).To(BeTrue())
+	g.Expect(EqualOrBeforeNow(time.Now().Add(-time.Millisecond))).To(BeTrue())
+	g.Expect(EqualOrBeforeNow(time.Now().Add(time.Millisecond))).To(BeFalse())
+}
+
+func TestFillDefaultIfNil(t *testing.T) {
+	g := NewWithT(t)
+	var testInt *int
+	testInt = GetValOrDefault[int](testInt, 10)
+	g.Expect(*testInt).To(Equal(10))
+
+	testFloat := pointer.Float64(1.0)
+	testFloat = GetValOrDefault(testFloat, 2.0)
+	g.Expect(*testFloat).To(Equal(1.0))
 }

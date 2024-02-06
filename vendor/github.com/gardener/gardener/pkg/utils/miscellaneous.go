@@ -118,10 +118,12 @@ func FindFreePort() (int, error) {
 	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
+// emailVefiryRegex is used to verify the validity of an email.
+var emailVefiryRegex = regexp.MustCompile(`^[^@]+@(?:[a-zA-Z-0-9]+\.)+[a-zA-Z]{2,}$`)
+
 // TestEmail validates the provided <email> against a regular expression and returns whether it matches.
 func TestEmail(email string) bool {
-	match, _ := regexp.MatchString(`^[^@]+@(?:[a-zA-Z-0-9]+\.)+[a-zA-Z]{2,}$`, email)
-	return match
+	return emailVefiryRegex.MatchString(email)
 }
 
 // IDForKeyWithOptionalValue returns an identifier for the given key + optional value.
@@ -157,9 +159,9 @@ func TimePtrDeref(ptr *time.Time, def time.Time) time.Time {
 	return def
 }
 
-// IntStrPtrFromInt returns an intstr.IntOrString pointer to its argument.
-func IntStrPtrFromInt(port int) *intstr.IntOrString {
-	v := intstr.FromInt(port)
+// IntStrPtrFromInt32 returns an intstr.IntOrString pointer to its argument.
+func IntStrPtrFromInt32(port int32) *intstr.IntOrString {
+	v := intstr.FromInt32(port)
 	return &v
 }
 
@@ -208,6 +210,19 @@ func FilterEntriesByPrefix(prefix string, entries []string) []string {
 		if strings.HasPrefix(entry, prefix) {
 			result = append(result, entry)
 		}
+	}
+	return result
+}
+
+// FilterEntriesByFilterFn returns a list of entries which passes the filter function.
+func FilterEntriesByFilterFn(entries []string, filterFn func(entry string) bool) []string {
+	var result []string
+	for _, entry := range entries {
+		if filterFn != nil && !filterFn(entry) {
+			continue
+		}
+
+		result = append(result, entry)
 	}
 	return result
 }

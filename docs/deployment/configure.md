@@ -31,23 +31,22 @@ A probe configuration is mounted as `ConfigMap` to the container. The path to th
 
 You can view an example YAML configuration provided as `data` in a `ConfigMap` [here](../../example/04-dwd-prober-configmap.yaml).
 
-| Name | Type |  Required | Default Value | Description |
-| --- | --- | --- | --- | --- |
-| internalKubeConfigSecretName | string | Yes | NA | Name of the kubernetes Secret which has the encoded KubeConfig required to connect to the Shoot control plane Kube ApiServer via an internal domain. This typically uses the local cluster DNS. |
-| externalKubeConfigSecretName | string | Yes | NA | Name of the kubernetes Secret which has the encoded KubeConfig required to connect to the Shoot control plane Kube ApiServer via an external domain. This typically uses the provider cluster DNS also used by the Kubelet running in the node of a Shoot cluster. |
-| probeInterval | metav1.Duration | No | 10s | Interval with which each probe will run. |
-| initialDelay | metav1.Duration | No | 30s | Initial delay for the probe to become active. Only applicable when the probe is created for the first time. |
-| probeTimeout | metav1.Duration | No | 30s | In each run of the probe it will attempt to connect to the Shoot Kube ApiServer. probeTimeout defines the timeout after which a single run of the probe will fail. |
-| successThreshold | int | No | 1 | Number of consecutive times a probe successfully connects to the Shoot Kube ApiServer and gets a response from it to ascertain that the probe is healthy. |
-| failureThreshold | int | No | 3 | Number of consecutive times a probe fails to get a response from the Kube ApiServer to ascertain that the probe is unheathy. |
-| internalProbeFailureBackoffDuration | metav1.Duration | No | 30s | Only applicable for internal probe. It is the duration that a probe should backOff in case the internal probe is unhealthy before re-attempting. This prevents too many calls to the Kube ApiServer. |
-| backoffJitterFactor | float64 | No | 0.2 | Jitter with which a probe is run. |
-| dependentResourceInfos | []prober.DependentResourceInfo | Yes | NA | Detailed below. |
+| Name                        | Type                           | Required | Default Value | Description                                                                                                                                                                                     |
+|-----------------------------|--------------------------------|----------|---------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| kubeConfigSecretName        | string                         | Yes      | NA            | Name of the kubernetes Secret which has the encoded KubeConfig required to connect to the Shoot control plane Kube ApiServer via an internal domain. This typically uses the local cluster DNS. |
+| probeInterval               | metav1.Duration                | No       | 10s           | Interval with which each probe will run.                                                                                                                                                        |
+| initialDelay                | metav1.Duration                | No       | 30s           | Initial delay for the probe to become active. Only applicable when the probe is created for the first time.                                                                                     |
+| probeTimeout                | metav1.Duration                | No       | 30s           | In each run of the probe it will attempt to connect to the Shoot Kube ApiServer. probeTimeout defines the timeout after which a single run of the probe will fail.                              |
+| backoffJitterFactor         | float64                        | No       | 0.2           | Jitter with which a probe is run.                                                                                                                                                               |
+| dependentResourceInfos      | []prober.DependentResourceInfo | Yes      | NA            | Detailed below.                                                                                                                                                                                 |
+| kcmNodeMonitorGraceDuration | metav1.Duration                | Yes      | NA            | It is the node-monitor-grace-period set in the kcm flags. Used to determine whether a node lease can be considered expired.                                                                     |
+| nodeLeaseFailureFraction    | float64                        | No       | 0.6           | is used to determine the maximum number of leases that can be expired for a lease probe to succeed.                                                                                             |
+
 
 
 ### DependentResourceInfo
 
-If a `failureThreshold` is breached by a probe while trying to reach the Shoot Kube ApiServer via external DNS route then it scales down the dependent resources defined by this property. Similarly, if the probe is now able to reach the Shoot Kube ApiServer it transitions the probe status from unhealthy to healthy and it scales up the dependent resources defined by this property.
+If a lease probe fails, then it scales down the dependent resources defined by this property. Similarly, if the lease probe is now successful, then it scales up the dependent resources defined by this property.
 
 Each dependent resource info has the following properties:
 
@@ -64,18 +63,18 @@ Each dependent resource info has the following properties:
 
 How to scale a `DependentResourceInfo` is captured in `ScaleInfo`. It has the following properties:
 
-| Name | Type | Required | Default Value | Description |
-| --- | --- | --- | --- | --- |
-| level | int | Yes | NA | Detailed below. |
-| initialDelay | metav1.Duration | No | 0s (No initial delay) | Once a decision is taken to scale a resource then via this property a delay can be induced before triggering the scale of the dependent resource. |
-| timeout | metav1.Duration | No | 30s | Defines the timeout for the scale operation to finish for a dependent resource. |
+| Name         | Type            | Required | Default Value         | Description                                                                                                                                       |
+|--------------|-----------------|----------|-----------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
+| level        | int             | Yes      | NA                    | Detailed below.                                                                                                                                   |
+| initialDelay | metav1.Duration | No       | 0s (No initial delay) | Once a decision is taken to scale a resource then via this property a delay can be induced before triggering the scale of the dependent resource. |
+| timeout      | metav1.Duration | No       | 30s                   | Defines the timeout for the scale operation to finish for a dependent resource.                                                                   |
 
 **Determining target replicas**
 
 Prober cannot assume any target replicas during a scale-up operation for the following reasons:
 
-1. Kubernetes resources could be set to provide highly availability and the number of replicas could wary from one shoot control plane to the other. In gardener the number of replicas of pods in shoot namespace are controled by the [shoot control plane configuration](https://github.com/gardener/gardener/blob/master/docs/usage/shoot_high_availability.md).
-2. If Horizontal pod autoscaler has been configured for a kubernetes dependent resource then it could potentially change the `spec.replicas` for a deployment/statefulset.
+1. Kubernetes resources could be set to provide highly availability and the number of replicas could wary from one shoot control plane to the other. In gardener the number of replicas of pods in shoot namespace are controlled by the [shoot control plane configuration](https://github.com/gardener/gardener/blob/master/docs/usage/shoot_high_availability.md).
+2. If Horizontal Pod Autoscaler has been configured for a kubernetes dependent resource then it could potentially change the `spec.replicas` for a deployment/statefulset.
 
 Given the above constraint lets look at how prober determines the target replicas during scale-down or scale-up operations.
 
@@ -153,16 +152,16 @@ Weeder configuration is mounted as `ConfigMap` to the container. The path to the
 
 You can view the example YAML configuration provided as `data` in a `ConfigMap` [here](../../example/03-dwd-weeder-configmap.yaml).
 
-| Name                         | Type             | Required | Default Value | Description                                                                                              |
-|------------------------------|------------------|----------|---------------|----------------------------------------------------------------------------------------------------------|
-| watchDuration                | *metav1.Duration | No       | 5m0s          | The time duration for which watch is kept on dependent pods to see if anyone turns to `CrashLoopBackoff` |
-| servicesAndDependantSelectors | map[string]DependantSelectors           | Yes      | NA            | Endpoint name and its corresponding dependent pods. More info below.                                     |
+| Name                          | Type                          | Required | Default Value | Description                                                                                              |
+|-------------------------------|-------------------------------|----------|---------------|----------------------------------------------------------------------------------------------------------|
+| watchDuration                 | *metav1.Duration              | No       | 5m0s          | The time duration for which watch is kept on dependent pods to see if anyone turns to `CrashLoopBackoff` |
+| servicesAndDependantSelectors | map[string]DependantSelectors | Yes      | NA            | Endpoint name and its corresponding dependent pods. More info below.                                     |
 
 ### DependantSelectors
 
 If the service recovers from downtime, then weeder starts to watch for CrashLoopBackOff pods. These pods are identified by info stored in this property.
 
-| Name                         | Type             | Required | Default Value | Description                                                                                                       |
-|------------------------------|------------------|----------|---------------|-------------------------------------------------------------------------------------------------------------------|
-| podSelectors                | []*metav1.LabelSelector | Yes      | NA            | This is a list of [Label selector](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1@v0.24.3#LabelSelector) |
+| Name         | Type                    | Required | Default Value | Description                                                                                                       |
+|--------------|-------------------------|----------|---------------|-------------------------------------------------------------------------------------------------------------------|
+| podSelectors | []*metav1.LabelSelector | Yes      | NA            | This is a list of [Label selector](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1@v0.24.3#LabelSelector) |
 

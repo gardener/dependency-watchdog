@@ -123,6 +123,9 @@ type SeedStatus struct {
 	// ClientCertificateExpirationTimestamp is the timestamp at which gardenlet's client certificate expires.
 	// +optional
 	ClientCertificateExpirationTimestamp *metav1.Time `json:"clientCertificateExpirationTimestamp,omitempty" protobuf:"bytes,8,opt,name=clientCertificateExpirationTimestamp"`
+	// LastOperation holds information about the last operation on the Seed.
+	// +optional
+	LastOperation *LastOperation `json:"lastOperation,omitempty" protobuf:"bytes,9,opt,name=lastOperation"`
 }
 
 // SeedBackup contains the object store configuration for backups for shoot (currently only etcd).
@@ -267,8 +270,24 @@ type SeedSettings struct {
 
 // SeedSettingExcessCapacityReservation controls the excess capacity reservation for shoot control planes in the seed.
 type SeedSettingExcessCapacityReservation struct {
-	// Enabled controls whether the excess capacity reservation should be enabled.
-	Enabled bool `json:"enabled" protobuf:"bytes,1,opt,name=enabled"`
+	// Enabled controls whether the default excess capacity reservation should be enabled. When not specified, the functionality is enabled.
+	// +optional
+	Enabled *bool `json:"enabled,omitempty" protobuf:"bytes,1,opt,name=enabled"`
+	// Configs configures excess capacity reservation deployments for shoot control planes in the seed.
+	// +optional
+	Configs []SeedSettingExcessCapacityReservationConfig `json:"configs,omitempty" protobuf:"bytes,2,rep,name=configs"`
+}
+
+// SeedSettingExcessCapacityReservationConfig configures excess capacity reservation deployments for shoot control planes in the seed.
+type SeedSettingExcessCapacityReservationConfig struct {
+	// Resources specify the resource requests and limits of the excess-capacity-reservation pod.
+	Resources corev1.ResourceList `json:"resources" protobuf:"bytes,1,rep,name=resources,casttype=k8s.io/api/core/v1.ResourceList,castkey=k8s.io/api/core/v1.ResourceName"`
+	// NodeSelector specifies the node where the excess-capacity-reservation pod should run.
+	// +optional
+	NodeSelector map[string]string `json:"nodeSelector,omitempty" protobuf:"bytes,2,rep,name=nodeSelector"`
+	// Tolerations specify the tolerations for the the excess-capacity-reservation pod.
+	// +optional
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty" protobuf:"bytes,3,rep,name=tolerations"`
 }
 
 // SeedSettingScheduling controls settings for scheduling decisions for the seed.
@@ -321,38 +340,17 @@ type SeedSettingVerticalPodAutoscaler struct {
 
 // SeedSettingDependencyWatchdog controls the dependency-watchdog settings for the seed.
 type SeedSettingDependencyWatchdog struct {
-	// Endpoint controls the endpoint settings for the dependency-watchdog for the seed.
-	// Deprecated: This field is deprecated and will be removed in a future version of Gardener. Use `Weeder` instead.
-	// +optional
-	Endpoint *SeedSettingDependencyWatchdogEndpoint `json:"endpoint,omitempty" protobuf:"bytes,1,opt,name=endpoint"`
-	// Probe controls the probe settings for the dependency-watchdog for the seed.
-	// Deprecated: This field is deprecated and will be removed in a future version of Gardener. Use `Prober` instead.
-	// +optional
-	Probe *SeedSettingDependencyWatchdogProbe `json:"probe,omitempty" protobuf:"bytes,2,opt,name=probe"`
+	// Endpoint is tombstoned to show why 1 is reserved protobuf tag.
+	// Endpoint *SeedSettingDependencyWatchdogEndpoint `json:"endpoint,omitempty" protobuf:"bytes,1,opt,name=endpoint"`
+	// Probe is tombstoned to show why 2 is reserved protobuf tag.
+	// Probe *SeedSettingDependencyWatchdogProbe `json:"probe,omitempty" protobuf:"bytes,2,opt,name=probe"`
+
 	// Weeder controls the weeder settings for the dependency-watchdog for the seed.
 	// +optional
 	Weeder *SeedSettingDependencyWatchdogWeeder `json:"weeder,omitempty" protobuf:"bytes,3,opt,name=weeder"`
 	// Prober controls the prober settings for the dependency-watchdog for the seed.
 	// +optional
 	Prober *SeedSettingDependencyWatchdogProber `json:"prober,omitempty" protobuf:"bytes,4,opt,name=prober"`
-}
-
-// SeedSettingDependencyWatchdogEndpoint controls the endpoint settings for the dependency-watchdog for the seed.
-// Deprecated: This type is deprecated and will be removed in a future version of Gardener. Use type `SeedSettingDependencyWatchdogWeeder` instead.
-type SeedSettingDependencyWatchdogEndpoint struct {
-	// Enabled controls whether the endpoint controller of the dependency-watchdog should be enabled. This controller
-	// helps to alleviate the delay where control plane components remain unavailable by finding the respective pods in
-	// CrashLoopBackoff status and restarting them once their dependants become ready and available again.
-	Enabled bool `json:"enabled" protobuf:"bytes,1,opt,name=enabled"`
-}
-
-// SeedSettingDependencyWatchdogProbe controls the probe settings for the dependency-watchdog for the seed.
-// Deprecated: This type is deprecated and will be removed in a future version of Gardener. Use type `SeedSettingDependencyWatchdogProber` instead.
-type SeedSettingDependencyWatchdogProbe struct {
-	// Enabled controls whether the probe controller of the dependency-watchdog should be enabled. This controller
-	// scales down the kube-controller-manager, machine-controller-manager and cluster-autoscaler of shoot clusters in case their respective kube-apiserver is not
-	// reachable via its external ingress in order to avoid melt-down situations.
-	Enabled bool `json:"enabled" protobuf:"bytes,1,opt,name=enabled"`
 }
 
 // SeedSettingDependencyWatchdogWeeder controls the weeder settings for the dependency-watchdog for the seed.
@@ -417,9 +415,6 @@ type SeedVolumeProvider struct {
 const (
 	// SeedBackupBucketsReady is a constant for a condition type indicating that associated BackupBuckets are ready.
 	SeedBackupBucketsReady ConditionType = "BackupBucketsReady"
-	// SeedBootstrapped is a constant for a condition type indicating that the seed cluster has been
-	// bootstrapped.
-	SeedBootstrapped ConditionType = "Bootstrapped"
 	// SeedExtensionsReady is a constant for a condition type indicating that the extensions are ready.
 	SeedExtensionsReady ConditionType = "ExtensionsReady"
 	// SeedGardenletReady is a constant for a condition type indicating that the Gardenlet is ready.

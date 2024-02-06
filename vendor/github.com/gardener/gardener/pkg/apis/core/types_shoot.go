@@ -159,6 +159,10 @@ type ShootStatus struct {
 	Credentials *ShootCredentials
 	// LastMaintenance holds information about the last maintenance operations on the Shoot.
 	LastMaintenance *LastMaintenance
+	// EncryptedResources is the list of resources in the Shoot which are currently encrypted.
+	// Secrets are encrypted by default and are not part of the list.
+	// See https://github.com/gardener/gardener/blob/master/docs/usage/etcd_encryption_config.md for more details.
+	EncryptedResources []string
 }
 
 // LastMaintenance holds information about a maintenance operation on the Shoot.
@@ -188,7 +192,7 @@ type ShootCredentialsRotation struct {
 	// SSHKeypair contains information about the ssh-keypair credential rotation.
 	SSHKeypair *ShootSSHKeypairRotation
 	// Observability contains information about the observability credential rotation.
-	Observability *ShootObservabilityRotation
+	Observability *ObservabilityRotation
 	// ServiceAccountKey contains information about the service account key credential rotation.
 	ServiceAccountKey *ServiceAccountKeyRotation
 	// ETCDEncryptionKey contains information about the ETCD encryption key credential rotation.
@@ -228,8 +232,8 @@ type ShootSSHKeypairRotation struct {
 	LastCompletionTime *metav1.Time
 }
 
-// ShootObservabilityRotation contains information about the observability credential rotation.
-type ShootObservabilityRotation struct {
+// ObservabilityRotation contains information about the observability credential rotation.
+type ObservabilityRotation struct {
 	// LastInitiationTime is the most recent time when the observability credential rotation was initiated.
 	LastInitiationTime *metav1.Time
 	// LastCompletionTime is the most recent time when the observability credential rotation was successfully completed.
@@ -479,6 +483,10 @@ type ClusterAutoscaler struct {
 	MaxGracefulTerminationSeconds *int32
 	// IgnoreTaints specifies a list of taint keys to ignore in node templates when considering to scale a node group.
 	IgnoreTaints []string
+	// NewPodScaleUpDelay specifies how long CA should ignore newly created pods before they have to be considered for scale-up.
+	NewPodScaleUpDelay *metav1.Duration
+	// MaxEmptyBulkDelete specifies the maximum number of empty nodes that can be deleted at the same time (default: 10).
+	MaxEmptyBulkDelete *int32
 }
 
 // ExpanderMode is type used for Expander values
@@ -577,6 +585,8 @@ type KubeAPIServerConfig struct {
 	// that is added by default to every pod that does not already have such a toleration (flag `--default-unreachable-toleration-seconds`).
 	// The field has effect only when the `DefaultTolerationSeconds` admission plugin is enabled.
 	DefaultUnreachableTolerationSeconds *int64
+	// EncryptionConfig contains customizable encryption configuration of the API server.
+	EncryptionConfig *EncryptionConfig
 }
 
 // APIServerLogging contains configuration for the logs level and http access logs
@@ -595,6 +605,16 @@ type APIServerRequests struct {
 	// MaxMutatingInflight is the maximum number of mutating requests in flight at a given time. When the server
 	// exceeds this, it rejects requests.
 	MaxMutatingInflight *int32
+}
+
+// EncryptionConfig contains customizable encryption configuration of the API server.
+type EncryptionConfig struct {
+	// Resources contains the list of resources that shall be encrypted in addition to secrets.
+	// Each item is a Kubernetes resource name in plural (resource or resource.group) that should be encrypted.
+	// Note that configuring a custom resource is only supported for versions >= 1.26.
+	// Wildcards are not supported for now.
+	// See https://github.com/gardener/gardener/blob/master/docs/usage/etcd_encryption_config.md for more details.
+	Resources []string
 }
 
 // ServiceAccountConfig is the kube-apiserver configuration for service accounts.
@@ -616,7 +636,6 @@ type ServiceAccountConfig struct {
 	// AcceptedIssuers is an additional set of issuers that are used to determine which service account tokens are accepted.
 	// These values are not used to generate new service account tokens. Only useful when service account tokens are also
 	// issued by another external system or a change of the current issuer that is used for generating tokens is being performed.
-	// This field is only available for Kubernetes v1.22 or later.
 	AcceptedIssuers []string
 }
 
@@ -1056,7 +1075,7 @@ type Worker struct {
 	// CABundle is a certificate bundle which will be installed onto every machine of this worker pool.
 	CABundle *string
 	// CRI contains configurations of CRI support of every machine in the worker pool.
-	// Defaults to a CRI with name `containerd` when the Kubernetes version of the `Shoot` is >= 1.22.
+	// Defaults to a CRI with name `containerd`.
 	CRI *CRI
 	// Kubernetes contains configuration for Kubernetes components related to this worker pool.
 	Kubernetes *WorkerKubernetes
@@ -1206,9 +1225,9 @@ type ContainerRuntime struct {
 
 var (
 	// DefaultWorkerMaxSurge is the default value for Worker MaxSurge.
-	DefaultWorkerMaxSurge = intstr.FromInt(1)
+	DefaultWorkerMaxSurge = intstr.FromInt32(1)
 	// DefaultWorkerMaxUnavailable is the default value for Worker MaxUnavailable.
-	DefaultWorkerMaxUnavailable = intstr.FromInt(0)
+	DefaultWorkerMaxUnavailable = intstr.FromInt32(0)
 )
 
 // WorkersSettings contains settings for all workers.

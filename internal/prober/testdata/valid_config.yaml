@@ -1,11 +1,8 @@
-internalKubeConfigSecretName: "dws-interal-probe-secret"
-externalKubeConfigSecretName: "dwd-external-probe-secret"
+kubeConfigSecretName: "dwd-api-server-probe-secret"
 probeInterval: 30s
 initialDelay: 5s
-successThreshold: 1
-failureThreshold: 3
-internalProbeFailureBackoffDuration: 30s
 backOffJitterFactor: 0.2
+kcmNodeMonitorGraceDuration: 2m
 dependentResourceInfos:
   - ref:
       kind: "Deployment"

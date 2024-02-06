@@ -73,6 +73,11 @@ func (in *BackupCompactionController) DeepCopyInto(out *BackupCompactionControll
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.MetricsScrapeWaitDuration != nil {
+		in, out := &in.MetricsScrapeWaitDuration, &out.MetricsScrapeWaitDuration
+		*out = new(v1.Duration)
+		**out = **in
+	}
 	return
 }
 
@@ -292,6 +297,18 @@ func (in *ETCDConfig) DeepCopyInto(out *ETCDConfig) {
 		in, out := &in.BackupLeaderElection, &out.BackupLeaderElection
 		*out = new(ETCDBackupLeaderElection)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.FeatureGates != nil {
+		in, out := &in.FeatureGates, &out.FeatureGates
+		*out = make(map[string]bool, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
+	if in.DeltaSnapshotRetentionPeriod != nil {
+		in, out := &in.DeltaSnapshotRetentionPeriod, &out.DeltaSnapshotRetentionPeriod
+		*out = new(v1.Duration)
+		**out = **in
 	}
 	return
 }
