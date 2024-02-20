@@ -84,8 +84,8 @@ func testMissingConfigValuesShouldReturnErrorAndNilConfig(t *testing.T, s *runti
 		fileName         string
 		expectedErrCount int
 	}{
-		{"config_missing_mandatory_values.yaml", 6},
-		{"config_missing_dependent_resource_infos.yaml", 3},
+		{"config_missing_mandatory_values.yaml", 5},
+		{"config_missing_dependent_resource_infos.yaml", 2},
 	}
 
 	for _, entry := range table {

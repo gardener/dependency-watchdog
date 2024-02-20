@@ -19,6 +19,11 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"time"
+
+	"github.com/Masterminds/semver/v3"
+	"github.com/gardener/gardener/pkg/utils/version"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"github.com/gardener/dependency-watchdog/internal/prober/scaler"
@@ -43,6 +48,11 @@ import (
 )
 
 const controllerName = "cluster"
+
+var (
+	defaultKCMNodeMonitorGraceDurationForK8sGreaterEqual127 = metav1.Duration{Duration: 40 * time.Second}
+	defaultKCMNodeMonitorGraceDurationForK8sLesserThan127   = metav1.Duration{Duration: 120 * time.Second}
+)
 
 // Reconciler reconciles a Cluster object
 type Reconciler struct {
@@ -121,7 +131,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	if canStartProber(shoot) {
-		r.startProber(ctx, shoot, log, req.Name)
+		err = r.startProber(ctx, shoot, log, req.Name)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 	return ctrl.Result{}, nil
 }
@@ -159,10 +172,13 @@ func canStartProber(shoot *v1beta1.Shoot) bool {
 
 // startProber sets up a new probe against a given key which uniquely identifies the probe.
 // Typically, the key in case of a shoot cluster is the shoot namespace
-func (r *Reconciler) startProber(ctx context.Context, shoot *v1beta1.Shoot, logger logr.Logger, key string) {
+func (r *Reconciler) startProber(ctx context.Context, shoot *v1beta1.Shoot, logger logr.Logger, key string) error {
 	_, ok := r.ProberMgr.GetProber(key)
 	if !ok {
-		probeConfig := r.getEffectiveProbeConfig(shoot, logger)
+		probeConfig, err := r.getEffectiveProbeConfig(shoot, logger)
+		if err != nil {
+			return err
+		}
 		deploymentScaler := scaler.NewScaler(key, probeConfig.DependentResourceInfos, r.Client, r.ScaleGetter, logger)
 		shootClientCreator := prober.NewShootClientCreator(r.Client)
 		p := prober.NewProber(ctx, key, probeConfig, deploymentScaler, shootClientCreator, logger)
@@ -170,6 +186,7 @@ func (r *Reconciler) startProber(ctx context.Context, shoot *v1beta1.Shoot, logg
 		logger.Info("Starting a new prober")
 		go p.Run()
 	}
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -189,12 +206,23 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // getEffectiveProbeConfig returns the updated probe config after checking the shoot KCM configuration for NodeMonitorGracePeriod.
 // If NodeMonitorGracePeriod is not set in the shoot, then the KCMNodeMonitorGraceDuration defined in the configmap of probe config will be used
-func (r *Reconciler) getEffectiveProbeConfig(shoot *v1beta1.Shoot, logger logr.Logger) *papi.Config {
+func (r *Reconciler) getEffectiveProbeConfig(shoot *v1beta1.Shoot, logger logr.Logger) (*papi.Config, error) {
 	probeConfig := *r.DefaultProbeConfig
 	kcmConfig := shoot.Spec.Kubernetes.KubeControllerManager
 	if kcmConfig != nil && kcmConfig.NodeMonitorGracePeriod != nil {
 		logger.Info("Using the NodeMonitorGracePeriod set in the shoot as KCMNodeMonitorGraceDuration in the probe config", "nodeMonitorGraceDuration", *kcmConfig.NodeMonitorGracePeriod)
-		probeConfig.KCMNodeMonitorGraceDuration = *kcmConfig.NodeMonitorGracePeriod
+		probeConfig.KCMNodeMonitorGraceDuration = kcmConfig.NodeMonitorGracePeriod
+	} else {
+		k8sVersion, err := semver.NewVersion(shoot.Spec.Kubernetes.Version)
+		if err != nil {
+			logger.Error(err, "Failed to determine parse shoot k8s version, cannot create probe")
+			return nil, err
+		}
+		if version.ConstraintK8sGreaterEqual127.Check(k8sVersion) {
+			probeConfig.KCMNodeMonitorGraceDuration = &defaultKCMNodeMonitorGraceDurationForK8sGreaterEqual127
+		} else {
+			probeConfig.KCMNodeMonitorGraceDuration = &defaultKCMNodeMonitorGraceDurationForK8sLesserThan127
+		}
 	}
-	return &probeConfig
+	return &probeConfig, nil
 }

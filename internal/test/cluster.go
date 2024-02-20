@@ -28,7 +28,7 @@ import (
 
 // CreateClusterResource creates a test cluster and shoot resources.
 // This should only be used for unit testing.
-func CreateClusterResource(numWorkers int, nodeMonitorGracePeriod *metav1.Duration, rawShoot bool) (*gardenerv1alpha1.Cluster, *gardencorev1beta1.Shoot, error) {
+func CreateClusterResource(numWorkers int, nodeMonitorGracePeriod *metav1.Duration, k8sVersion string, rawShoot bool) (*gardenerv1alpha1.Cluster, *gardencorev1beta1.Shoot, error) {
 	cloudProfile := gardencorev1beta1.CloudProfile{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "aws",
@@ -52,7 +52,7 @@ func CreateClusterResource(numWorkers int, nodeMonitorGracePeriod *metav1.Durati
 			},
 		},
 	}
-	shoot := CreateShoot(seed.Name, numWorkers, nodeMonitorGracePeriod)
+	shoot := CreateShoot(seed.Name, numWorkers, nodeMonitorGracePeriod, k8sVersion)
 	if rawShoot {
 		shootBytes, err := json.Marshal(shoot)
 		if err != nil {
@@ -67,7 +67,7 @@ func CreateClusterResource(numWorkers int, nodeMonitorGracePeriod *metav1.Durati
 
 // CreateShoot creates a shoot resources.
 // This should only be used for unit testing.
-func CreateShoot(seedName string, numWorkers int, nodeMonitorGracePeriod *metav1.Duration) gardencorev1beta1.Shoot {
+func CreateShoot(seedName string, numWorkers int, nodeMonitorGracePeriod *metav1.Duration, k8sVersion string) gardencorev1beta1.Shoot {
 	end := "00 08 * * 1,2,3,4,5"
 	start := "30 19 * * 1,2,3,4,5"
 	location := "Asia/Calcutta"
@@ -87,6 +87,7 @@ func CreateShoot(seedName string, numWorkers int, nodeMonitorGracePeriod *metav1
 				KubeControllerManager: &gardencorev1beta1.KubeControllerManagerConfig{
 					NodeMonitorGracePeriod: nodeMonitorGracePeriod,
 				},
+				Version: k8sVersion,
 			},
 			Provider: gardencorev1beta1.Provider{
 				Type:    "aws",
@@ -107,11 +108,11 @@ func CreateShoot(seedName string, numWorkers int, nodeMonitorGracePeriod *metav1
 func createWorkers(numWorkers int) []gardencorev1beta1.Worker {
 	workers := make([]gardencorev1beta1.Worker, 0, numWorkers)
 	for i := 0; i < numWorkers; i++ {
-		max := rand.Int31n(5)
+		mx := rand.Int31n(5)
 		w := gardencorev1beta1.Worker{
 			Name:    fmt.Sprintf("worker-pool-%d", i),
 			Machine: gardencorev1beta1.Machine{},
-			Maximum: max,
+			Maximum: mx,
 			Minimum: 1,
 		}
 		workers = append(workers, w)
