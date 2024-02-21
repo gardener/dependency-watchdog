@@ -365,11 +365,11 @@ func testShootHasNoWorkers(g *WithT, crClient client.Client, reconciler *Reconci
 	proberShouldNotBePresent(g, reconciler, cluster)
 }
 
-func proberShouldBePresent(g *WithT, reconciler *Reconciler, cluster *gardenerv1alpha1.Cluster, kcmNodeMonitorGraceDuration metav1.Duration) {
+func proberShouldBePresent(g *WithT, reconciler *Reconciler, cluster *gardenerv1alpha1.Cluster, expectedKCMNodeMonitorGraceDuration metav1.Duration) {
 	g.Eventually(func() int { return len(reconciler.ProberMgr.GetAllProbers()) }, 10*time.Second, 1*time.Second).Should(Equal(1))
 	prober, ok := reconciler.ProberMgr.GetProber(cluster.ObjectMeta.Name)
 	g.Expect(ok).To(BeTrue())
-	g.Expect(*prober.GetConfig().KCMNodeMonitorGraceDuration).To(Equal(kcmNodeMonitorGraceDuration))
+	g.Expect(*prober.GetConfig().KCMNodeMonitorGraceDuration).To(Equal(expectedKCMNodeMonitorGraceDuration))
 	g.Expect(prober.IsClosed()).To(BeFalse())
 }
 

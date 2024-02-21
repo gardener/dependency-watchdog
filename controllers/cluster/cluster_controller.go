@@ -215,7 +215,7 @@ func (r *Reconciler) getEffectiveProbeConfig(shoot *v1beta1.Shoot, logger logr.L
 	} else {
 		k8sVersion, err := semver.NewVersion(shoot.Spec.Kubernetes.Version)
 		if err != nil {
-			logger.Error(err, "Failed to determine parse shoot k8s version, cannot create probe")
+			logger.Error(err, "Failed to parse shoot k8s version, cannot create probe")
 			return nil, err
 		}
 		if version.ConstraintK8sGreaterEqual127.Check(k8sVersion) {
