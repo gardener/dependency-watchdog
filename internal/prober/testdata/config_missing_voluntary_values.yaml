@@ -1,5 +1,4 @@
 kubeConfigSecretName: "dwd-api-server-probe-secret"
-kCMNodeMonitorGraceDuration: 2m
 dependentResourceInfos:
   - ref:
       kind: "Deployment"

@@ -42,6 +42,10 @@ const (
 	//		2. numberOfOwnedLeases = 10, numberOfExpiredLeases = 5.
 	//	 	   numberOfExpiredLeases/numberOfOwnedLeases = 0.5, which is < DefaultNodeLeaseFailureFraction and so the lease probe will succeed.
 	DefaultNodeLeaseFailureFraction = 0.60
+	// DefaultKCMNodeMonitorGraceDuration is set to the default value of nodeMonitorGracePeriod in KCM.
+	// See https://kubernetes.io/docs/reference/command-line-tools-reference/kube-controller-manager/#:~:text=%2D%2Dnode%2Dmonitor%2Dgrace%2Dperiod%20duration
+	// Note: Make sure to keep this value in sync with default value of nodeMonitorGracePeriod in KCM.
+	DefaultKCMNodeMonitorGraceDuration = 40 * time.Second
 )
 
 // LoadConfig reads the prober configuration from a file, unmarshalls it, fills in the default values and
@@ -63,7 +67,9 @@ func validate(c *papi.Config, scheme *runtime.Scheme) error {
 	v := new(util.Validator)
 	// Check the mandatory config parameters for which a default will not be set
 	v.MustNotBeEmpty("KubeConfigSecretName", c.KubeConfigSecretName)
-	v.MustNotBeZeroDuration("KCMNodeMonitorGraceDuration", c.KCMNodeMonitorGraceDuration)
+	if c.KCMNodeMonitorGraceDuration != nil {
+		v.MustNotBeZeroDuration("KCMNodeMonitorGraceDuration", *c.KCMNodeMonitorGraceDuration)
+	}
 	v.MustNotBeEmpty("ScaleResourceInfos", c.DependentResourceInfos)
 	for _, resInfo := range c.DependentResourceInfos {
 		v.ResourceRefMustBeValid(resInfo.Ref, scheme)
@@ -82,6 +88,7 @@ func fillDefaultValues(c *papi.Config) {
 	c.ProbeTimeout = util.GetValOrDefault(c.ProbeTimeout, metav1.Duration{Duration: DefaultProbeTimeout})
 	c.BackoffJitterFactor = util.GetValOrDefault(c.BackoffJitterFactor, DefaultBackoffJitterFactor)
 	c.NodeLeaseFailureFraction = util.GetValOrDefault(c.NodeLeaseFailureFraction, DefaultNodeLeaseFailureFraction)
+	c.KCMNodeMonitorGraceDuration = util.GetValOrDefault(c.KCMNodeMonitorGraceDuration, metav1.Duration{Duration: DefaultKCMNodeMonitorGraceDuration})
 	fillDefaultValuesForResourceInfos(c.DependentResourceInfos)
 }
 
