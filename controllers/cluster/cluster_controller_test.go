@@ -54,7 +54,10 @@ const (
 	maxConcurrentReconcilesProber = 1
 )
 
-var shootKCMNodeMonitorGracePeriod = &metav1.Duration{Duration: 40 * time.Second}
+var (
+	shootKCMNodeMonitorGracePeriod   = &metav1.Duration{Duration: 80 * time.Second}
+	defaultKCMNodeMonitorGracePeriod = metav1.Duration{Duration: proberpackage.DefaultKCMNodeMonitorGraceDuration}
+)
 
 func setupProberEnv(ctx context.Context, g *WithT) (client.Client, *envtest.Environment, *Reconciler, manager.Manager) {
 	scheme := buildScheme()
@@ -221,7 +224,7 @@ func testShootHibernation(g *WithT, crClient client.Client, reconciler *Reconcil
 	cluster, shoot, err := testutil.CreateClusterResource(1, nil, false)
 	g.Expect(err).ToNot(HaveOccurred())
 	createCluster(g, crClient, cluster)
-	proberShouldBePresent(g, reconciler, cluster, reconciler.DefaultProbeConfig.KCMNodeMonitorGraceDuration)
+	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod)
 	// update spec to indicate start of hibernation
 	updateShootHibernationSpec(g, crClient, cluster, shoot, pointer.Bool(true))
 	proberShouldNotBePresent(g, reconciler, cluster)
@@ -232,7 +235,7 @@ func testShootHibernation(g *WithT, crClient client.Client, reconciler *Reconcil
 	proberShouldNotBePresent(g, reconciler, cluster)
 	// update status to indicate cluster has successfully woken up
 	updateShootHibernationStatus(g, crClient, cluster, shoot, false)
-	proberShouldBePresent(g, reconciler, cluster, reconciler.DefaultProbeConfig.KCMNodeMonitorGraceDuration)
+	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod)
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
@@ -270,7 +273,7 @@ func testProberShouldBeRemovedIfDeletionTimeStampIsSet(g *WithT, crClient client
 	cluster, shoot, err := testutil.CreateClusterResource(1, nil, false)
 	g.Expect(err).ToNot(HaveOccurred())
 	createCluster(g, crClient, cluster)
-	proberShouldBePresent(g, reconciler, cluster, reconciler.DefaultProbeConfig.KCMNodeMonitorGraceDuration)
+	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod)
 	updateShootDeletionTimeStamp(g, crClient, cluster, shoot)
 	proberShouldNotBePresent(g, reconciler, cluster)
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
@@ -326,7 +329,7 @@ func testShootRestoringIsNotComplete(g *WithT, crClient client.Client, reconcile
 	cluster, shoot, err := testutil.CreateClusterResource(1, nil, false)
 	g.Expect(err).ToNot(HaveOccurred())
 	createCluster(g, crClient, cluster)
-	proberShouldBePresent(g, reconciler, cluster, reconciler.DefaultProbeConfig.KCMNodeMonitorGraceDuration)
+	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod)
 	// cluster migration starts
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeMigrate, "")
 	updateCluster(g, crClient, cluster)
@@ -343,7 +346,7 @@ func testLastOperationIsRestoreAndSuccessful(g *WithT, crClient client.Client, r
 	g.Expect(err).ToNot(HaveOccurred())
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeRestore, gardencorev1beta1.LastOperationStateSucceeded)
 	createCluster(g, crClient, cluster)
-	proberShouldBePresent(g, reconciler, cluster, reconciler.DefaultProbeConfig.KCMNodeMonitorGraceDuration)
+	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod)
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
@@ -352,7 +355,7 @@ func testLastOperationIsShootReconciliation(g *WithT, crClient client.Client, re
 	g.Expect(err).ToNot(HaveOccurred())
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeReconcile, "")
 	createCluster(g, crClient, cluster)
-	proberShouldBePresent(g, reconciler, cluster, reconciler.DefaultProbeConfig.KCMNodeMonitorGraceDuration)
+	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod)
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
@@ -363,11 +366,11 @@ func testShootHasNoWorkers(g *WithT, crClient client.Client, reconciler *Reconci
 	proberShouldNotBePresent(g, reconciler, cluster)
 }
 
-func proberShouldBePresent(g *WithT, reconciler *Reconciler, cluster *gardenerv1alpha1.Cluster, kcmNodeMonitorGraceDuration metav1.Duration) {
+func proberShouldBePresent(g *WithT, reconciler *Reconciler, cluster *gardenerv1alpha1.Cluster, expectedKCMNodeMonitorGraceDuration metav1.Duration) {
 	g.Eventually(func() int { return len(reconciler.ProberMgr.GetAllProbers()) }, 10*time.Second, 1*time.Second).Should(Equal(1))
 	prober, ok := reconciler.ProberMgr.GetProber(cluster.ObjectMeta.Name)
 	g.Expect(ok).To(BeTrue())
-	g.Expect(prober.GetConfig().KCMNodeMonitorGraceDuration).To(Equal(kcmNodeMonitorGraceDuration))
+	g.Expect(*prober.GetConfig().KCMNodeMonitorGraceDuration).To(Equal(expectedKCMNodeMonitorGraceDuration))
 	g.Expect(prober.IsClosed()).To(BeFalse())
 }
 

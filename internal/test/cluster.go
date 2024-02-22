@@ -107,11 +107,11 @@ func CreateShoot(seedName string, numWorkers int, nodeMonitorGracePeriod *metav1
 func createWorkers(numWorkers int) []gardencorev1beta1.Worker {
 	workers := make([]gardencorev1beta1.Worker, 0, numWorkers)
 	for i := 0; i < numWorkers; i++ {
-		max := rand.Int31n(5)
+		mx := rand.Int31n(5)
 		w := gardencorev1beta1.Worker{
 			Name:    fmt.Sprintf("worker-pool-%d", i),
 			Machine: gardencorev1beta1.Machine{},
-			Maximum: max,
+			Maximum: mx,
 			Minimum: 1,
 		}
 		workers = append(workers, w)
