@@ -70,6 +70,7 @@ func testCheckIfDefaultValuesAreSetForAllOptionalMissingValues(t *testing.T, s *
 	g.Expect(config.ProbeInterval.Milliseconds()).To(Equal(DefaultProbeInterval.Milliseconds()), "LoadConfig should set probe delay to DefaultProbeInterval if not set in the config file")
 	g.Expect(*config.BackoffJitterFactor).To(Equal(DefaultBackoffJitterFactor), "LoadConfig should set jitter factor to DefaultJitterFactor if not set in the config file")
 	g.Expect(*config.NodeLeaseFailureFraction).To(Equal(DefaultNodeLeaseFailureFraction), "LoadConfig should set lease failure threshold fraction to DefaultNodeLeaseFailureFraction if not set in the config file")
+	g.Expect(config.KCMNodeMonitorGraceDuration.Milliseconds()).To(Equal(DefaultKCMNodeMonitorGraceDuration.Milliseconds()), "LoadConfig should set kcmNodeMonitorGraceDuration to DefaultKCMNodeMonitorGraceDuration if not set in the config file")
 	for _, resInfo := range config.DependentResourceInfos {
 		g.Expect(resInfo.ScaleUpInfo.InitialDelay.Milliseconds()).To(Equal(DefaultScaleInitialDelay.Milliseconds()), fmt.Sprintf("LoadConfig should set scale up initial delay for %v to DefaultInitialDelay if not set in the config file", resInfo.Ref.Name))
 		g.Expect(resInfo.ScaleUpInfo.Timeout.Milliseconds()).To(Equal(DefaultScaleUpdateTimeout.Milliseconds()), fmt.Sprintf("LoadConfig should set scale up timeout for %v to DefaultScaleUpTimeout if not set in the config file", resInfo.Ref.Name))
