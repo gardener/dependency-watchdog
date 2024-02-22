@@ -194,7 +194,7 @@ func (r *Reconciler) getEffectiveProbeConfig(shoot *v1beta1.Shoot, logger logr.L
 	kcmConfig := shoot.Spec.Kubernetes.KubeControllerManager
 	if kcmConfig != nil && kcmConfig.NodeMonitorGracePeriod != nil {
 		logger.Info("Using the NodeMonitorGracePeriod set in the shoot as KCMNodeMonitorGraceDuration in the probe config", "nodeMonitorGraceDuration", *kcmConfig.NodeMonitorGracePeriod)
-		probeConfig.KCMNodeMonitorGraceDuration = *kcmConfig.NodeMonitorGracePeriod
+		probeConfig.KCMNodeMonitorGraceDuration = kcmConfig.NodeMonitorGracePeriod
 	}
 	return &probeConfig
 }

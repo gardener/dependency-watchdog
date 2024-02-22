@@ -2,7 +2,6 @@ kubeConfigSecretName: "dwd-api-server-probe-secret"
 probeInterval: 20s
 initialDelay: 5s
 backOffJitterFactor: 0.2
-kcmNodeMonitorGraceDuration: 2m
 dependentResourceInfos:
   - ref:
       kind: "Deployment"
