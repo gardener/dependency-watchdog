@@ -1,7 +1,7 @@
 # Dependency Watchdog
-
 <img src="logo/gardener-dwd.png" style="width:200px">
 
+[![REUSE status](https://api.reuse.software/badge/github.com/gardener/dependency-watchdog)](https://api.reuse.software/info/github.com/gardener/dependency-watchdog)
 [![CI Build status](https://concourse.ci.gardener.cloud/api/v1/teams/gardener/pipelines/dependency-watchdog-master/jobs/master-head-update-job/badge)](https://concourse.ci.gardener.cloud/api/v1/teams/gardener/pipelines/dependency-watchdog-master/jobs/master-head-update-job/)
 [![Unit Tests](https://testgrid.k8s.io/q/summary/gardener-dependency-watchdog/ci-dependency-watchdog-unit/tests_status?style=svg)](https://testgrid.k8s.io/q/summary/gardener-dependency-watchdog/ci-dependency-watchdog-unit/tests_status)
 [![Go Report Card](https://goreportcard.com/badge/github.com/gardener/dependency-watchdog)](https://goreportcard.com/report/github.com/gardener/dependency-watchdog)
