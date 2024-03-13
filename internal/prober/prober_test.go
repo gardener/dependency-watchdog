@@ -114,6 +114,23 @@ func TestSuccessfulProbesShouldRunScaleUp(t *testing.T) {
 	}
 }
 
+func TestSuccessfulProbesShouldRunScaleUpWithUnrelatedLeases(t *testing.T) {
+	leaseList := createNodeLeases([]metav1.MicroTime{nonExpiredLeaseRenewTime, expiredLeaseRenewTime, expiredLeaseRenewTime})
+	nodeList := createNodes(1)
+
+	testCases := []probeTestCase{
+		{name: "Scale Up Succeeds", leaseList: leaseList, nodeList: nodeList, minScaleUpCount: 1, maxScaleUpCount: math.MaxInt8},
+	}
+
+	for _, entry := range testCases {
+		t.Run(entry.name, func(t *testing.T) {
+			mocks := createAndInitializeMocks(t, entry)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+			createAndRunProber(t, testProbeInterval.Duration, config, mocks)
+		})
+	}
+}
+
 func TestLeaseProbeFailureShouldRunScaleDown(t *testing.T) {
 	leaseList := createNodeLeases([]metav1.MicroTime{nonExpiredLeaseRenewTime, expiredLeaseRenewTime, expiredLeaseRenewTime, expiredLeaseRenewTime})
 	nodeList := createNodes(len(leaseList.Items))
