@@ -14,23 +14,23 @@ import (
 	"testing"
 	"time"
 
-	mockcoordinationv1 "github.com/gardener/dependency-watchdog/internal/mock/client-go/kubernetes/coordinationv1"
+	"github.com/go-logr/logr"
+	"github.com/golang/mock/gomock"
+	. "github.com/onsi/gomega"
 	coordinationv1 "k8s.io/api/coordination/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/pointer"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	mockdiscovery "github.com/gardener/dependency-watchdog/internal/mock/client-go/discovery"
 	mockinterface "github.com/gardener/dependency-watchdog/internal/mock/client-go/kubernetes"
+	mockcoordinationv1 "github.com/gardener/dependency-watchdog/internal/mock/client-go/kubernetes/coordinationv1"
+	mockcorev1 "github.com/gardener/dependency-watchdog/internal/mock/client-go/kubernetes/corev1"
 	mockprober "github.com/gardener/dependency-watchdog/internal/mock/prober"
 	mockscaler "github.com/gardener/dependency-watchdog/internal/mock/prober/scaler"
-
-	"github.com/go-logr/logr"
-	"github.com/golang/mock/gomock"
-	. "github.com/onsi/gomega"
 )
 
 var (
@@ -47,15 +47,19 @@ type probeTestMocks struct {
 	shootClientCreator *mockprober.MockShootClientCreator
 	kubernetes         *mockinterface.MockInterface
 	discovery          *mockdiscovery.MockDiscoveryInterface
+	coreV1             *mockcorev1.MockCoreV1Interface
 	coordinationV1     *mockcoordinationv1.MockCoordinationV1Interface
+	node               *mockcorev1.MockNodeInterface
 	lease              *mockcoordinationv1.MockLeaseInterface
 }
 
 type probeTestCase struct {
 	name                    string
+	nodeList                *corev1.NodeList
 	leaseList               *coordinationv1.LeaseList
 	shootClientCreatorError error
 	discoveryError          error
+	nodeListError           error
 	leaseListError          error
 	scaleUpError            error
 	scaleDownError          error
@@ -84,10 +88,11 @@ func TestAPIServerProbeFailure(t *testing.T) {
 
 func TestSuccessfulProbesShouldRunScaleUp(t *testing.T) {
 	leaseList := createNodeLeases([]metav1.MicroTime{nonExpiredLeaseRenewTime, nonExpiredLeaseRenewTime, expiredLeaseRenewTime, expiredLeaseRenewTime})
+	nodeList := createNodes(len(leaseList.Items))
 
 	testCases := []probeTestCase{
-		{name: "Scale Up Succeeds", leaseList: leaseList, minScaleUpCount: 1, maxScaleUpCount: math.MaxInt8},
-		{name: "Scale Up Fails", leaseList: leaseList, scaleUpError: errors.New("scale Up failed"), minScaleUpCount: 1, maxScaleUpCount: math.MaxInt8},
+		{name: "Scale Up Succeeds", leaseList: leaseList, nodeList: nodeList, minScaleUpCount: 1, maxScaleUpCount: math.MaxInt8},
+		{name: "Scale Up Fails", leaseList: leaseList, nodeList: nodeList, scaleUpError: errors.New("scale Up failed"), minScaleUpCount: 1, maxScaleUpCount: math.MaxInt8},
 	}
 
 	for _, entry := range testCases {
@@ -101,10 +106,11 @@ func TestSuccessfulProbesShouldRunScaleUp(t *testing.T) {
 
 func TestLeaseProbeFailureShouldRunScaleDown(t *testing.T) {
 	leaseList := createNodeLeases([]metav1.MicroTime{nonExpiredLeaseRenewTime, expiredLeaseRenewTime, expiredLeaseRenewTime, expiredLeaseRenewTime})
+	nodeList := createNodes(len(leaseList.Items))
 
 	testCases := []probeTestCase{
-		{name: "Scale Down Succeeds", leaseList: leaseList, minScaleDownCount: 1, maxScaleDownCount: math.MaxInt8},
-		{name: "Scale Down Fails", leaseList: leaseList, scaleDownError: errors.New("scale Down failed"), minScaleDownCount: 1, maxScaleDownCount: math.MaxInt8},
+		{name: "Scale Down Succeeds", leaseList: leaseList, nodeList: nodeList, minScaleDownCount: 1, maxScaleDownCount: math.MaxInt8},
+		{name: "Scale Down Fails", leaseList: leaseList, nodeList: nodeList, scaleDownError: errors.New("scale Down failed"), minScaleDownCount: 1, maxScaleDownCount: math.MaxInt8},
 	}
 
 	for _, entry := range testCases {
@@ -118,11 +124,13 @@ func TestLeaseProbeFailureShouldRunScaleDown(t *testing.T) {
 
 func TestLeaseProbeListCallFailureShouldSkipScaling(t *testing.T) {
 	leaseList := createNodeLeases([]metav1.MicroTime{nonExpiredLeaseRenewTime, nonExpiredLeaseRenewTime, nonExpiredLeaseRenewTime})
+	nodeList := createNodes(len(leaseList.Items))
 
 	testCases := []probeTestCase{
-		{name: "Forbidden request error is returned by lease list call", leaseList: leaseList, leaseListError: apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden"))},
-		{name: "Unauthorized request error is returned by lease list call", leaseList: leaseList, leaseListError: apierrors.NewUnauthorized("unauthorized")},
-		{name: "Throttling error is returned by lease list call", leaseList: leaseList, leaseListError: apierrors.NewTooManyRequests("Too many requests", 10)},
+		{name: "Forbidden request error is returned by lease list call", nodeList: nodeList, leaseList: leaseList, leaseListError: apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden"))},
+		{name: "Unauthorized request error is returned by lease list call", nodeList: nodeList, leaseList: leaseList, leaseListError: apierrors.NewUnauthorized("unauthorized")},
+		{name: "Throttling error is returned by lease list call", nodeList: nodeList, leaseListError: apierrors.NewTooManyRequests("Too many requests", 10)},
+		{name: "Throttling error is returned by node list call", nodeListError: apierrors.NewTooManyRequests("Too many requests", 10)},
 	}
 
 	for _, entry := range testCases {
@@ -149,6 +157,7 @@ func TestScalingShouldNotHappenIfNoOwnedLeasesPresent(t *testing.T) {
 	entry := probeTestCase{
 		name:      "lease probe should reset if no owned lease is present",
 		leaseList: createNodeLeases(nil),
+		nodeList:  createNodes(0),
 	}
 	mocks := createAndInitializeMocks(t, entry)
 	config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
@@ -185,7 +194,9 @@ func createAndInitializeMocks(t *testing.T, testCase probeTestCase) probeTestMoc
 		shootClientCreator: mockprober.NewMockShootClientCreator(ctrl),
 		kubernetes:         mockinterface.NewMockInterface(ctrl),
 		discovery:          mockdiscovery.NewMockDiscoveryInterface(ctrl),
+		coreV1:             mockcorev1.NewMockCoreV1Interface(ctrl),
 		coordinationV1:     mockcoordinationv1.NewMockCoordinationV1Interface(ctrl),
+		node:               mockcorev1.NewMockNodeInterface(ctrl),
 		lease:              mockcoordinationv1.NewMockLeaseInterface(ctrl),
 	}
 	initializeMocks(mocks, testCase)
@@ -195,8 +206,11 @@ func createAndInitializeMocks(t *testing.T, testCase probeTestCase) probeTestMoc
 func initializeMocks(mocks probeTestMocks, testCase probeTestCase) {
 	mocks.shootClientCreator.EXPECT().CreateClient(gomock.Any(), proberTestLogger, gomock.Any(), gomock.Any(), gomock.Any()).Return(mocks.kubernetes, testCase.shootClientCreatorError).AnyTimes()
 	mocks.kubernetes.EXPECT().Discovery().Return(mocks.discovery).AnyTimes()
+	mocks.kubernetes.EXPECT().CoreV1().Return(mocks.coreV1).AnyTimes()
 	mocks.kubernetes.EXPECT().CoordinationV1().Return(mocks.coordinationV1).AnyTimes()
+	mocks.coreV1.EXPECT().Nodes().Return(mocks.node).AnyTimes()
 	mocks.coordinationV1.EXPECT().Leases(nodeLeaseNamespace).Return(mocks.lease).AnyTimes()
+	mocks.node.EXPECT().List(gomock.Any(), gomock.Any()).Return(testCase.nodeList, testCase.nodeListError).AnyTimes()
 	mocks.lease.EXPECT().List(gomock.Any(), gomock.Any()).Return(testCase.leaseList, testCase.leaseListError).AnyTimes()
 	mocks.discovery.EXPECT().ServerVersion().Return(nil, testCase.discoveryError).AnyTimes()
 	mocks.scaler.EXPECT().ScaleUp(gomock.Any()).Return(testCase.scaleUpError).MaxTimes(testCase.maxScaleUpCount).MinTimes(testCase.minScaleUpCount)
@@ -217,14 +231,28 @@ func createConfig(probeInterval metav1.Duration, initialDelay metav1.Duration, k
 func createNodeLeases(renewTimes []metav1.MicroTime) (leaseList *coordinationv1.LeaseList) {
 	var items []coordinationv1.Lease
 	for i, renewTime := range renewTimes {
-		items = append(items, createNodeLease("lease-"+strconv.Itoa(i), "node-"+strconv.Itoa(i), renewTime))
+		items = append(items, createNodeLease(name(i), renewTime))
 	}
 	return &coordinationv1.LeaseList{
 		Items: items,
 	}
 }
 
-func createNodeLease(name, ownerNode string, renewTime metav1.MicroTime) coordinationv1.Lease {
+func createNodes(count int) (nodeList *corev1.NodeList) {
+	var items []corev1.Node
+	for i := 0; i < count; i++ {
+		items = append(items, createNode(name(i)))
+	}
+	return &corev1.NodeList{
+		Items: items,
+	}
+}
+
+func name(i int) string {
+	return "lease-" + strconv.Itoa(i)
+}
+
+func createNodeLease(name string, renewTime metav1.MicroTime) coordinationv1.Lease {
 	return coordinationv1.Lease{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -233,13 +261,21 @@ func createNodeLease(name, ownerNode string, renewTime metav1.MicroTime) coordin
 				{
 					APIVersion: "v1",
 					Kind:       "Node",
-					Name:       ownerNode,
+					Name:       name,
 				},
 			},
 		},
 		Spec: coordinationv1.LeaseSpec{
 			HolderIdentity: &name,
 			RenewTime:      &renewTime,
+		},
+	}
+}
+
+func createNode(name string) corev1.Node {
+	return corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
 		},
 	}
 }
