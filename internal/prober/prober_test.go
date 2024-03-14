@@ -114,12 +114,12 @@ func TestSuccessfulProbesShouldRunScaleUp(t *testing.T) {
 	}
 }
 
-func TestSuccessfulProbesShouldRunScaleUpWithUnrelatedLeases(t *testing.T) {
+func TestLeaseProbeShouldNotConsiderUnrelatedLeases(t *testing.T) {
 	leaseList := createNodeLeases([]metav1.MicroTime{nonExpiredLeaseRenewTime, expiredLeaseRenewTime, expiredLeaseRenewTime})
-	nodeList := createNodes(1)
 
 	testCases := []probeTestCase{
-		{name: "Scale Up Succeeds", leaseList: leaseList, nodeList: nodeList, minScaleUpCount: 1, maxScaleUpCount: math.MaxInt8},
+		{name: "Scale Up Succeeds", leaseList: leaseList, nodeList: createNodes(1), minScaleUpCount: 1, maxScaleUpCount: math.MaxInt8},
+		{name: "Scale Down Succeeds", leaseList: leaseList, nodeList: createNodes(3), minScaleDownCount: 1, maxScaleDownCount: math.MaxInt8},
 	}
 
 	for _, entry := range testCases {
