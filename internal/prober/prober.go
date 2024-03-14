@@ -172,15 +172,15 @@ func (p *Prober) probeNodeLeases(shootClient kubernetes.Interface) ([]coordinati
 		return nil, err
 	}
 
-	var out []coordinationv1.Lease
+	var filteredLeases []coordinationv1.Lease
 	for _, lease := range leases.Items {
 		// skip leases belonging to non-existing nodes
 		if nodeNames.Has(lease.Name) { // node leases have the same names as nodes
-			out = append(out, lease)
+			filteredLeases = append(filteredLeases, lease)
 		}
 	}
 
-	return out, err
+	return filteredLeases, err
 }
 
 func (p *Prober) isLeaseExpired(lease coordinationv1.Lease) bool {
