@@ -21,6 +21,7 @@ import (
 	coordinationv1 "k8s.io/api/coordination/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	dwdScaler "github.com/gardener/dependency-watchdog/internal/prober/scaler"
@@ -162,13 +163,34 @@ func (p *Prober) probeAPIServer(shootClient kubernetes.Interface) error {
 }
 
 func (p *Prober) probeNodeLeases(shootClient kubernetes.Interface) ([]coordinationv1.Lease, error) {
-	nodeLeases, err := shootClient.CoordinationV1().Leases(nodeLeaseNamespace).List(p.ctx, metav1.ListOptions{})
+	nodes, err := shootClient.CoreV1().Nodes().List(p.ctx, metav1.ListOptions{})
+	if err != nil {
+		p.setBackOffIfThrottlingError(err)
+		p.l.Error(err, "Failed to list nodes, will retry probe")
+		return nil, err
+	}
+
+	nodeNames := sets.New[string]()
+	for _, node := range nodes.Items {
+		nodeNames.Insert(node.Name)
+	}
+
+	leases, err := shootClient.CoordinationV1().Leases(nodeLeaseNamespace).List(p.ctx, metav1.ListOptions{})
 	if err != nil {
 		p.setBackOffIfThrottlingError(err)
 		p.l.Error(err, "Failed to list leases, will retry probe")
 		return nil, err
 	}
-	return nodeLeases.Items, err
+
+	var filteredLeases []coordinationv1.Lease
+	for _, lease := range leases.Items {
+		// skip leases belonging to non-existing nodes
+		if nodeNames.Has(lease.Name) { // node leases have the same names as nodes
+			filteredLeases = append(filteredLeases, lease)
+		}
+	}
+
+	return filteredLeases, err
 }
 
 func (p *Prober) isLeaseExpired(lease coordinationv1.Lease) bool {
