@@ -1,4 +1,20 @@
 # More info: https://docs.docker.com/engine/reference/builder/#dockerignore-file
-# Ignore build and test binaries.
-bin/
-testbin/
+
+# Exclude folders relevant for build
+!.git
+!.dockerignore
+!charts/
+!cmd/
+!extensions/
+!hack/
+!imagevector/
+!pkg/
+!plugin/
+!test/
+!third_party/
+!vendor/
+!.golangci.yaml.in
+!go.mod
+!go.sum
+!Makefile
+!VERSION

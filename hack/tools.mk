@@ -10,6 +10,7 @@ GO_ADD_LICENSE    := $(TOOLS_BIN_DIR)/addlicense
 GO_IMPORT_BOSS    := $(TOOLS_BIN_DIR)/import-boss
 GO_STRESS         := $(TOOLS_BIN_DIR)/stress
 SETUP_ENVTEST     := $(TOOLS_BIN_DIR)/setup-envtest
+GOTESTFMT 	   	  := $(TOOLS_BIN_DIR)/gotestfmt
 
 #default tool versions
 GOLANGCI_LINT_VERSION ?= v1.55.2
@@ -22,6 +23,7 @@ GO_ADD_LICENSE_VERSION ?= latest
 GO_IMPORT_BOSS_VERSION ?= v0.28.4 
 GO_STRESS_VERSION ?= latest
 SETUP_ENVTEST_VERSION ?= latest
+GOTESTFMT_VERSION ?= latest
 
 # add ./hack/tools/bin to the PATH
 export TOOLS_BIN_DIR := $(TOOLS_BIN_DIR)
@@ -52,3 +54,6 @@ $(GO_STRESS):
 
 $(SETUP_ENVTEST):
 	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@$(SETUP_ENVTEST_VERSION)
+
+$(GOTESTFMT):
+	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@$(GOTESTFMT_VERSION)
