@@ -108,12 +108,7 @@ func (p *Prober) probe(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	if len(candidateNodeLeases) == 0 {
-		p.l.Info("No owned node leases are present in the cluster, skipping scaling operation")
-		return
-	}
 	if p.shouldPerformScaleUp(candidateNodeLeases) {
-		p.l.Info("Lease probe succeeded, performing scale up operation if required")
 		if err = p.scaler.ScaleUp(ctx); err != nil {
 			p.l.Error(err, "Failed to scale up resources")
 		}
@@ -129,13 +124,21 @@ func (p *Prober) probe(ctx context.Context) {
 // shouldPerformScaleUp returns true if the ratio of expired node leases to valid node leases is less than
 // the NodeLeaseFailureFraction set in the prober config
 func (p *Prober) shouldPerformScaleUp(candidateNodeLeases []coordinationv1.Lease) bool {
+	if len(candidateNodeLeases) == 0 {
+		p.l.Info("No owned node leases are present in the cluster, performing scale up operation if required")
+		return true
+	}
 	var expiredNodeLeaseCount float64
 	for _, lease := range candidateNodeLeases {
 		if p.isLeaseExpired(lease) {
 			expiredNodeLeaseCount++
 		}
 	}
-	return expiredNodeLeaseCount/float64(len(candidateNodeLeases)) < *p.config.NodeLeaseFailureFraction
+	shouldScaleUp := expiredNodeLeaseCount/float64(len(candidateNodeLeases)) < *p.config.NodeLeaseFailureFraction
+	if shouldScaleUp {
+		p.l.Info("Lease probe succeeded, performing scale up operation if required")
+	}
+	return shouldScaleUp
 }
 
 func (p *Prober) setupProbeClient(ctx context.Context, namespace string, kubeConfigSecretName string) (kubernetes.Interface, error) {

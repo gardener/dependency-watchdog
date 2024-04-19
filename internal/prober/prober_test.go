@@ -171,11 +171,13 @@ func TestAPIServerProbeShouldNotRunIfClientNotCreated(t *testing.T) {
 	createAndRunProber(t, testProbeInterval.Duration, config, mocks)
 }
 
-func TestScalingShouldNotHappenIfNoOwnedLeasesPresent(t *testing.T) {
+func TestScaleUpShouldHappenIfNoOwnedLeasesPresent(t *testing.T) {
 	entry := probeTestCase{
-		name:      "lease probe should reset if no owned lease is present",
-		leaseList: createNodeLeases(nil),
-		nodeList:  createNodes(0),
+		name:            "scale up should happen if no owned lease is present",
+		leaseList:       createNodeLeases(nil),
+		nodeList:        createNodes(0),
+		minScaleUpCount: 1,
+		maxScaleUpCount: math.MaxInt8,
 	}
 	mocks := createAndInitializeMocks(t, entry)
 	config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
