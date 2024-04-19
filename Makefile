@@ -13,15 +13,14 @@ TOOLS_DIR := hack/tools
 include hack/tools.mk
 ENVTEST   := $(TOOLS_BIN_DIR)/setup-envtest
 
-.PHONY: revendor
-revendor:
+.PHONY: tidy
+tidy:
 	@env GO111MODULE=on go mod tidy
-	@env GO111MODULE=on go mod vendor
 
 .PHONY: update-dependencies
 update-dependencies:
 	@env GO111MODULE=on go get -u
-	@make revendor
+	@make tidy
 
 .PHONY: check-vulnerabilities
 check-vulnerabilities: $(GO_VULN_CHECK)
@@ -63,7 +62,7 @@ format:
 	@./hack/format.sh ./controllers ./internal
 
 .PHONY: test
-test: $(SETUP_ENVTEST)
+test: $(SETUP_ENVTEST) $(GOTESTFMT)
 	@./hack/test.sh
 
 .PHONY: kind-tests
