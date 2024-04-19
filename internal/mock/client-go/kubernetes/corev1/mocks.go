@@ -64,7 +64,7 @@ func (m *MockCoreV1Interface) ConfigMaps(arg0 string) v12.ConfigMapInterface {
 }
 
 // ConfigMaps indicates an expected call of ConfigMaps.
-func (mr *MockCoreV1InterfaceMockRecorder) ConfigMaps(arg0 any) *gomock.Call {
+func (mr *MockCoreV1InterfaceMockRecorder) ConfigMaps(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigMaps", reflect.TypeOf((*MockCoreV1Interface)(nil).ConfigMaps), arg0)
 }
@@ -78,7 +78,7 @@ func (m *MockCoreV1Interface) Endpoints(arg0 string) v12.EndpointsInterface {
 }
 
 // Endpoints indicates an expected call of Endpoints.
-func (mr *MockCoreV1InterfaceMockRecorder) Endpoints(arg0 any) *gomock.Call {
+func (mr *MockCoreV1InterfaceMockRecorder) Endpoints(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Endpoints", reflect.TypeOf((*MockCoreV1Interface)(nil).Endpoints), arg0)
 }
@@ -92,7 +92,7 @@ func (m *MockCoreV1Interface) Events(arg0 string) v12.EventInterface {
 }
 
 // Events indicates an expected call of Events.
-func (mr *MockCoreV1InterfaceMockRecorder) Events(arg0 any) *gomock.Call {
+func (mr *MockCoreV1InterfaceMockRecorder) Events(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Events", reflect.TypeOf((*MockCoreV1Interface)(nil).Events), arg0)
 }
@@ -106,7 +106,7 @@ func (m *MockCoreV1Interface) LimitRanges(arg0 string) v12.LimitRangeInterface {
 }
 
 // LimitRanges indicates an expected call of LimitRanges.
-func (mr *MockCoreV1InterfaceMockRecorder) LimitRanges(arg0 any) *gomock.Call {
+func (mr *MockCoreV1InterfaceMockRecorder) LimitRanges(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LimitRanges", reflect.TypeOf((*MockCoreV1Interface)(nil).LimitRanges), arg0)
 }
@@ -148,7 +148,7 @@ func (m *MockCoreV1Interface) PersistentVolumeClaims(arg0 string) v12.Persistent
 }
 
 // PersistentVolumeClaims indicates an expected call of PersistentVolumeClaims.
-func (mr *MockCoreV1InterfaceMockRecorder) PersistentVolumeClaims(arg0 any) *gomock.Call {
+func (mr *MockCoreV1InterfaceMockRecorder) PersistentVolumeClaims(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistentVolumeClaims", reflect.TypeOf((*MockCoreV1Interface)(nil).PersistentVolumeClaims), arg0)
 }
@@ -176,7 +176,7 @@ func (m *MockCoreV1Interface) PodTemplates(arg0 string) v12.PodTemplateInterface
 }
 
 // PodTemplates indicates an expected call of PodTemplates.
-func (mr *MockCoreV1InterfaceMockRecorder) PodTemplates(arg0 any) *gomock.Call {
+func (mr *MockCoreV1InterfaceMockRecorder) PodTemplates(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PodTemplates", reflect.TypeOf((*MockCoreV1Interface)(nil).PodTemplates), arg0)
 }
@@ -190,7 +190,7 @@ func (m *MockCoreV1Interface) Pods(arg0 string) v12.PodInterface {
 }
 
 // Pods indicates an expected call of Pods.
-func (mr *MockCoreV1InterfaceMockRecorder) Pods(arg0 any) *gomock.Call {
+func (mr *MockCoreV1InterfaceMockRecorder) Pods(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Pods", reflect.TypeOf((*MockCoreV1Interface)(nil).Pods), arg0)
 }
@@ -218,7 +218,7 @@ func (m *MockCoreV1Interface) ReplicationControllers(arg0 string) v12.Replicatio
 }
 
 // ReplicationControllers indicates an expected call of ReplicationControllers.
-func (mr *MockCoreV1InterfaceMockRecorder) ReplicationControllers(arg0 any) *gomock.Call {
+func (mr *MockCoreV1InterfaceMockRecorder) ReplicationControllers(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplicationControllers", reflect.TypeOf((*MockCoreV1Interface)(nil).ReplicationControllers), arg0)
 }
@@ -232,7 +232,7 @@ func (m *MockCoreV1Interface) ResourceQuotas(arg0 string) v12.ResourceQuotaInter
 }
 
 // ResourceQuotas indicates an expected call of ResourceQuotas.
-func (mr *MockCoreV1InterfaceMockRecorder) ResourceQuotas(arg0 any) *gomock.Call {
+func (mr *MockCoreV1InterfaceMockRecorder) ResourceQuotas(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResourceQuotas", reflect.TypeOf((*MockCoreV1Interface)(nil).ResourceQuotas), arg0)
 }
@@ -246,7 +246,7 @@ func (m *MockCoreV1Interface) Secrets(arg0 string) v12.SecretInterface {
 }
 
 // Secrets indicates an expected call of Secrets.
-func (mr *MockCoreV1InterfaceMockRecorder) Secrets(arg0 any) *gomock.Call {
+func (mr *MockCoreV1InterfaceMockRecorder) Secrets(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Secrets", reflect.TypeOf((*MockCoreV1Interface)(nil).Secrets), arg0)
 }
@@ -260,7 +260,7 @@ func (m *MockCoreV1Interface) ServiceAccounts(arg0 string) v12.ServiceAccountInt
 }
 
 // ServiceAccounts indicates an expected call of ServiceAccounts.
-func (mr *MockCoreV1InterfaceMockRecorder) ServiceAccounts(arg0 any) *gomock.Call {
+func (mr *MockCoreV1InterfaceMockRecorder) ServiceAccounts(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ServiceAccounts", reflect.TypeOf((*MockCoreV1Interface)(nil).ServiceAccounts), arg0)
 }
@@ -274,7 +274,7 @@ func (m *MockCoreV1Interface) Services(arg0 string) v12.ServiceInterface {
 }
 
 // Services indicates an expected call of Services.
-func (mr *MockCoreV1InterfaceMockRecorder) Services(arg0 any) *gomock.Call {
+func (mr *MockCoreV1InterfaceMockRecorder) Services(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Services", reflect.TypeOf((*MockCoreV1Interface)(nil).Services), arg0)
 }
@@ -312,7 +312,7 @@ func (m *MockNodeInterface) Apply(arg0 context.Context, arg1 *v11.NodeApplyConfi
 }
 
 // Apply indicates an expected call of Apply.
-func (mr *MockNodeInterfaceMockRecorder) Apply(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockNodeInterfaceMockRecorder) Apply(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Apply", reflect.TypeOf((*MockNodeInterface)(nil).Apply), arg0, arg1, arg2)
 }
@@ -327,7 +327,7 @@ func (m *MockNodeInterface) ApplyStatus(arg0 context.Context, arg1 *v11.NodeAppl
 }
 
 // ApplyStatus indicates an expected call of ApplyStatus.
-func (mr *MockNodeInterfaceMockRecorder) ApplyStatus(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockNodeInterfaceMockRecorder) ApplyStatus(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyStatus", reflect.TypeOf((*MockNodeInterface)(nil).ApplyStatus), arg0, arg1, arg2)
 }
@@ -342,7 +342,7 @@ func (m *MockNodeInterface) Create(arg0 context.Context, arg1 *v1.Node, arg2 v10
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockNodeInterfaceMockRecorder) Create(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockNodeInterfaceMockRecorder) Create(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockNodeInterface)(nil).Create), arg0, arg1, arg2)
 }
@@ -356,7 +356,7 @@ func (m *MockNodeInterface) Delete(arg0 context.Context, arg1 string, arg2 v10.D
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockNodeInterfaceMockRecorder) Delete(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockNodeInterfaceMockRecorder) Delete(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockNodeInterface)(nil).Delete), arg0, arg1, arg2)
 }
@@ -370,7 +370,7 @@ func (m *MockNodeInterface) DeleteCollection(arg0 context.Context, arg1 v10.Dele
 }
 
 // DeleteCollection indicates an expected call of DeleteCollection.
-func (mr *MockNodeInterfaceMockRecorder) DeleteCollection(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockNodeInterfaceMockRecorder) DeleteCollection(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteCollection", reflect.TypeOf((*MockNodeInterface)(nil).DeleteCollection), arg0, arg1, arg2)
 }
@@ -385,7 +385,7 @@ func (m *MockNodeInterface) Get(arg0 context.Context, arg1 string, arg2 v10.GetO
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockNodeInterfaceMockRecorder) Get(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockNodeInterfaceMockRecorder) Get(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockNodeInterface)(nil).Get), arg0, arg1, arg2)
 }
@@ -400,7 +400,7 @@ func (m *MockNodeInterface) List(arg0 context.Context, arg1 v10.ListOptions) (*v
 }
 
 // List indicates an expected call of List.
-func (mr *MockNodeInterfaceMockRecorder) List(arg0, arg1 any) *gomock.Call {
+func (mr *MockNodeInterfaceMockRecorder) List(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockNodeInterface)(nil).List), arg0, arg1)
 }
@@ -408,7 +408,7 @@ func (mr *MockNodeInterfaceMockRecorder) List(arg0, arg1 any) *gomock.Call {
 // Patch mocks base method.
 func (m *MockNodeInterface) Patch(arg0 context.Context, arg1 string, arg2 types.PatchType, arg3 []byte, arg4 v10.PatchOptions, arg5 ...string) (*v1.Node, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2, arg3, arg4}
+	varargs := []interface{}{arg0, arg1, arg2, arg3, arg4}
 	for _, a := range arg5 {
 		varargs = append(varargs, a)
 	}
@@ -419,9 +419,9 @@ func (m *MockNodeInterface) Patch(arg0 context.Context, arg1 string, arg2 types.
 }
 
 // Patch indicates an expected call of Patch.
-func (mr *MockNodeInterfaceMockRecorder) Patch(arg0, arg1, arg2, arg3, arg4 any, arg5 ...any) *gomock.Call {
+func (mr *MockNodeInterfaceMockRecorder) Patch(arg0, arg1, arg2, arg3, arg4 interface{}, arg5 ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2, arg3, arg4}, arg5...)
+	varargs := append([]interface{}{arg0, arg1, arg2, arg3, arg4}, arg5...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Patch", reflect.TypeOf((*MockNodeInterface)(nil).Patch), varargs...)
 }
 
@@ -435,7 +435,7 @@ func (m *MockNodeInterface) PatchStatus(arg0 context.Context, arg1 string, arg2 
 }
 
 // PatchStatus indicates an expected call of PatchStatus.
-func (mr *MockNodeInterfaceMockRecorder) PatchStatus(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockNodeInterfaceMockRecorder) PatchStatus(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PatchStatus", reflect.TypeOf((*MockNodeInterface)(nil).PatchStatus), arg0, arg1, arg2)
 }
@@ -450,7 +450,7 @@ func (m *MockNodeInterface) Update(arg0 context.Context, arg1 *v1.Node, arg2 v10
 }
 
 // Update indicates an expected call of Update.
-func (mr *MockNodeInterfaceMockRecorder) Update(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockNodeInterfaceMockRecorder) Update(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockNodeInterface)(nil).Update), arg0, arg1, arg2)
 }
@@ -465,7 +465,7 @@ func (m *MockNodeInterface) UpdateStatus(arg0 context.Context, arg1 *v1.Node, ar
 }
 
 // UpdateStatus indicates an expected call of UpdateStatus.
-func (mr *MockNodeInterfaceMockRecorder) UpdateStatus(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockNodeInterfaceMockRecorder) UpdateStatus(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateStatus", reflect.TypeOf((*MockNodeInterface)(nil).UpdateStatus), arg0, arg1, arg2)
 }
@@ -480,7 +480,7 @@ func (m *MockNodeInterface) Watch(arg0 context.Context, arg1 v10.ListOptions) (w
 }
 
 // Watch indicates an expected call of Watch.
-func (mr *MockNodeInterfaceMockRecorder) Watch(arg0, arg1 any) *gomock.Call {
+func (mr *MockNodeInterfaceMockRecorder) Watch(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Watch", reflect.TypeOf((*MockNodeInterface)(nil).Watch), arg0, arg1)
 }
