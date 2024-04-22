@@ -118,6 +118,7 @@ func (p *Prober) probe(ctx context.Context) {
 	if err != nil {
 		return
 	}
+	// revive:disable:early-return
 	if p.shouldPerformScaleUp(candidateNodeLeases) {
 		if err = p.scaler.ScaleUp(ctx); err != nil {
 			p.l.Error(err, "Failed to scale up resources")
@@ -129,6 +130,7 @@ func (p *Prober) probe(ctx context.Context) {
 		}
 		return
 	}
+	// revive:enable:early-return
 }
 
 // shouldPerformScaleUp returns true if the ratio of expired node leases to valid node leases is less than
