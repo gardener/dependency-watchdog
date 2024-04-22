@@ -23,7 +23,7 @@ GO_ADD_LICENSE_VERSION ?= latest
 GO_IMPORT_BOSS_VERSION ?= v0.28.4 
 GO_STRESS_VERSION ?= latest
 SETUP_ENVTEST_VERSION ?= latest
-GOTESTFMT_VERSION ?= latest
+GOTESTFMT_VERSION ?= v2.5.0
 
 # add ./hack/tools/bin to the PATH
 export TOOLS_BIN_DIR := $(TOOLS_BIN_DIR)
