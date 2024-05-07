@@ -5,7 +5,7 @@
 
 Prober starts asynchronous and periodic probes for every shoot cluster. The first probe is the api-server probe which checks the reachability of the API Server from the control plane. The second probe is the lease probe which is done after the api server probe is successful and checks if the number of expired node leases is below a certain threshold. 
 If the lease probe fails, it will scale down the dependent kubernetes resources. Once the connectivity to `kube-apiserver` is reestablished and the number of expired node leases are within the accepted threshold, the prober will then proactively scale up the dependent kubernetes resources it had scaled down earlier. The failure threshold fraction for lease probe
-and dependent kubernetes resources are defined in [configuration](/example/04-dwd-prober-configmap.yaml) that is passed to the prober.
+and dependent kubernetes resources are defined in [configuration](/example/01-dwd-prober-configmap.yaml) that is passed to the prober.
 
 ### Origin
 
@@ -61,12 +61,12 @@ then the probes are retried after a backOff of `backOffDurationForThrottledReque
 If the lease probe fails, then the error could be due to failure in listing the leases. In this case, no scaling operations are performed. If the error in listing the leases is a `TooManyRequests` error due to requests to the Kube-API-Server being throttled,
 then the probes are retried after a backOff of `backOffDurationForThrottledRequests`.
 
-If there is no error in listing the leases, then the Lease probe fails if the number of expired leases reaches the threshold fraction specified in the [configuration](/example/04-dwd-prober-configmap.yaml). 
+If there is no error in listing the leases, then the Lease probe fails if the number of expired leases reaches the threshold fraction specified in the [configuration](/example/01-dwd-prober-configmap.yaml). 
 A lease is considered expired in the following scenario:-
 ```
 	time.Now() >= lease.Spec.RenewTime + (p.config.KCMNodeMonitorGraceDuration.Duration * expiryBufferFraction)
 ```
-Here, `lease.Spec.RenewTime` is the time when current holder of a lease has last updated the lease. `config` is the probe config generated from the [configuration](/example/04-dwd-prober-configmap.yaml) and
+Here, `lease.Spec.RenewTime` is the time when current holder of a lease has last updated the lease. `config` is the probe config generated from the [configuration](/example/01-dwd-prober-configmap.yaml) and
 `KCMNodeMonitorGraceDuration` is amount of time which KCM allows a running Node to be unresponsive before marking it unhealthy (See [ref](https://kubernetes.io/docs/reference/command-line-tools-reference/kube-controller-manager/#:~:text=Amount%20of%20time%20which%20we%20allow%20running%20Node%20to%20be%20unresponsive%20before%20marking%20it%20unhealthy.%20Must%20be%20N%20times%20more%20than%20kubelet%27s%20nodeStatusUpdateFrequency%2C%20where%20N%20means%20number%20of%20retries%20allowed%20for%20kubelet%20to%20post%20node%20status.))
 . `expiryBufferFraction` is a hard coded value of `0.75`. Using this fraction allows the prober to intervene before KCM marks a node as unknown, but at the same time allowing kubelet sufficient retries to renew the node lease (Kubelet renews the lease every `10s` See [ref](https://kubernetes.io/docs/reference/config-api/kubelet-config.v1beta1/#:~:text=The%20lease%20is%20currently%20renewed%20every%2010s%2C%20per%20KEP%2D0009.)).
 
