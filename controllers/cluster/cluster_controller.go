@@ -176,12 +176,6 @@ func shouldStopProber(shoot *v1beta1.Shoot, logger logr.Logger) bool {
 		logger.Info("Cluster does not have any workers, existing prober if any will be removed")
 		return true
 	}
-
-	// if a shoot has any purpose other than production or infrastructure, then any existing probe should be removed as it is no longer needed.
-	if shoot.Spec.Purpose == nil || (*shoot.Spec.Purpose != v1beta1.ShootPurposeProduction && *shoot.Spec.Purpose != v1beta1.ShootPurposeInfrastructure) {
-		logger.Info("Cluster does not have production or infrastructure purpose, existing prober if any will be removed", "shoot-purpose", shoot.Spec.Purpose)
-		return true
-	}
 	return false
 }
 
@@ -193,10 +187,6 @@ func shouldStopProber(shoot *v1beta1.Shoot, logger logr.Logger) bool {
 // that MCM is scaled down in case connectivity to the Kube API server of the shoot on the destination seed is broken, else it will try and recreate machines.
 // If the shoot.Status.LastOperation.Type == "Reconcile" then it is assumed that the cluster has been successfully created at-least once, and it is safe to start the probe.
 func canStartProber(shoot *v1beta1.Shoot, logger logr.Logger) bool {
-	//if shoot.Spec.Purpose == nil || (*shoot.Spec.Purpose != v1beta1.ShootPurposeProduction && *shoot.Spec.Purpose != v1beta1.ShootPurposeInfrastructure) {
-	//	logger.Info("Cannot start probe. It can only be started for clusters with production or infrastructure purpose", "shoot-purpose", shoot.Spec.Purpose)
-	//	return false
-	//}
 	if !v1beta1helper.HibernationIsEnabled(shoot) && shoot.Status.IsHibernated {
 		logger.Info("Cannot start probe. Cluster is waking up from hibernation")
 		return false

@@ -8,10 +8,10 @@ import (
 
 const workerPoolLabel = "worker.gardener.cloud/pool"
 
-// defaultSkipMeltdownProtectionForNodesWithConditions are the default node conditions on which meltdown protection for a node will be skipped.
+// DefaultSkipMeltdownProtectionForNodesWithConditions are the default node conditions on which meltdown protection for a node will be skipped.
 // These conditions are borrowed from MCM which uses these conditions to decide if a node is unhealthy which is then replaced.
 // NOTE: If these default set of node conditions are changed in MCM, make sure to change it here as well.
-var defaultSkipMeltdownProtectionForNodesWithConditions = []string{"KernelDeadlock", "ReadonlyFilesystem", "DiskPressure", "NetworkUnavailable"}
+var DefaultSkipMeltdownProtectionForNodesWithConditions = []string{"KernelDeadlock", "ReadonlyFilesystem", "DiskPressure", "NetworkUnavailable"}
 
 // IsAnyNodeConditionSet return true if the node has at least one of the given conditions set to true.
 func IsAnyNodeConditionSet(node *corev1.Node, conditionNames []string) bool {
@@ -30,7 +30,7 @@ func GetEffectiveNodeConditionsForWorkers(shoot *v1beta1.Shoot) map[string][]str
 	workerNodeConditions := make(map[string][]string)
 	for _, worker := range shoot.Spec.Provider.Workers {
 		if worker.MachineControllerManagerSettings != nil {
-			workerNodeConditions[worker.Name] = GetSliceOrDefault(worker.MachineControllerManagerSettings.NodeConditions, defaultSkipMeltdownProtectionForNodesWithConditions)
+			workerNodeConditions[worker.Name] = GetSliceOrDefault(worker.MachineControllerManagerSettings.NodeConditions, DefaultSkipMeltdownProtectionForNodesWithConditions)
 		}
 	}
 	return workerNodeConditions
@@ -43,5 +43,5 @@ func GetEffectiveNodeConditions(node *corev1.Node, workerNodeConditions map[stri
 			return conditions
 		}
 	}
-	return defaultSkipMeltdownProtectionForNodesWithConditions
+	return DefaultSkipMeltdownProtectionForNodesWithConditions
 }

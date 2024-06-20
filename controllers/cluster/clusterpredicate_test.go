@@ -20,35 +20,35 @@ import (
 func TestCreateAndDeletePredicateFunc(t *testing.T) {
 	tests := []struct {
 		title          string
-		run            func(g *WithT, numWorkers int) bool
-		numWorkers     int
+		run            func(g *WithT, workerNames []string) bool
+		workerNames    []string
 		expectedResult bool
 	}{
-		{"test: create predicate func for cluster having workers", testCreatePredicateFunc, 2, true},
-		{"test: create predicate func for cluster having no workers", testCreatePredicateFunc, 0, false},
-		{"test: delete predicate func for cluster having workers", testDeletePredicateFunc, 2, true},
-		{"test: delete predicate func for cluster having no workers", testDeletePredicateFunc, 0, false},
+		{"test: create predicate func for cluster having workers", testCreatePredicateFunc, []string{workerOneName, workerTwoName}, true},
+		{"test: create predicate func for cluster having no workers", testCreatePredicateFunc, nil, false},
+		{"test: delete predicate func for cluster having workers", testDeletePredicateFunc, []string{workerOneName, workerTwoName}, true},
+		{"test: delete predicate func for cluster having no workers", testDeletePredicateFunc, nil, false},
 	}
 
 	for _, test := range tests {
 		t.Run(test.title, func(t *testing.T) {
 			g := NewWithT(t)
-			predicateResult := test.run(g, test.numWorkers)
+			predicateResult := test.run(g, test.workerNames)
 			g.Expect(predicateResult).To(Equal(test.expectedResult))
 		})
 	}
 }
 
-func testCreatePredicateFunc(g *WithT, numWorkers int) bool {
-	cluster, _, err := test.CreateClusterResource(numWorkers, nil, infraPurpose, true)
+func testCreatePredicateFunc(g *WithT, workerNames []string) bool {
+	cluster, _, err := test.NewClusterBuilder().WithWorkerNames(workerNames).WithRawShoot(true).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	e := event.CreateEvent{Object: cluster}
 	predicateFuncs := workerLessShoot(logr.Discard())
 	return predicateFuncs.Create(e)
 }
 
-func testDeletePredicateFunc(g *WithT, numWorkers int) bool {
-	cluster, _, err := test.CreateClusterResource(numWorkers, nil, infraPurpose, true)
+func testDeletePredicateFunc(g *WithT, workerNames []string) bool {
+	cluster, _, err := test.NewClusterBuilder().WithWorkerNames(workerNames).WithRawShoot(true).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	e := event.DeleteEvent{Object: cluster}
 	predicateFuncs := workerLessShoot(logr.Discard())
@@ -58,30 +58,30 @@ func testDeletePredicateFunc(g *WithT, numWorkers int) bool {
 func TestUpdatePredicateFunc(t *testing.T) {
 	tests := []struct {
 		title          string
-		oldNumWorkers  int
-		newNumWorkers  int
+		oldWorkerNames []string
+		newWorkerNames []string
 		expectedResult bool
 	}{
-		{"test: both old and new cluster do not have workers", 0, 0, false},
-		{"test: old cluster has no workers and new cluster has workers", 0, 1, true},
-		{"test: old cluster has workers and new cluster do not have workers", 2, 0, true},
-		{"test: both old and new cluster have workers and there is no change", 1, 1, true},
-		{"test: both old and new cluster have workers and are different in number", 1, 2, true},
+		{"test: both old and new cluster do not have workers", nil, nil, false},
+		{"test: old cluster has no workers and new cluster has workers", nil, []string{workerOneName}, true},
+		{"test: old cluster has workers and new cluster do not have workers", []string{workerOneName, workerTwoName}, nil, true},
+		{"test: both old and new cluster have workers and there is no change", []string{workerOneName}, []string{workerOneName}, true},
+		{"test: both old and new cluster have workers and are different in number", []string{workerOneName}, []string{workerOneName, workerTwoName}, true},
 	}
 
 	for _, test := range tests {
 		t.Run(test.title, func(t *testing.T) {
 			g := NewWithT(t)
-			predicateResult := testUpdatePredicateFunc(g, test.oldNumWorkers, test.newNumWorkers)
+			predicateResult := testUpdatePredicateFunc(g, test.oldWorkerNames, test.newWorkerNames)
 			g.Expect(predicateResult).To(Equal(test.expectedResult))
 		})
 	}
 }
 
-func testUpdatePredicateFunc(g *WithT, oldNumWorker, newNumWorkers int) bool {
-	oldCluster, _, err := test.CreateClusterResource(oldNumWorker, nil, prodPurpose, true)
+func testUpdatePredicateFunc(g *WithT, oldWorkerNames, newWorkerNames []string) bool {
+	oldCluster, _, err := test.NewClusterBuilder().WithWorkerNames(oldWorkerNames).WithRawShoot(true).Build()
 	g.Expect(err).ToNot(HaveOccurred())
-	newCluster, _, err := test.CreateClusterResource(newNumWorkers, nil, prodPurpose, true)
+	newCluster, _, err := test.NewClusterBuilder().WithWorkerNames(newWorkerNames).WithRawShoot(true).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	e := event.UpdateEvent{
 		ObjectOld: oldCluster,
@@ -111,7 +111,7 @@ func TestShootHasWorkersForNonShootResource(t *testing.T) {
 
 func TestShootHasWorkersForInvalidShootResource(t *testing.T) {
 	g := NewWithT(t)
-	cluster, _, err := test.CreateClusterResource(0, nil, prodPurpose, false)
+	cluster, _, err := test.NewClusterBuilder().WithRawShoot(true).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	seed := gardencorev1beta1.Seed{
 		ObjectMeta: metav1.ObjectMeta{
