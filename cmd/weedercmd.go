@@ -76,8 +76,8 @@ func startEndpointsControllerMgr(logger logr.Logger) (manager.Manager, error) {
 	}
 
 	restConf := ctrl.GetConfigOrDie()
-	restConf.QPS = float32(proberOpts.KubeApiQps)
-	restConf.Burst = proberOpts.KubeApiBurst
+	restConf.QPS = float32(weederOpts.KubeApiQps)
+	restConf.Burst = weederOpts.KubeApiBurst
 	mgr, err := ctrl.NewManager(restConf, ctrl.Options{
 		Scheme:                     scheme,
 		Metrics:                    server.Options{BindAddress: weederOpts.SharedOpts.MetricsBindAddress},
@@ -90,6 +90,7 @@ func startEndpointsControllerMgr(logger logr.Logger) (manager.Manager, error) {
 		LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
 		LeaderElectionID:           weederLeaderElectionID,
 		Logger:                     weederLogger,
+		PprofBindAddress:           weederOpts.SharedOpts.PprofBindAddress,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to start the weeder controller manager %w", err)

@@ -18,7 +18,7 @@ import (
 
 // CreateClusterResource creates a test cluster and shoot resources.
 // This should only be used for unit testing.
-func CreateClusterResource(numWorkers int, nodeMonitorGracePeriod *metav1.Duration, rawShoot bool) (*gardenerv1alpha1.Cluster, *gardencorev1beta1.Shoot, error) {
+func CreateClusterResource(numWorkers int, nodeMonitorGracePeriod *metav1.Duration, purpose gardencorev1beta1.ShootPurpose, rawShoot bool) (*gardenerv1alpha1.Cluster, *gardencorev1beta1.Shoot, error) {
 	cloudProfile := gardencorev1beta1.CloudProfile{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "aws",
@@ -42,7 +42,7 @@ func CreateClusterResource(numWorkers int, nodeMonitorGracePeriod *metav1.Durati
 			},
 		},
 	}
-	shoot := CreateShoot(seed.Name, numWorkers, nodeMonitorGracePeriod)
+	shoot := CreateShoot(seed.Name, numWorkers, nodeMonitorGracePeriod, purpose)
 	if rawShoot {
 		shootBytes, err := json.Marshal(shoot)
 		if err != nil {
@@ -57,7 +57,7 @@ func CreateClusterResource(numWorkers int, nodeMonitorGracePeriod *metav1.Durati
 
 // CreateShoot creates a shoot resources.
 // This should only be used for unit testing.
-func CreateShoot(seedName string, numWorkers int, nodeMonitorGracePeriod *metav1.Duration) gardencorev1beta1.Shoot {
+func CreateShoot(seedName string, numWorkers int, nodeMonitorGracePeriod *metav1.Duration, purpose gardencorev1beta1.ShootPurpose) gardencorev1beta1.Shoot {
 	end := "00 08 * * 1,2,3,4,5"
 	start := "30 19 * * 1,2,3,4,5"
 	location := "Asia/Calcutta"
@@ -82,6 +82,7 @@ func CreateShoot(seedName string, numWorkers int, nodeMonitorGracePeriod *metav1
 				Type:    "aws",
 				Workers: createWorkers(numWorkers),
 			},
+			Purpose: &purpose,
 		},
 		Status: gardencorev1beta1.ShootStatus{
 			IsHibernated: false,

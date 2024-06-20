@@ -107,6 +107,7 @@ func startClusterControllerMgr(logger logr.Logger) (manager.Manager, error) {
 		LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
 		LeaderElectionID:           proberLeaderElectionID,
 		Logger:                     proberLogger,
+		PprofBindAddress:           proberOpts.SharedOpts.PprofBindAddress,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to start the prober controller manager %w", err)

@@ -42,6 +42,8 @@ import (
 const (
 	testdataPath                  = "testdata"
 	maxConcurrentReconcilesProber = 1
+	infraPurpose                  = gardencorev1beta1.ShootPurposeInfrastructure
+	prodPurpose                   = gardencorev1beta1.ShootPurposeProduction
 )
 
 var (
@@ -137,7 +139,7 @@ func testProberDedicatedEnvTest(t *testing.T) {
 func testReconciliationAfterAPIServerIsDown(ctx context.Context, t *testing.T, testEnv *envtest.Environment, _ client.Client, reconciler *Reconciler, _ manager.Manager, cancelFn context.CancelFunc) {
 	var err error
 	g := NewWithT(t)
-	cluster, _, err := testutil.CreateClusterResource(1, nil, false)
+	cluster, _, err := testutil.CreateClusterResource(1, nil, prodPurpose, false)
 	g.Expect(err).ToNot(HaveOccurred())
 	cancelFn()
 	err = testEnv.ControlPlane.APIServer.Stop()
@@ -169,6 +171,7 @@ func testProberSharedEnvTest(t *testing.T) {
 		{"start prober if last operation is restore and successfully", testLastOperationIsRestoreAndSuccessful},
 		{"start prober if last operation is reconciliation of shoot", testLastOperationIsShootReconciliation},
 		{"no prober if shoot has no workers", testShootHasNoWorkers},
+		{"no prober if shoot does not have production or infrastructure purpose", testShootDoesNotHaveInfraOrProdPurpose},
 	}
 
 	for _, test := range tests {
@@ -176,6 +179,36 @@ func testProberSharedEnvTest(t *testing.T) {
 			test.run(g, crClient, reconciler)
 		})
 		deleteAllClusters(g, crClient)
+	}
+}
+
+func testShootWorkerNodeConditonsAreChanged(g *WithT, crClient client.Client, reconciler *Reconciler) {
+	cluster, shoot, err := testutil.CreateClusterResource(1, nil, prodPurpose, false)
+	g.Expect(err).ToNot(HaveOccurred())
+	createCluster(g, crClient, cluster)
+	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod)
+	// update the worker node conditions
+	workerNodeConditions := map[string][]string{"node1": {"Ready"}}
+	cluster.Spec.Shoot.Object.(*gardencorev1beta1.Shoot).Status.WorkerNodeConditions = workerNodeConditions
+	updateCluster(g, crClient, cluster)
+	proberShouldNotBePresent(g, reconciler, cluster)
+	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
+}
+
+func testShootDoesNotHaveInfraOrProdPurpose(g *WithT, crClient client.Client, reconciler *Reconciler) {
+	tests := []struct {
+		shootPurpose gardencorev1beta1.ShootPurpose
+	}{
+		{shootPurpose: gardencorev1beta1.ShootPurposeTesting},
+		{shootPurpose: gardencorev1beta1.ShootPurposeDevelopment},
+		{shootPurpose: gardencorev1beta1.ShootPurposeEvaluation},
+	}
+
+	for _, test := range tests {
+		cluster, _, err := testutil.CreateClusterResource(1, nil, test.shootPurpose, false)
+		g.Expect(err).ToNot(HaveOccurred())
+		createCluster(g, crClient, cluster)
+		proberShouldNotBePresent(g, reconciler, cluster)
 	}
 }
 
@@ -211,7 +244,7 @@ func updateShootHibernationSpec(g *WithT, crClient client.Client, cluster *garde
 }
 
 func testShootHibernation(g *WithT, crClient client.Client, reconciler *Reconciler) {
-	cluster, shoot, err := testutil.CreateClusterResource(1, nil, false)
+	cluster, shoot, err := testutil.CreateClusterResource(1, nil, prodPurpose, false)
 	g.Expect(err).ToNot(HaveOccurred())
 	createCluster(g, crClient, cluster)
 	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod)
@@ -238,7 +271,7 @@ func updateShootHibernationStatus(g *WithT, crClient client.Client, cluster *gar
 }
 
 func testInvalidShootInClusterSpec(g *WithT, crClient client.Client, reconciler *Reconciler) {
-	cluster, _, err := testutil.CreateClusterResource(1, nil, false)
+	cluster, _, err := testutil.CreateClusterResource(1, nil, infraPurpose, false)
 	g.Expect(err).ToNot(HaveOccurred())
 	cluster.Spec.Shoot.Object = nil
 	cluster.Spec.Shoot.Raw = []byte(`{"apiVersion": 8}`)
@@ -260,7 +293,7 @@ func updateShootDeletionTimeStamp(g *WithT, crClient client.Client, cluster *gar
 }
 
 func testProberShouldBeRemovedIfDeletionTimeStampIsSet(g *WithT, crClient client.Client, reconciler *Reconciler) {
-	cluster, shoot, err := testutil.CreateClusterResource(1, nil, false)
+	cluster, shoot, err := testutil.CreateClusterResource(1, nil, infraPurpose, false)
 	g.Expect(err).ToNot(HaveOccurred())
 	createCluster(g, crClient, cluster)
 	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod)
@@ -292,7 +325,7 @@ func testShootCreationNotComplete(g *WithT, crClient client.Client, reconciler *
 	}
 
 	for _, testCase := range testCases {
-		cluster, shoot, err := testutil.CreateClusterResource(1, shootKCMNodeMonitorGracePeriod, false)
+		cluster, shoot, err := testutil.CreateClusterResource(1, shootKCMNodeMonitorGracePeriod, prodPurpose, false)
 		g.Expect(err).ToNot(HaveOccurred())
 		setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeCreate, testCase.lastOpState)
 		createCluster(g, crClient, cluster)
@@ -306,7 +339,7 @@ func testShootCreationNotComplete(g *WithT, crClient client.Client, reconciler *
 }
 
 func testShootIsMigrating(g *WithT, crClient client.Client, reconciler *Reconciler) {
-	cluster, shoot, err := testutil.CreateClusterResource(1, nil, false)
+	cluster, shoot, err := testutil.CreateClusterResource(1, nil, infraPurpose, false)
 	g.Expect(err).ToNot(HaveOccurred())
 	createCluster(g, crClient, cluster)
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeMigrate, "")
@@ -316,7 +349,7 @@ func testShootIsMigrating(g *WithT, crClient client.Client, reconciler *Reconcil
 }
 
 func testShootRestoringIsNotComplete(g *WithT, crClient client.Client, reconciler *Reconciler) {
-	cluster, shoot, err := testutil.CreateClusterResource(1, nil, false)
+	cluster, shoot, err := testutil.CreateClusterResource(1, nil, prodPurpose, false)
 	g.Expect(err).ToNot(HaveOccurred())
 	createCluster(g, crClient, cluster)
 	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod)
@@ -332,7 +365,7 @@ func testShootRestoringIsNotComplete(g *WithT, crClient client.Client, reconcile
 }
 
 func testLastOperationIsRestoreAndSuccessful(g *WithT, crClient client.Client, reconciler *Reconciler) {
-	cluster, shoot, err := testutil.CreateClusterResource(1, nil, false)
+	cluster, shoot, err := testutil.CreateClusterResource(1, nil, infraPurpose, false)
 	g.Expect(err).ToNot(HaveOccurred())
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeRestore, gardencorev1beta1.LastOperationStateSucceeded)
 	createCluster(g, crClient, cluster)
@@ -341,7 +374,7 @@ func testLastOperationIsRestoreAndSuccessful(g *WithT, crClient client.Client, r
 }
 
 func testLastOperationIsShootReconciliation(g *WithT, crClient client.Client, reconciler *Reconciler) {
-	cluster, shoot, err := testutil.CreateClusterResource(1, nil, false)
+	cluster, shoot, err := testutil.CreateClusterResource(1, nil, infraPurpose, false)
 	g.Expect(err).ToNot(HaveOccurred())
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeReconcile, "")
 	createCluster(g, crClient, cluster)
@@ -350,7 +383,7 @@ func testLastOperationIsShootReconciliation(g *WithT, crClient client.Client, re
 }
 
 func testShootHasNoWorkers(g *WithT, crClient client.Client, reconciler *Reconciler) {
-	cluster, _, err := testutil.CreateClusterResource(0, nil, false)
+	cluster, _, err := testutil.CreateClusterResource(0, nil, prodPurpose, false)
 	g.Expect(err).ToNot(HaveOccurred())
 	createCluster(g, crClient, cluster)
 	proberShouldNotBePresent(g, reconciler, cluster)

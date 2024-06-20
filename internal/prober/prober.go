@@ -6,16 +6,16 @@ package prober
 
 import (
 	"context"
+	"reflect"
+	"slices"
 	"time"
-
-	coordinationv1 "k8s.io/api/coordination/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	dwdScaler "github.com/gardener/dependency-watchdog/internal/prober/scaler"
 	"github.com/gardener/dependency-watchdog/internal/util"
+	coordinationv1 "k8s.io/api/coordination/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/go-logr/logr"
 
@@ -39,28 +39,30 @@ const (
 
 // Prober represents a probe to the Kube ApiServer of a shoot
 type Prober struct {
-	namespace          string
-	config             *papi.Config
-	scaler             dwdScaler.Scaler
-	shootClientCreator ShootClientCreator
-	backOff            *time.Timer
-	ctx                context.Context
-	cancelFn           context.CancelFunc
-	l                  logr.Logger
+	namespace            string
+	config               *papi.Config
+	workerNodeConditions map[string][]string
+	scaler               dwdScaler.Scaler
+	shootClientCreator   ShootClientCreator
+	backOff              *time.Timer
+	ctx                  context.Context
+	cancelFn             context.CancelFunc
+	l                    logr.Logger
 }
 
 // NewProber creates a new Prober
-func NewProber(parentCtx context.Context, namespace string, config *papi.Config, scaler dwdScaler.Scaler, shootClientCreator ShootClientCreator, logger logr.Logger) *Prober {
+func NewProber(parentCtx context.Context, namespace string, config *papi.Config, workerNodeConditions map[string][]string, scaler dwdScaler.Scaler, shootClientCreator ShootClientCreator, logger logr.Logger) *Prober {
 	pLogger := logger.WithValues("shootNamespace", namespace)
 	ctx, cancelFn := context.WithCancel(parentCtx)
 	return &Prober{
-		namespace:          namespace,
-		config:             config,
-		scaler:             scaler,
-		shootClientCreator: shootClientCreator,
-		ctx:                ctx,
-		cancelFn:           cancelFn,
-		l:                  pLogger,
+		namespace:            namespace,
+		config:               config,
+		workerNodeConditions: workerNodeConditions,
+		scaler:               scaler,
+		shootClientCreator:   shootClientCreator,
+		ctx:                  ctx,
+		cancelFn:             cancelFn,
+		l:                    pLogger,
 	}
 }
 
@@ -104,18 +106,26 @@ func (p *Prober) probe(ctx context.Context) {
 	}
 	p.l.Info("API server probe is successful, will conduct node lease probe")
 
-	candidateNodeLeases, err := p.probeNodeLeases(shootClient)
+	candidateNodeLeases, err := p.probeNodeLeases(ctx, shootClient)
 	if err != nil {
 		return
 	}
+	if len(candidateNodeLeases) > 1 {
+		p.triggerScale(ctx, candidateNodeLeases)
+	} else {
+		p.l.Info("skipping scaling operation as number of candidate node leases <= 1")
+	}
+}
+
+func (p *Prober) triggerScale(ctx context.Context, candidateNodeLeases []coordinationv1.Lease) {
 	// revive:disable:early-return
 	if p.shouldPerformScaleUp(candidateNodeLeases) {
-		if err = p.scaler.ScaleUp(ctx); err != nil {
+		if err := p.scaler.ScaleUp(ctx); err != nil {
 			p.l.Error(err, "Failed to scale up resources")
 		}
 	} else {
 		p.l.Info("Lease probe failed, performing scale down operation if required")
-		if err = p.scaler.ScaleDown(ctx); err != nil {
+		if err := p.scaler.ScaleDown(ctx); err != nil {
 			p.l.Error(err, "Failed to scale down resources")
 		}
 		return
@@ -157,20 +167,32 @@ func (p *Prober) probeAPIServer(shootClient kubernetes.Interface) error {
 	return err
 }
 
-func (p *Prober) probeNodeLeases(shootClient kubernetes.Interface) ([]coordinationv1.Lease, error) {
-	nodes, err := shootClient.CoreV1().Nodes().List(p.ctx, metav1.ListOptions{})
+func (p *Prober) probeNodeLeases(ctx context.Context, shootClient kubernetes.Interface) ([]coordinationv1.Lease, error) {
+	nodeNames, err := p.getFilteredNodeNames(ctx, shootClient)
+	if err != nil {
+		return nil, err
+	}
+	return p.getFilteredNodeLeases(ctx, shootClient, nodeNames)
+}
+
+func (p *Prober) getFilteredNodeNames(ctx context.Context, shootClient kubernetes.Interface) ([]string, error) {
+	nodes, err := shootClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		p.setBackOffIfThrottlingError(err)
 		p.l.Error(err, "Failed to list nodes, will retry probe")
 		return nil, err
 	}
-
-	nodeNames := sets.New[string]()
+	nodeNames := make([]string, 0, len(nodes.Items))
 	for _, node := range nodes.Items {
-		nodeNames.Insert(node.Name)
+		if !util.IsAnyNodeConditionSet(&node, util.GetEffectiveNodeConditions(&node, p.workerNodeConditions)) {
+			nodeNames = append(nodeNames, node.Name)
+		}
 	}
+	return nodeNames, nil
+}
 
-	leases, err := shootClient.CoordinationV1().Leases(nodeLeaseNamespace).List(p.ctx, metav1.ListOptions{})
+func (p *Prober) getFilteredNodeLeases(ctx context.Context, shootClient kubernetes.Interface, nodeNames []string) ([]coordinationv1.Lease, error) {
+	leases, err := shootClient.CoordinationV1().Leases(nodeLeaseNamespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		p.setBackOffIfThrottlingError(err)
 		p.l.Error(err, "Failed to list leases, will retry probe")
@@ -180,12 +202,12 @@ func (p *Prober) probeNodeLeases(shootClient kubernetes.Interface) ([]coordinati
 	var filteredLeases []coordinationv1.Lease
 	for _, lease := range leases.Items {
 		// skip leases belonging to non-existing nodes
-		if nodeNames.Has(lease.Name) { // node leases have the same names as nodes
+		if slices.Contains(nodeNames, lease.Name) {
+			// node leases have the same names as nodes
 			filteredLeases = append(filteredLeases, lease)
 		}
 	}
-
-	return filteredLeases, err
+	return filteredLeases, nil
 }
 
 func (p *Prober) isLeaseExpired(lease coordinationv1.Lease) bool {
@@ -222,4 +244,9 @@ func (p *Prober) resetBackoff(d time.Duration) {
 		p.backOff.Stop()
 	}
 	p.backOff = time.NewTimer(d)
+}
+
+// AreWorkerNodeConditionsStale checks if the worker node conditions are up-to-date
+func (p *Prober) AreWorkerNodeConditionsStale(newWorkerNodeConditions map[string][]string) bool {
+	return !reflect.DeepEqual(p.workerNodeConditions, newWorkerNodeConditions)
 }

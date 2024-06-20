@@ -91,3 +91,24 @@ func TestFillDefaultIfNil(t *testing.T) {
 	testFloat = GetValOrDefault(testFloat, 2.0)
 	g.Expect(*testFloat).To(Equal(1.0))
 }
+
+func TestGetSliceOrDefault(t *testing.T) {
+	defaultSlice := []string{"bingo"};
+
+	tests := []struct {
+		description         string
+		inputSlice          []string
+		expectedOutputSlice []string
+	}{
+		{description: "default slice should be returned if input slice is nil", inputSlice: nil, expectedOutputSlice: defaultSlice},
+		{description: "default slice should be returned if input slice is empty", inputSlice: []string{}, expectedOutputSlice: defaultSlice},
+		{description: "input slice should be returned if it is not nil or empty", inputSlice: []string{"bingo", "tringo"}, expectedOutputSlice: []string{"bingo", "tringo"}},
+	}
+	g := NewWithT(t)
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			g.Expect(GetSliceOrDefault(test.inputSlice, test.expectedOutputSlice)).To(Equal(test.expectedOutputSlice))
+		})
+	}
+}

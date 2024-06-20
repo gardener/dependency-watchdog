@@ -7,6 +7,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"github.com/gardener/dependency-watchdog/internal/util"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"github.com/gardener/dependency-watchdog/internal/prober/scaler"
@@ -73,43 +74,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, fmt.Errorf("error extracting shoot from cluster: %w", err)
 	}
 
-	// If shoot is marked for deletion then any existing probes will be unregistered
-	if shoot.DeletionTimestamp != nil {
+	if shouldStopProber(shoot, log) {
 		if r.ProberMgr.Unregister(req.Name) {
-			log.Info("Cluster has been marked for deletion, existing prober has been removed")
+			log.Info("Existing prober has been removed")
 		}
 		return ctrl.Result{}, nil
 	}
 
-	// if hibernation is enabled then we will remove any existing prober. Any resource scaling that is required in case of hibernation will now be handled as part of worker reconciliation in extension controllers.
-	if v1beta1helper.HibernationIsEnabled(shoot) {
-		if r.ProberMgr.Unregister(req.Name) {
-			log.Info("Cluster hibernation is enabled, existing prober has been removed")
-		}
-		return ctrl.Result{}, nil
-	}
-
-	// if control plane migration has started for a shoot, then any existing probe should be removed as it is no longer needed.
-	if shoot.Status.LastOperation != nil && shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeMigrate {
-		if r.ProberMgr.Unregister(req.Name) {
-			log.Info("Cluster migration is enabled, existing prober has been removed")
-		}
-		return ctrl.Result{}, nil
-	}
-
-	// if a shoot is created without any workers (this can only happen for control-plane-as-a-service use case), then if there is a probe registered then
-	// unregister the probe and return early. If there is no existing probe registered then return early.
-	if len(shoot.Spec.Provider.Workers) == 0 {
-		if r.ProberMgr.Unregister(req.Name) {
-			log.Info("Cluster does not have any workers. An existing probe has been removed")
-		} else {
-			log.Info("Cluster does not have any workers. No probe will be created")
-		}
-		return ctrl.Result{}, nil
-	}
-
-	if canStartProber(shoot) {
-		r.startProber(ctx, shoot, log, req.Name)
+	if canStartProber(shoot, log) {
+		r.startProber(ctx, shoot, log)
 	}
 	return ctrl.Result{}, nil
 }
@@ -126,38 +99,30 @@ func (r *Reconciler) getCluster(ctx context.Context, namespace string, name stri
 	return cluster, false, nil
 }
 
-// canStartProber checks if a probe can be registered and started.
-// shoot.Status.LastOperation.Type provides an insight into the current state of the cluster. It is important to identify the following cases:
-// 1. Cluster has been created successfully => This will ensure that the current state of shoot Kube API Server can be acted upon to decide on scaling operations. If the cluster
-// is in the process of creation, then it is possible that the control plane components have not completely come up. If the probe starts prematurely then it could start to scale down resources.
-// 2. During control plane migration, the value of shoot.Status.LastOperation.Type will be "Restore" => During this time it is imperative that probe is started early to ensure
-// that MCM is scaled down in case connectivity to the Kube API server of the shoot on the destination seed is broken, else it will try and recreate machines.
-// If the shoot.Status.LastOperation.Type == "Reconcile" then it is assumed that the cluster has been successfully created at-least once, and it is safe to start the probe.
-func canStartProber(shoot *v1beta1.Shoot) bool {
-	if shoot.Status.IsHibernated || shoot.Status.LastOperation == nil {
-		return false
-	}
-	if shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeReconcile ||
-		(shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeRestore && shoot.Status.LastOperation.State == v1beta1.LastOperationStateSucceeded) ||
-		(shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeCreate && shoot.Status.LastOperation.State == v1beta1.LastOperationStateSucceeded) {
-		return true
-	}
-	return false
-}
-
 // startProber sets up a new probe against a given key which uniquely identifies the probe.
 // Typically, the key in case of a shoot cluster is the shoot namespace
-func (r *Reconciler) startProber(ctx context.Context, shoot *v1beta1.Shoot, logger logr.Logger, key string) {
-	_, ok := r.ProberMgr.GetProber(key)
+func (r *Reconciler) startProber(ctx context.Context, shoot *v1beta1.Shoot, logger logr.Logger) {
+	workerNodeConditions := util.GetEffectiveNodeConditionsForWorkers(shoot)
+	existingProber, ok := r.ProberMgr.GetProber(shoot.Name)
 	if !ok {
-		probeConfig := r.getEffectiveProbeConfig(shoot, logger)
-		deploymentScaler := scaler.NewScaler(key, probeConfig.DependentResourceInfos, r.Client, r.ScaleGetter, logger)
-		shootClientCreator := prober.NewShootClientCreator(r.Client)
-		p := prober.NewProber(ctx, key, probeConfig, deploymentScaler, shootClientCreator, logger)
-		r.ProberMgr.Register(*p)
-		logger.Info("Starting a new prober")
-		go p.Run()
+		r.createAndRunProber(ctx, shoot, workerNodeConditions, logger)
+	} else {
+		if existingProber.AreWorkerNodeConditionsStale(workerNodeConditions) {
+			logger.Info("restarting prober due to change in node conditions for workers")
+			_ = r.ProberMgr.Unregister(shoot.Name)
+			r.createAndRunProber(ctx, shoot, workerNodeConditions, logger)
+		}
 	}
+}
+
+func (r *Reconciler) createAndRunProber(ctx context.Context, shoot *v1beta1.Shoot, workerNodeConditions map[string][]string, logger logr.Logger) {
+	probeConfig := r.getEffectiveProbeConfig(shoot, logger)
+	deploymentScaler := scaler.NewScaler(shoot.Name, probeConfig.DependentResourceInfos, r.Client, r.ScaleGetter, logger)
+	shootClientCreator := prober.NewShootClientCreator(r.Client)
+	p := prober.NewProber(ctx, shoot.Name, probeConfig, workerNodeConditions, deploymentScaler, shootClientCreator, logger)
+	r.ProberMgr.Register(*p)
+	logger.Info("Starting a new prober")
+	go p.Run()
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -185,4 +150,66 @@ func (r *Reconciler) getEffectiveProbeConfig(shoot *v1beta1.Shoot, logger logr.L
 		probeConfig.KCMNodeMonitorGraceDuration = kcmConfig.NodeMonitorGracePeriod
 	}
 	return &probeConfig
+}
+
+func shouldStopProber(shoot *v1beta1.Shoot, logger logr.Logger) bool {
+	// If shoot is marked for deletion then any existing probes will be unregistered
+	if shoot.DeletionTimestamp != nil {
+		logger.Info("Cluster has been marked for deletion, existing prober if any will be removed")
+		return true
+	}
+
+	// if hibernation is enabled then we will remove any existing prober. Any resource scaling that is required in case of hibernation will now be handled as part of worker reconciliation in extension controllers.
+	if v1beta1helper.HibernationIsEnabled(shoot) {
+		logger.Info("Cluster hibernation is enabled, existing prober if any will be removed")
+		return true
+	}
+
+	// if control plane migration has started for a shoot, then any existing probe should be removed as it is no longer needed.
+	if shoot.Status.LastOperation != nil && shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeMigrate {
+		logger.Info("Cluster migration is enabled, existing prober if any will be removed")
+		return true
+	}
+
+	// if a shoot is created without any workers (this can only happen for control-plane-as-a-service use case), then any existing probe should be removed as it is no longer needed.
+	if len(shoot.Spec.Provider.Workers) == 0 {
+		logger.Info("Cluster does not have any workers, existing prober if any will be removed")
+		return true
+	}
+
+	// if a shoot has any purpose other than production or infrastructure, then any existing probe should be removed as it is no longer needed.
+	if shoot.Spec.Purpose == nil || (*shoot.Spec.Purpose != v1beta1.ShootPurposeProduction && *shoot.Spec.Purpose != v1beta1.ShootPurposeInfrastructure) {
+		logger.Info("Cluster does not have production or infrastructure purpose, existing prober if any will be removed", "shoot-purpose", shoot.Spec.Purpose)
+		return true
+	}
+	return false
+}
+
+// canStartProber checks if a probe can be registered and started.
+// shoot.Status.LastOperation.Type provides an insight into the current state of the cluster. It is important to identify the following cases:
+// 1. Cluster has been created successfully => This will ensure that the current state of shoot Kube API Server can be acted upon to decide on scaling operations. If the cluster
+// is in the process of creation, then it is possible that the control plane components have not completely come up. If the probe starts prematurely then it could start to scale down resources.
+// 2. During control plane migration, the value of shoot.Status.LastOperation.Type will be "Restore" => During this time it is imperative that probe is started early to ensure
+// that MCM is scaled down in case connectivity to the Kube API server of the shoot on the destination seed is broken, else it will try and recreate machines.
+// If the shoot.Status.LastOperation.Type == "Reconcile" then it is assumed that the cluster has been successfully created at-least once, and it is safe to start the probe.
+func canStartProber(shoot *v1beta1.Shoot, logger logr.Logger) bool {
+	//if shoot.Spec.Purpose == nil || (*shoot.Spec.Purpose != v1beta1.ShootPurposeProduction && *shoot.Spec.Purpose != v1beta1.ShootPurposeInfrastructure) {
+	//	logger.Info("Cannot start probe. It can only be started for clusters with production or infrastructure purpose", "shoot-purpose", shoot.Spec.Purpose)
+	//	return false
+	//}
+	if !v1beta1helper.HibernationIsEnabled(shoot) && shoot.Status.IsHibernated {
+		logger.Info("Cannot start probe. Cluster is waking up from hibernation")
+		return false
+	}
+	if shoot.Status.LastOperation == nil {
+		logger.Info("Cannot start probe. Cluster is creation phase")
+		return false
+	}
+	if shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeReconcile ||
+		(shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeRestore && shoot.Status.LastOperation.State == v1beta1.LastOperationStateSucceeded) ||
+		(shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeCreate && shoot.Status.LastOperation.State == v1beta1.LastOperationStateSucceeded) {
+		return true
+	}
+	logger.Info("Cannot start probe. Cluster is either in migration or in creation phase")
+	return false
 }

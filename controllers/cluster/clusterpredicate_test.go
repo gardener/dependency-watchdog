@@ -40,7 +40,7 @@ func TestCreateAndDeletePredicateFunc(t *testing.T) {
 }
 
 func testCreatePredicateFunc(g *WithT, numWorkers int) bool {
-	cluster, _, err := test.CreateClusterResource(numWorkers, nil, true)
+	cluster, _, err := test.CreateClusterResource(numWorkers, nil, infraPurpose, true)
 	g.Expect(err).ToNot(HaveOccurred())
 	e := event.CreateEvent{Object: cluster}
 	predicateFuncs := workerLessShoot(logr.Discard())
@@ -48,7 +48,7 @@ func testCreatePredicateFunc(g *WithT, numWorkers int) bool {
 }
 
 func testDeletePredicateFunc(g *WithT, numWorkers int) bool {
-	cluster, _, err := test.CreateClusterResource(numWorkers, nil, true)
+	cluster, _, err := test.CreateClusterResource(numWorkers, nil, infraPurpose, true)
 	g.Expect(err).ToNot(HaveOccurred())
 	e := event.DeleteEvent{Object: cluster}
 	predicateFuncs := workerLessShoot(logr.Discard())
@@ -79,9 +79,9 @@ func TestUpdatePredicateFunc(t *testing.T) {
 }
 
 func testUpdatePredicateFunc(g *WithT, oldNumWorker, newNumWorkers int) bool {
-	oldCluster, _, err := test.CreateClusterResource(oldNumWorker, nil, true)
+	oldCluster, _, err := test.CreateClusterResource(oldNumWorker, nil, prodPurpose, true)
 	g.Expect(err).ToNot(HaveOccurred())
-	newCluster, _, err := test.CreateClusterResource(newNumWorkers, nil, true)
+	newCluster, _, err := test.CreateClusterResource(newNumWorkers, nil, prodPurpose, true)
 	g.Expect(err).ToNot(HaveOccurred())
 	e := event.UpdateEvent{
 		ObjectOld: oldCluster,
@@ -111,7 +111,7 @@ func TestShootHasWorkersForNonShootResource(t *testing.T) {
 
 func TestShootHasWorkersForInvalidShootResource(t *testing.T) {
 	g := NewWithT(t)
-	cluster, _, err := test.CreateClusterResource(0, nil, false)
+	cluster, _, err := test.CreateClusterResource(0, nil, prodPurpose, false)
 	g.Expect(err).ToNot(HaveOccurred())
 	seed := gardencorev1beta1.Seed{
 		ObjectMeta: metav1.ObjectMeta{
