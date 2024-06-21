@@ -22,14 +22,14 @@ Prober can be configured via the following flags:
 | leader-elect-renew-deadline | time.Duration | No | 10s | The interval between attempts by the acting master to renew a leadership slot before it stops leading. This must be less than or equal to the lease duration. This is only applicable if leader election is enabled. |
 | leader-elect-retry-period | time.Duration | No | 2s | The duration the clients should wait between attempting acquisition and renewal of a leadership. This is only applicable if leader election is enabled. |
 
-You can view an example kubernetes prober [deployment](../../example/01-dwd-prober-deployment.yaml) YAML to see how these command line args are configured.
+You can view an example kubernetes prober [deployment](../../example/03-dwd-prober-deployment.yaml) YAML to see how these command line args are configured.
 
 
 ### Prober Configuration
 
 A probe configuration is mounted as `ConfigMap` to the container. The path to the config file is configured via `config-file` command line argument as mentioned above. Prober will start one probe per Shoot control plane hosted within the Seed cluster. Each such probe will run asynchronously and will periodically connect to the Kube ApiServer of the Shoot. Configuration below will influence each such probe.
 
-You can view an example YAML configuration provided as `data` in a `ConfigMap` [here](../../example/04-dwd-prober-configmap.yaml).
+You can view an example YAML configuration provided as `data` in a `ConfigMap` [here](../../example/01-dwd-prober-configmap.yaml).
 
 | Name                        | Type                           | Required | Default Value | Description                                                                                                                                                                                     |
 |-----------------------------|--------------------------------|----------|---------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -144,13 +144,13 @@ Dependency watchdog weeder command also (just like the prober command) takes com
 ### Command Line Arguments
 
 Weeder can be configured with the same flags as that for prober described under [command-line-arguments](#command-line-arguments) section
-You can find an example weeder [deployment](../../example/02-dwd-weeder-deployment.yaml) YAML to see how these command line args are configured.
+You can find an example weeder [deployment](../../example/04-dwd-weeder-deployment.yaml) YAML to see how these command line args are configured.
 
 ### Weeder Configuration
 
 Weeder configuration is mounted as `ConfigMap` to the container. The path to the config file is configured via `config-file` command line argument as mentioned above. Weeder will start one go routine per podSelector per endpoint on an endpoint event as described in [weeder internal concepts](../concepts/weeder.md#internals). 
 
-You can view the example YAML configuration provided as `data` in a `ConfigMap` [here](../../example/03-dwd-weeder-configmap.yaml).
+You can view the example YAML configuration provided as `data` in a `ConfigMap` [here](../../example/02-dwd-weeder-configmap.yaml).
 
 | Name                          | Type                          | Required | Default Value | Description                                                                                              |
 |-------------------------------|-------------------------------|----------|---------------|----------------------------------------------------------------------------------------------------------|
