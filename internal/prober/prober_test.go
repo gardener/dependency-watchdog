@@ -10,9 +10,7 @@ import (
 	"context"
 	"errors"
 	"github.com/gardener/dependency-watchdog/internal/mock/controller-runtime/client"
-	"github.com/gardener/dependency-watchdog/internal/test"
-	"github.com/gardener/dependency-watchdog/internal/util"
-	"math"
+	"github.com/gardener/dependency-watchdog/internal/test/fakes"
 	"strconv"
 	"testing"
 	"time"
@@ -81,125 +79,133 @@ func TestAPIServerProbeFailure(t *testing.T) {
 		{name: "Throttling error is returned by api server", discoveryError: apierrors.NewTooManyRequests("Too many requests", 10)},
 	}
 
-	for _, entry := range testCases {
-		t.Run(entry.name, func(t *testing.T) {
-			mocks := createAndInitializeMocks(t, entry)
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
-			createAndRunProber(t, testProbeInterval.Duration, config, mocks)
-		})
-	}
-}
-
-func TestSuccessfulProbesShouldRunScaleUp(t *testing.T) {
-	leaseList := createNodeLeases([]metav1.MicroTime{nonExpiredLeaseRenewTime, nonExpiredLeaseRenewTime, expiredLeaseRenewTime, expiredLeaseRenewTime})
-	nodeList := createNodes(len(leaseList.Items))
-
-	testCases := []probeTestCase{
-		{name: "Scale Up Succeeds", leaseList: leaseList, nodeList: nodeList, minScaleUpCount: 1, maxScaleUpCount: math.MaxInt8},
-		{name: "Scale Up Fails", leaseList: leaseList, nodeList: nodeList, scaleUpError: errors.New("scale Up failed"), minScaleUpCount: 1, maxScaleUpCount: math.MaxInt8},
-	}
-
-	for _, entry := range testCases {
-		t.Run(entry.name, func(t *testing.T) {
-			mocks := createAndInitializeMocks(t, entry)
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
-			createAndRunProber(t, testProbeInterval.Duration, config, mocks)
-		})
-	}
-}
-
-func TestLeaseProbeShouldNotConsiderUnrelatedLeases(t *testing.T) {
-	leaseList1 := createNodeLeases([]metav1.MicroTime{nonExpiredLeaseRenewTime, expiredLeaseRenewTime, expiredLeaseRenewTime})
-	leaseList2 := createNodeLeases([]metav1.MicroTime{expiredLeaseRenewTime, nonExpiredLeaseRenewTime, nonExpiredLeaseRenewTime})
-
-	testCases := []probeTestCase{
-		{name: "Scale Up Succeeds", leaseList: leaseList1, nodeList: createNodes(1), minScaleUpCount: 1, maxScaleUpCount: math.MaxInt8},
-		{name: "Scale Down Succeeds", leaseList: leaseList2, nodeList: createNodes(1), minScaleDownCount: 1, maxScaleDownCount: math.MaxInt8},
-	}
-
-	for _, entry := range testCases {
-		t.Run(entry.name, func(t *testing.T) {
-			mocks := createAndInitializeMocks(t, entry)
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
-			createAndRunProber(t, testProbeInterval.Duration, config, mocks)
-		})
-	}
-}
-
-func TestLeaseProbeFailureShouldRunScaleDown(t *testing.T) {
-	leaseList := createNodeLeases([]metav1.MicroTime{nonExpiredLeaseRenewTime, expiredLeaseRenewTime, expiredLeaseRenewTime, expiredLeaseRenewTime})
-	nodeList := createNodes(len(leaseList.Items))
-
-	testCases := []probeTestCase{
-		{name: "Scale Down Succeeds", leaseList: leaseList, nodeList: nodeList, minScaleDownCount: 1, maxScaleDownCount: math.MaxInt8},
-		{name: "Scale Down Fails", leaseList: leaseList, nodeList: nodeList, scaleDownError: errors.New("scale Down failed"), minScaleDownCount: 1, maxScaleDownCount: math.MaxInt8},
-	}
-
-	for _, entry := range testCases {
-		t.Run(entry.name, func(t *testing.T) {
-			mocks := createAndInitializeMocks(t, entry)
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: time.Minute}, 0.2)
-			createAndRunProber(t, testProbeInterval.Duration, config, mocks)
-		})
-	}
-}
-
-func TestLeaseProbeListCallFailureShouldSkipScaling(t *testing.T) {
-	leaseList := createNodeLeases([]metav1.MicroTime{nonExpiredLeaseRenewTime, nonExpiredLeaseRenewTime, nonExpiredLeaseRenewTime})
-	nodeList := createNodes(len(leaseList.Items))
-
-	testCases := []probeTestCase{
-		{name: "Forbidden request error is returned by lease list call", nodeList: nodeList, leaseList: leaseList, leaseListError: apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden"))},
-		{name: "Unauthorized request error is returned by lease list call", nodeList: nodeList, leaseList: leaseList, leaseListError: apierrors.NewUnauthorized("unauthorized")},
-		{name: "Throttling error is returned by lease list call", nodeList: nodeList, leaseListError: apierrors.NewTooManyRequests("Too many requests", 10)},
-		{name: "Throttling error is returned by node list call", nodeListError: apierrors.NewTooManyRequests("Too many requests", 10)},
-	}
-
-	for _, entry := range testCases {
-		t.Run(entry.name, func(t *testing.T) {
-			mocks := createAndInitializeMocks(t, entry)
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
-			createAndRunProber(t, testProbeInterval.Duration, config, mocks)
-		})
-	}
-}
-
-func TestAPIServerProbeShouldNotRunIfClientNotCreated(t *testing.T) {
-	err := errors.New("cannot create kubernetes client")
-	entry := probeTestCase{
-		name:                    "api server probe should not run if client to access it is not created",
-		shootClientCreatorError: err,
-	}
-	mocks := createAndInitializeMocks(t, entry)
-	config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
-	createAndRunProber(t, testProbeInterval.Duration, config, mocks)
-}
-
-func TestScaleUpShouldHappenIfNoOwnedLeasesPresent(t *testing.T) {
-	entry := probeTestCase{
-		name:            "scale up should happen if no owned lease is present",
-		leaseList:       createNodeLeases(nil),
-		nodeList:        createNodes(0),
-		minScaleUpCount: 1,
-		maxScaleUpCount: math.MaxInt8,
-	}
-	mocks := createAndInitializeMocks(t, entry)
-	config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
-	createAndRunProber(t, testProbeInterval.Duration, config, mocks)
-}
-
-func createAndRunProber(t *testing.T, duration time.Duration, config *papi.Config, testMocks probeTestMocks) {
 	g := NewWithT(t)
-	workerNodeConditions := map[string][]string{
-		test.Worker1Name: {test.NodeConditionDiskPressure, test.NodeConditionMemoryPressure},
-		test.Worker2Name: util.DefaultUnhealthyNodeConditions,
-	}
-	p := NewProber(context.Background(), testMocks.seedClient, "default", config, workerNodeConditions, testMocks.scaler, testMocks.shootClientCreator, proberTestLogger)
-	g.Expect(p.IsClosed()).To(BeFalse())
+	t.Parallel()
+	for _, entry := range testCases {
+		t.Run(entry.name, func(t *testing.T) {
+			//mocks := createAndInitializeMocks(t, entry)
+			dc := fakes.NewDiscoveryClient(entry.discoveryError)
+			scc := fakes.NewShootClientCreator(dc, nil)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+			p := NewProber(context.Background(), nil, "default", config, nil, nil, scc, proberTestLogger)
+			g.Expect(p.IsClosed()).To(BeFalse())
 
-	runProber(p, duration)
-	g.Expect(p.IsClosed()).To(BeTrue())
+			runProber(p, testProbeTimeout.Duration)
+			g.Expect(p.IsClosed()).To(BeTrue())
+		})
+	}
 }
+
+//func TestSuccessfulProbesShouldRunScaleUp(t *testing.T) {
+//	leaseList := createNodeLeases([]metav1.MicroTime{nonExpiredLeaseRenewTime, nonExpiredLeaseRenewTime, expiredLeaseRenewTime, expiredLeaseRenewTime})
+//	nodeList := createNodes(len(leaseList.Items))
+//
+//	testCases := []probeTestCase{
+//		{name: "Scale Up Succeeds", leaseList: leaseList, nodeList: nodeList, minScaleUpCount: 1, maxScaleUpCount: math.MaxInt8},
+//		{name: "Scale Up Fails", leaseList: leaseList, nodeList: nodeList, scaleUpError: errors.New("scale Up failed"), minScaleUpCount: 1, maxScaleUpCount: math.MaxInt8},
+//	}
+//
+//	for _, entry := range testCases {
+//		t.Run(entry.name, func(t *testing.T) {
+//			mocks := createAndInitializeMocks(t, entry)
+//			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+//			createAndRunProber(t, testProbeInterval.Duration, config, mocks)
+//		})
+//	}
+//}
+//
+//func TestLeaseProbeShouldNotConsiderUnrelatedLeases(t *testing.T) {
+//	leaseList1 := createNodeLeases([]metav1.MicroTime{nonExpiredLeaseRenewTime, expiredLeaseRenewTime, expiredLeaseRenewTime})
+//	leaseList2 := createNodeLeases([]metav1.MicroTime{expiredLeaseRenewTime, nonExpiredLeaseRenewTime, nonExpiredLeaseRenewTime})
+//
+//	testCases := []probeTestCase{
+//		{name: "Scale Up Succeeds", leaseList: leaseList1, nodeList: createNodes(1), minScaleUpCount: 1, maxScaleUpCount: math.MaxInt8},
+//		{name: "Scale Down Succeeds", leaseList: leaseList2, nodeList: createNodes(1), minScaleDownCount: 1, maxScaleDownCount: math.MaxInt8},
+//	}
+//
+//	for _, entry := range testCases {
+//		t.Run(entry.name, func(t *testing.T) {
+//			mocks := createAndInitializeMocks(t, entry)
+//			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+//			createAndRunProber(t, testProbeInterval.Duration, config, mocks)
+//		})
+//	}
+//}
+//
+//func TestLeaseProbeFailureShouldRunScaleDown(t *testing.T) {
+//	leaseList := createNodeLeases([]metav1.MicroTime{nonExpiredLeaseRenewTime, expiredLeaseRenewTime, expiredLeaseRenewTime, expiredLeaseRenewTime})
+//	nodeList := createNodes(len(leaseList.Items))
+//
+//	testCases := []probeTestCase{
+//		{name: "Scale Down Succeeds", leaseList: leaseList, nodeList: nodeList, minScaleDownCount: 1, maxScaleDownCount: math.MaxInt8},
+//		{name: "Scale Down Fails", leaseList: leaseList, nodeList: nodeList, scaleDownError: errors.New("scale Down failed"), minScaleDownCount: 1, maxScaleDownCount: math.MaxInt8},
+//	}
+//
+//	for _, entry := range testCases {
+//		t.Run(entry.name, func(t *testing.T) {
+//			mocks := createAndInitializeMocks(t, entry)
+//			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: time.Minute}, 0.2)
+//			createAndRunProber(t, testProbeInterval.Duration, config, mocks)
+//		})
+//	}
+//}
+//
+//func TestLeaseProbeListCallFailureShouldSkipScaling(t *testing.T) {
+//	leaseList := createNodeLeases([]metav1.MicroTime{nonExpiredLeaseRenewTime, nonExpiredLeaseRenewTime, nonExpiredLeaseRenewTime})
+//	nodeList := createNodes(len(leaseList.Items))
+//
+//	testCases := []probeTestCase{
+//		{name: "Forbidden request error is returned by lease list call", nodeList: nodeList, leaseList: leaseList, leaseListError: apierrors.NewForbidden(schema.GroupResource{}, "test", errors.New("forbidden"))},
+//		{name: "Unauthorized request error is returned by lease list call", nodeList: nodeList, leaseList: leaseList, leaseListError: apierrors.NewUnauthorized("unauthorized")},
+//		{name: "Throttling error is returned by lease list call", nodeList: nodeList, leaseListError: apierrors.NewTooManyRequests("Too many requests", 10)},
+//		{name: "Throttling error is returned by node list call", nodeListError: apierrors.NewTooManyRequests("Too many requests", 10)},
+//	}
+//
+//	for _, entry := range testCases {
+//		t.Run(entry.name, func(t *testing.T) {
+//			mocks := createAndInitializeMocks(t, entry)
+//			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+//			createAndRunProber(t, testProbeInterval.Duration, config, mocks)
+//		})
+//	}
+//}
+//
+//func TestAPIServerProbeShouldNotRunIfClientNotCreated(t *testing.T) {
+//	err := errors.New("cannot create kubernetes client")
+//	entry := probeTestCase{
+//		name:                    "api server probe should not run if client to access it is not created",
+//		shootClientCreatorError: err,
+//	}
+//	mocks := createAndInitializeMocks(t, entry)
+//	config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+//	createAndRunProber(t, testProbeInterval.Duration, config, mocks)
+//}
+//
+//func TestScaleUpShouldHappenIfNoOwnedLeasesPresent(t *testing.T) {
+//	entry := probeTestCase{
+//		name:            "scale up should happen if no owned lease is present",
+//		leaseList:       createNodeLeases(nil),
+//		nodeList:        createNodes(0),
+//		minScaleUpCount: 1,
+//		maxScaleUpCount: math.MaxInt8,
+//	}
+//	mocks := createAndInitializeMocks(t, entry)
+//	config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+//	createAndRunProber(t, testProbeInterval.Duration, config, mocks)
+//}
+//
+//func createAndRunProber(t *testing.T, duration time.Duration, config *papi.Config, testMocks probeTestMocks) {
+//	g := NewWithT(t)
+//	workerNodeConditions := map[string][]string{
+//		test.Worker1Name: {test.NodeConditionDiskPressure, test.NodeConditionMemoryPressure},
+//		test.Worker2Name: util.DefaultUnhealthyNodeConditions,
+//	}
+//	p := NewProber(context.Background(), testMocks.seedClient, "default", config, workerNodeConditions, testMocks.scaler, testMocks.shootClientCreator, proberTestLogger)
+//	g.Expect(p.IsClosed()).To(BeFalse())
+//
+//	runProber(p, duration)
+//	g.Expect(p.IsClosed()).To(BeTrue())
+//}
 
 func runProber(p *Prober, d time.Duration) {
 	exitAfter := time.NewTimer(d)

@@ -6,6 +6,7 @@ package prober
 
 import (
 	"context"
+	"github.com/gardener/dependency-watchdog/internal/prober/types"
 	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"reflect"
@@ -38,34 +39,20 @@ const (
 	nodeLeaseNamespace   = "kube-node-lease"
 )
 
-// Prober represents a probe to the Kube ApiServer of a shoot
-type Prober struct {
-	namespace            string
-	config               *papi.Config
-	workerNodeConditions map[string][]string
-	scaler               dwdScaler.Scaler
-	seedClient           client.Client
-	shootClientCreator   ShootClientCreator
-	backOff              *time.Timer
-	ctx                  context.Context
-	cancelFn             context.CancelFunc
-	l                    logr.Logger
-}
-
 // NewProber creates a new Prober
 func NewProber(parentCtx context.Context, seedClient client.Client, namespace string, config *papi.Config, workerNodeConditions map[string][]string, scaler dwdScaler.Scaler, shootClientCreator ShootClientCreator, logger logr.Logger) *Prober {
 	pLogger := logger.WithValues("shootNamespace", namespace)
 	ctx, cancelFn := context.WithCancel(parentCtx)
-	return &Prober{
-		namespace:            namespace,
-		config:               config,
-		workerNodeConditions: workerNodeConditions,
-		scaler:               scaler,
-		seedClient:           seedClient,
-		shootClientCreator:   shootClientCreator,
-		ctx:                  ctx,
-		cancelFn:             cancelFn,
-		l:                    pLogger,
+	return &types.Prober{
+		Namespace:            namespace,
+		Config:               config,
+		WorkerNodeConditions: workerNodeConditions,
+		Scaler:               scaler,
+		SeedClient:           seedClient,
+		ShootClientCreator:   shootClientCreator,
+		Ctx:                  ctx,
+		CancelFn:             cancelFn,
+		Logger:               pLogger,
 	}
 }
 
@@ -104,7 +91,7 @@ func (p *Prober) probe(ctx context.Context) {
 	}
 	p.l.Info("API server probe is successful, will conduct node lease probe")
 
-	shootClient, err := p.setupProbeClient(ctx, p.namespace, p.config.KubeConfigSecretName)
+	shootClient, err := p.setupProbeClient(ctx)
 	if err != nil {
 		p.l.Error(err, "Failed to create shoot client using the KubeConfig secret, ignoring error, probe will be re-attempted")
 		return
@@ -156,7 +143,7 @@ func (p *Prober) shouldPerformScaleUp(candidateNodeLeases []coordinationv1.Lease
 	return shouldScaleUp
 }
 
-func (p *Prober) setupProbeClient(ctx context.Context, namespace string, kubeConfigSecretName string) (client.Client, error) {
+func (p *Prober) setupProbeClient(ctx context.Context) (client.Client, error) {
 	shootClient, err := p.shootClientCreator.CreateClient(ctx, p.l, p.config.ProbeTimeout.Duration)
 	if err != nil {
 		return nil, err
