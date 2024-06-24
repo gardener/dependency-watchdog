@@ -19,8 +19,9 @@ import (
 
 // ShootClientCreator provides a facade to create kubernetes client targeting a shoot.
 type ShootClientCreator interface {
-	// CreateClient creates a new clientSet to connect to the Kube ApiServer running in the passed-in shoot control namespace.
+	// CreateClient creates a new client.Client to connect to the Kube ApiServer running in the passed-in shoot control namespace.
 	CreateClient(ctx context.Context, logger logr.Logger, connectionTimeout time.Duration) (client.Client, error)
+	// CreateDiscoveryClient creates a new discovery.DiscoveryInterface to connect to the Kube ApiServer running in the passed-in shoot control namespace.
 	CreateDiscoveryClient(ctx context.Context, logger logr.Logger, connectionTimeout time.Duration) (discovery.DiscoveryInterface, error)
 }
 

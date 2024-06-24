@@ -7,6 +7,7 @@ package prober
 import (
 	"context"
 	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"slices"
@@ -15,11 +16,9 @@ import (
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	dwdScaler "github.com/gardener/dependency-watchdog/internal/prober/scaler"
 	"github.com/gardener/dependency-watchdog/internal/util"
+	"github.com/go-logr/logr"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/go-logr/logr"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -98,7 +97,7 @@ func (p *Prober) GetConfig() *papi.Config {
 
 func (p *Prober) probe(ctx context.Context) {
 	p.backOffIfNeeded()
-	err = p.probeAPIServer(ctx)
+	err := p.probeAPIServer(ctx)
 	if err != nil {
 		p.l.Info("API server probe failed, Skipping lease probe and scaling operation", "err", err.Error())
 		return
@@ -189,9 +188,9 @@ func (p *Prober) probeNodeLeases(ctx context.Context, shootClient client.Client)
 // 1. Not managed by MCM - these nodes will not be considered for lease probe.
 // 2. Unhealthy (checked via node conditions) - these will not be considered for lease probe allowing MCM to replace these nodes.
 // 3. If the corresponding Machine object for a node has its state set to Terminating or Failed, the node will not be considered for lease probe.
-func (p *Prober) getFilteredNodeNames(ctx context.Context, shootClient kubernetes.Interface) ([]string, error) {
-	nodes, err := shootClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-	if err != nil {
+func (p *Prober) getFilteredNodeNames(ctx context.Context, shootClient client.Client) ([]string, error) {
+	nodes := &corev1.NodeList{}
+	if err := shootClient.List(ctx, nodes); err != nil {
 		p.setBackOffIfThrottlingError(err)
 		p.l.Error(err, "Failed to list nodes, will retry probe")
 		return nil, err
@@ -224,9 +223,9 @@ func (p *Prober) getMachines(ctx context.Context) ([]v1alpha1.Machine, error) {
 
 // getFilteredNodeLeases filters out node leases which are not created for given nodeNames. The nodes are filtered via getFilteredNodeNames.
 // It is assumed that the node leases have the same name as the corresponding node name for which they are created.
-func (p *Prober) getFilteredNodeLeases(ctx context.Context, shootClient kubernetes.Interface, nodeNames []string) ([]coordinationv1.Lease, error) {
-	leases, err := shootClient.CoordinationV1().Leases(nodeLeaseNamespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
+func (p *Prober) getFilteredNodeLeases(ctx context.Context, shootClient client.Client, nodeNames []string) ([]coordinationv1.Lease, error) {
+	leases := &coordinationv1.LeaseList{}
+	if err := shootClient.List(ctx, leases); err != nil {
 		p.setBackOffIfThrottlingError(err)
 		p.l.Error(err, "Failed to list leases, will retry probe")
 		return nil, err
