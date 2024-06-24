@@ -35,7 +35,7 @@ const controllerName = "cluster"
 
 // Reconciler reconciles a Cluster object
 type Reconciler struct {
-	client.Client
+	Client client.Client
 	// Scheme is the controller-runtime scheme used to initialize the controller manager and to validate the probe config
 	Scheme *runtime.Scheme
 	// ProberMgr is interface to manage lifecycle of probers.
@@ -90,7 +90,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 // getCluster will retrieve the cluster object given the namespace and name Not found is not treated as an error and is handled differently in the caller
 func (r *Reconciler) getCluster(ctx context.Context, namespace string, name string) (cluster *extensionsv1alpha1.Cluster, notFound bool, err error) {
 	cluster = &extensionsv1alpha1.Cluster{}
-	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, cluster); err != nil {
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, cluster); err != nil {
 		if errors.IsNotFound(err) {
 			return nil, true, nil
 		}
@@ -118,8 +118,9 @@ func (r *Reconciler) startProber(ctx context.Context, shoot *v1beta1.Shoot, logg
 func (r *Reconciler) createAndRunProber(ctx context.Context, shoot *v1beta1.Shoot, workerNodeConditions map[string][]string, logger logr.Logger) {
 	probeConfig := r.getEffectiveProbeConfig(shoot, logger)
 	deploymentScaler := scaler.NewScaler(shoot.Name, probeConfig.DependentResourceInfos, r.Client, r.ScaleGetter, logger)
-	shootClientCreator := prober.NewShootClientCreator(r.Client)
-	p := prober.NewProber(ctx, shoot.Name, probeConfig, workerNodeConditions, deploymentScaler, shootClientCreator, logger)
+	targetNamespace := shoot.Name
+	shootClientCreator := prober.NewShootClientCreator(targetNamespace, probeConfig.KubeConfigSecretName, r.Client)
+	p := prober.NewProber(ctx, r.Client, targetNamespace, probeConfig, workerNodeConditions, deploymentScaler, shootClientCreator, logger)
 	r.ProberMgr.Register(*p)
 	logger.Info("Starting a new prober")
 	go p.Run()

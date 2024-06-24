@@ -106,7 +106,7 @@ func setupShootClientTest(t *testing.T, namespace string) func() {
 	secret.ObjectMeta.Namespace = namespace
 	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(secret).ToNot(BeNil())
-	clientCreator = NewShootClientCreator(sk8sClient)
+	clientCreator = NewShootClientCreator(sk8sClient, "", "")
 
 	return func() {
 		err := sk8sClient.Delete(sctx, secret)

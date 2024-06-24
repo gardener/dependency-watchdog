@@ -9,6 +9,9 @@ package prober
 import (
 	"context"
 	"errors"
+	"github.com/gardener/dependency-watchdog/internal/mock/controller-runtime/client"
+	"github.com/gardener/dependency-watchdog/internal/test"
+	"github.com/gardener/dependency-watchdog/internal/util"
 	"math"
 	"strconv"
 	"testing"
@@ -45,6 +48,7 @@ var (
 type probeTestMocks struct {
 	scaler             *mockscaler.MockScaler
 	shootClientCreator *mockprober.MockShootClientCreator
+	seedClient         *client.MockClient
 	kubernetes         *mockinterface.MockInterface
 	discovery          *mockdiscovery.MockDiscoveryInterface
 	coreV1             *mockcorev1.MockCoreV1Interface
@@ -184,9 +188,13 @@ func TestScaleUpShouldHappenIfNoOwnedLeasesPresent(t *testing.T) {
 	createAndRunProber(t, testProbeInterval.Duration, config, mocks)
 }
 
-func createAndRunProber(t *testing.T, duration time.Duration, config *papi.Config, interfaces probeTestMocks) {
+func createAndRunProber(t *testing.T, duration time.Duration, config *papi.Config, testMocks probeTestMocks) {
 	g := NewWithT(t)
-	p := NewProber(context.Background(), "default", config, interfaces.scaler, interfaces.shootClientCreator, proberTestLogger)
+	workerNodeConditions := map[string][]string{
+		test.Worker1Name: {test.NodeConditionDiskPressure, test.NodeConditionMemoryPressure},
+		test.Worker2Name: util.DefaultUnhealthyNodeConditions,
+	}
+	p := NewProber(context.Background(), testMocks.seedClient, "default", config, workerNodeConditions, testMocks.scaler, testMocks.shootClientCreator, proberTestLogger)
 	g.Expect(p.IsClosed()).To(BeFalse())
 
 	runProber(p, duration)
@@ -212,6 +220,7 @@ func createAndInitializeMocks(t *testing.T, testCase probeTestCase) probeTestMoc
 	mocks := probeTestMocks{
 		scaler:             mockscaler.NewMockScaler(ctrl),
 		shootClientCreator: mockprober.NewMockShootClientCreator(ctrl),
+		seedClient:         client.NewMockClient(ctrl),
 		kubernetes:         mockinterface.NewMockInterface(ctrl),
 		discovery:          mockdiscovery.NewMockDiscoveryInterface(ctrl),
 		coreV1:             mockcorev1.NewMockCoreV1Interface(ctrl),
@@ -269,7 +278,7 @@ func createNodes(count int) (nodeList *corev1.NodeList) {
 }
 
 func name(i int) string {
-	return "lease-" + strconv.Itoa(i)
+	return "node-" + strconv.Itoa(i)
 }
 
 func createNodeLease(name string, renewTime metav1.MicroTime) coordinationv1.Lease {

@@ -6,7 +6,9 @@ package prober
 
 import (
 	"context"
+	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	"reflect"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"slices"
 	"time"
 
@@ -43,6 +45,7 @@ type Prober struct {
 	config               *papi.Config
 	workerNodeConditions map[string][]string
 	scaler               dwdScaler.Scaler
+	seedClient           client.Client
 	shootClientCreator   ShootClientCreator
 	backOff              *time.Timer
 	ctx                  context.Context
@@ -51,7 +54,7 @@ type Prober struct {
 }
 
 // NewProber creates a new Prober
-func NewProber(parentCtx context.Context, namespace string, config *papi.Config, workerNodeConditions map[string][]string, scaler dwdScaler.Scaler, shootClientCreator ShootClientCreator, logger logr.Logger) *Prober {
+func NewProber(parentCtx context.Context, seedClient client.Client, namespace string, config *papi.Config, workerNodeConditions map[string][]string, scaler dwdScaler.Scaler, shootClientCreator ShootClientCreator, logger logr.Logger) *Prober {
 	pLogger := logger.WithValues("shootNamespace", namespace)
 	ctx, cancelFn := context.WithCancel(parentCtx)
 	return &Prober{
@@ -59,6 +62,7 @@ func NewProber(parentCtx context.Context, namespace string, config *papi.Config,
 		config:               config,
 		workerNodeConditions: workerNodeConditions,
 		scaler:               scaler,
+		seedClient:           seedClient,
 		shootClientCreator:   shootClientCreator,
 		ctx:                  ctx,
 		cancelFn:             cancelFn,
@@ -94,18 +98,18 @@ func (p *Prober) GetConfig() *papi.Config {
 
 func (p *Prober) probe(ctx context.Context) {
 	p.backOffIfNeeded()
-	shootClient, err := p.setupProbeClient(ctx, p.namespace, p.config.KubeConfigSecretName)
-	if err != nil {
-		p.l.Error(err, "Failed to create shoot client using the KubeConfig secret, ignoring error, probe will be re-attempted")
-		return
-	}
-	err = p.probeAPIServer(shootClient)
+	err = p.probeAPIServer(ctx)
 	if err != nil {
 		p.l.Info("API server probe failed, Skipping lease probe and scaling operation", "err", err.Error())
 		return
 	}
 	p.l.Info("API server probe is successful, will conduct node lease probe")
 
+	shootClient, err := p.setupProbeClient(ctx, p.namespace, p.config.KubeConfigSecretName)
+	if err != nil {
+		p.l.Error(err, "Failed to create shoot client using the KubeConfig secret, ignoring error, probe will be re-attempted")
+		return
+	}
 	candidateNodeLeases, err := p.probeNodeLeases(ctx, shootClient)
 	if err != nil {
 		return
@@ -153,21 +157,27 @@ func (p *Prober) shouldPerformScaleUp(candidateNodeLeases []coordinationv1.Lease
 	return shouldScaleUp
 }
 
-func (p *Prober) setupProbeClient(ctx context.Context, namespace string, kubeConfigSecretName string) (kubernetes.Interface, error) {
-	shootClient, err := p.shootClientCreator.CreateClient(ctx, p.l, namespace, kubeConfigSecretName, p.config.ProbeTimeout.Duration)
+func (p *Prober) setupProbeClient(ctx context.Context, namespace string, kubeConfigSecretName string) (client.Client, error) {
+	shootClient, err := p.shootClientCreator.CreateClient(ctx, p.l, p.config.ProbeTimeout.Duration)
 	if err != nil {
 		return nil, err
 	}
 	return shootClient, nil
 }
 
-func (p *Prober) probeAPIServer(shootClient kubernetes.Interface) error {
-	_, err := shootClient.Discovery().ServerVersion()
+func (p *Prober) probeAPIServer(ctx context.Context) error {
+	discoveryClient, err := p.shootClientCreator.CreateDiscoveryClient(ctx, p.l, p.config.ProbeTimeout.Duration)
+	if err != nil {
+		p.l.Error(err, "Failed to create discovery client, probe will be re-attempted")
+		p.setBackOffIfThrottlingError(err)
+		return err
+	}
+	_, err = discoveryClient.ServerVersion()
 	p.setBackOffIfThrottlingError(err)
 	return err
 }
 
-func (p *Prober) probeNodeLeases(ctx context.Context, shootClient kubernetes.Interface) ([]coordinationv1.Lease, error) {
+func (p *Prober) probeNodeLeases(ctx context.Context, shootClient client.Client) ([]coordinationv1.Lease, error) {
 	nodeNames, err := p.getFilteredNodeNames(ctx, shootClient)
 	if err != nil {
 		return nil, err
@@ -175,6 +185,10 @@ func (p *Prober) probeNodeLeases(ctx context.Context, shootClient kubernetes.Int
 	return p.getFilteredNodeLeases(ctx, shootClient, nodeNames)
 }
 
+// getFilteredNodeNames filters nodes for which node leases should be eventually checked in the caller. This function filters out the nodes which are:
+// 1. Not managed by MCM - these nodes will not be considered for lease probe.
+// 2. Unhealthy (checked via node conditions) - these will not be considered for lease probe allowing MCM to replace these nodes.
+// 3. If the corresponding Machine object for a node has its state set to Terminating or Failed, the node will not be considered for lease probe.
 func (p *Prober) getFilteredNodeNames(ctx context.Context, shootClient kubernetes.Interface) ([]string, error) {
 	nodes, err := shootClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -182,15 +196,34 @@ func (p *Prober) getFilteredNodeNames(ctx context.Context, shootClient kubernete
 		p.l.Error(err, "Failed to list nodes, will retry probe")
 		return nil, err
 	}
+	machines, err := p.getMachines(ctx)
+	if err != nil {
+		return nil, err
+	}
 	nodeNames := make([]string, 0, len(nodes.Items))
 	for _, node := range nodes.Items {
-		if !util.IsAnyNodeConditionSet(&node, util.GetEffectiveNodeConditions(&node, p.workerNodeConditions)) {
+		if util.IsNodeManagedByMCM(&node) &&
+			util.IsNodeHealthyByConditions(&node, util.GetWorkerUnhealthyNodeConditions(&node, p.workerNodeConditions)) &&
+			util.GetMachineNotInFailedOrTerminatingState(node.Name, machines) != nil {
 			nodeNames = append(nodeNames, node.Name)
 		}
 	}
 	return nodeNames, nil
 }
 
+// getMachines will retrieve all machines in the shoot namespace for which this probe is running.
+func (p *Prober) getMachines(ctx context.Context) ([]v1alpha1.Machine, error) {
+	machines := &v1alpha1.MachineList{}
+	if err := p.seedClient.List(ctx, machines, client.InNamespace(p.namespace)); err != nil {
+		p.setBackOffIfThrottlingError(err)
+		p.l.Error(err, "Failed to list machines, will retry probe")
+		return nil, err
+	}
+	return machines.Items, nil
+}
+
+// getFilteredNodeLeases filters out node leases which are not created for given nodeNames. The nodes are filtered via getFilteredNodeNames.
+// It is assumed that the node leases have the same name as the corresponding node name for which they are created.
 func (p *Prober) getFilteredNodeLeases(ctx context.Context, shootClient kubernetes.Interface, nodeNames []string) ([]coordinationv1.Lease, error) {
 	leases, err := shootClient.CoordinationV1().Leases(nodeLeaseNamespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -201,7 +234,6 @@ func (p *Prober) getFilteredNodeLeases(ctx context.Context, shootClient kubernet
 
 	var filteredLeases []coordinationv1.Lease
 	for _, lease := range leases.Items {
-		// skip leases belonging to non-existing nodes
 		if slices.Contains(nodeNames, lease.Name) {
 			// node leases have the same names as nodes
 			filteredLeases = append(filteredLeases, lease)
@@ -233,7 +265,7 @@ func (p *Prober) doProbe(client kubernetes.Interface) error {
 }
 
 func (p *Prober) setBackOffIfThrottlingError(err error) {
-	if apierrors.IsTooManyRequests(err) {
+	if err != nil && apierrors.IsTooManyRequests(err) {
 		p.l.V(4).Info("API server is throttled, backing off", "backOffDuration", backOffDurationForThrottledRequests.Seconds())
 		p.resetBackoff(backOffDurationForThrottledRequests)
 	}
