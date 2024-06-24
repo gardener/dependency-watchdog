@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package prober
+package shoot
 
 import (
 	"context"
@@ -17,22 +17,35 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// NewShootClientCreator creates an instance of ShootClientCreator.
-func NewShootClientCreator(namespace string, secretName string, client client.Client) ShootClientCreator {
-	return &shootClientCreator{
+const (
+	defaultGetSecretBackoff     = 100 * time.Millisecond
+	defaultGetSecretMaxAttempts = 3
+)
+
+// ClientCreator provides a facade to create kubernetes client targeting a shoot.
+type ClientCreator interface {
+	// CreateClient creates a new client.Client to connect to the Kube ApiServer running in the passed-in shoot control namespace.
+	CreateClient(ctx context.Context, logger logr.Logger, connectionTimeout time.Duration) (client.Client, error)
+	// CreateDiscoveryClient creates a new discovery.DiscoveryInterface to connect to the Kube ApiServer running in the passed-in shoot control namespace.
+	CreateDiscoveryClient(ctx context.Context, logger logr.Logger, connectionTimeout time.Duration) (discovery.DiscoveryInterface, error)
+}
+
+// NewClientCreator creates an instance of ClientCreator.
+func NewClientCreator(namespace string, secretName string, client client.Client) ClientCreator {
+	return &clientCreator{
 		namespace:  namespace,
 		secretName: secretName,
 		client:     client,
 	}
 }
 
-type shootClientCreator struct {
+type clientCreator struct {
 	namespace  string
 	secretName string
 	client     client.Client
 }
 
-func (s *shootClientCreator) CreateClient(ctx context.Context, logger logr.Logger, connectionTimeout time.Duration) (client.Client, error) {
+func (s *clientCreator) CreateClient(ctx context.Context, logger logr.Logger, connectionTimeout time.Duration) (client.Client, error) {
 	kubeConfigBytes, err := s.getKubeConfigBytesFromSecret(ctx, logger)
 	if err != nil {
 		return nil, err
@@ -40,7 +53,7 @@ func (s *shootClientCreator) CreateClient(ctx context.Context, logger logr.Logge
 	return util.CreateClientFromKubeConfigBytes(kubeConfigBytes, connectionTimeout)
 }
 
-func (s *shootClientCreator) CreateDiscoveryClient(ctx context.Context, logger logr.Logger, connectionTimeout time.Duration) (discovery.DiscoveryInterface, error) {
+func (s *clientCreator) CreateDiscoveryClient(ctx context.Context, logger logr.Logger, connectionTimeout time.Duration) (discovery.DiscoveryInterface, error) {
 	kubeConfigBytes, err := s.getKubeConfigBytesFromSecret(ctx, logger)
 	if err != nil {
 		return nil, err
@@ -48,7 +61,7 @@ func (s *shootClientCreator) CreateDiscoveryClient(ctx context.Context, logger l
 	return util.CreateDiscoveryInterfaceFromKubeConfigBytes(kubeConfigBytes, connectionTimeout)
 }
 
-func (s *shootClientCreator) getKubeConfigBytesFromSecret(ctx context.Context, logger logr.Logger) ([]byte, error) {
+func (s *clientCreator) getKubeConfigBytesFromSecret(ctx context.Context, logger logr.Logger) ([]byte, error) {
 	operation := fmt.Sprintf("get-secret-%s-for-namespace-%s", s.secretName, s.namespace)
 	retryResult := util.Retry(ctx, logger,
 		operation,

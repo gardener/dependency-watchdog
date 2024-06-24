@@ -26,8 +26,6 @@ import (
 )
 
 const (
-	defaultGetSecretBackoff             = 100 * time.Millisecond
-	defaultGetSecretMaxAttempts         = 3
 	backOffDurationForThrottledRequests = 10 * time.Second
 	// expiryBufferFraction is used to compute a revised expiry time used by the prober to determine expired leases
 	// Using a fraction allows the prober to intervene before KCM marks a node as unknown, but at the same time allowing
@@ -39,20 +37,42 @@ const (
 	nodeLeaseNamespace   = "kube-node-lease"
 )
 
+// Prober represents a probe to the Kube ApiServer of a shoot
+type Prober struct {
+	namespace            string
+	config               *papi.Config
+	workerNodeConditions map[string][]string
+	scaler               dwdScaler.Scaler
+	seedClient           client.Client
+	shootClientCreator   ShootClientCreator
+	backOff              *time.Timer
+	ctx                  context.Context
+	cancelFn             context.CancelFunc
+	l                    logr.Logger
+}
+
+/*
+	prober/shoot/ShootClientCreator
+	prober/shoot/fakes -> prober/shoot/ShootClientCreator
+	prober/prober.go -> prober/shoot/ShootClientCreator
+	prober/prober_test.go -> prober/shoot/fakes
+
+*/
+
 // NewProber creates a new Prober
-func NewProber(parentCtx context.Context, seedClient client.Client, namespace string, config *papi.Config, workerNodeConditions map[string][]string, scaler dwdScaler.Scaler, shootClientCreator ShootClientCreator, logger logr.Logger) *Prober {
+func NewProber(parentCtx context.Context, seedClient client.Client, namespace string, config *papi.Config, workerNodeConditions map[string][]string, scaler dwdScaler.Scaler, shootClientCreator types.ShootClientCreator, logger logr.Logger) *Prober {
 	pLogger := logger.WithValues("shootNamespace", namespace)
 	ctx, cancelFn := context.WithCancel(parentCtx)
-	return &types.Prober{
-		Namespace:            namespace,
-		Config:               config,
-		WorkerNodeConditions: workerNodeConditions,
-		Scaler:               scaler,
-		SeedClient:           seedClient,
-		ShootClientCreator:   shootClientCreator,
-		Ctx:                  ctx,
-		CancelFn:             cancelFn,
-		Logger:               pLogger,
+	return &Prober{
+		namespace:            namespace,
+		config:               config,
+		workerNodeConditions: workerNodeConditions,
+		scaler:               scaler,
+		seedClient:           seedClient,
+		shootClientCreator:   shootClientCreator,
+		ctx:                  ctx,
+		cancelFn:             cancelFn,
+		l:                    pLogger,
 	}
 }
 

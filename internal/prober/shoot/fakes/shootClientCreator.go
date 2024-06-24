@@ -2,7 +2,7 @@ package fakes
 
 import (
 	"context"
-	"github.com/gardener/dependency-watchdog/internal/prober"
+	"github.com/gardener/dependency-watchdog/internal/prober/shoot"
 	"github.com/go-logr/logr"
 	"k8s.io/client-go/discovery"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -14,8 +14,8 @@ type shootClientCreator struct {
 	client          client.Client
 }
 
-// NewShootClientCreator creates an instance of ShootClientCreator.
-func NewShootClientCreator(discoveryClient discovery.DiscoveryInterface, client client.Client) prober.ShootClientCreator {
+// NewShootClientCreator creates an instance of ClientCreator.
+func NewShootClientCreator(discoveryClient discovery.DiscoveryInterface, client client.Client) shoot.ClientCreator {
 	return &shootClientCreator{
 		discoveryClient: discoveryClient,
 		client:          client,

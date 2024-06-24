@@ -119,7 +119,7 @@ func (r *Reconciler) createAndRunProber(ctx context.Context, shoot *v1beta1.Shoo
 	probeConfig := r.getEffectiveProbeConfig(shoot, logger)
 	deploymentScaler := scaler.NewScaler(shoot.Name, probeConfig.DependentResourceInfos, r.Client, r.ScaleGetter, logger)
 	targetNamespace := shoot.Name
-	shootClientCreator := prober.NewShootClientCreator(targetNamespace, probeConfig.KubeConfigSecretName, r.Client)
+	shootClientCreator := shoot.NewShootClientCreator(targetNamespace, probeConfig.KubeConfigSecretName, r.Client)
 	p := prober.NewProber(ctx, r.Client, targetNamespace, probeConfig, workerNodeConditions, deploymentScaler, shootClientCreator, logger)
 	r.ProberMgr.Register(*p)
 	logger.Info("Starting a new prober")

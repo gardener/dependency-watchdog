@@ -5,14 +5,8 @@
 package test
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"fmt"
-	"log"
-	"os"
-	"testing"
-
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
@@ -60,48 +54,11 @@ func GetUnstructured(filePath string) (*unstructured.Unstructured, error) {
 	return unstructuredObject, nil
 }
 
-// ReadFile reads the file present at the given filePath and returns a byte Buffer containing its contents.
-func ReadFile(filePath string) (*bytes.Buffer, error) {
-	f, err := os.Open(filePath)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = f.Close() }()
-
-	buff := new(bytes.Buffer)
-	_, err = buff.ReadFrom(f)
-	if err != nil {
-		return nil, err
-	}
-	return buff, nil
-}
-
-// FileExistsOrFail checks if the given filepath is valid and returns an error if file is not found or does not exist.
-func FileExistsOrFail(filepath string) {
-	var err error
-	if _, err = os.Stat(filepath); errors.Is(err, os.ErrNotExist) {
-		log.Fatalf("%s does not exist. This should not have happened. Check testdata directory.\n", filepath)
-	}
-	if err != nil {
-		log.Fatalf("Error occured in finding file %s : %v", filepath, err)
-	}
-}
-
-// ValidateIfFileExists validates the existence of a file
-func ValidateIfFileExists(file string, t *testing.T) {
-	g := NewWithT(t)
-	var err error
-	if _, err := os.Stat(file); errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("%s does not exist. This should not have happened. Check testdata directory.\n", file)
-	}
-	g.Expect(err).ToNot(HaveOccurred(), "File at path %v should exist")
-}
-
 // CreateTestNamespace creates a namespace with the given namePrefix
-func CreateTestNamespace(ctx context.Context, g *WithT, cli client.Client, namePrefix string) string {
+func CreateTestNamespace(ctx context.Context, g *WithT, cli client.Client, name string) string {
 	ns := corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: namePrefix + "-",
+			Name: name,
 		},
 	}
 	g.Expect(cli.Create(ctx, &ns)).To(Succeed())
@@ -113,28 +70,4 @@ func TeardownEnv(g *WithT, testEnv *envtest.Environment, cancelFn context.Cancel
 	cancelFn()
 	err := testEnv.Stop()
 	g.Expect(err).NotTo(HaveOccurred())
-}
-
-// MergeMaps merges newMaps with an oldMap. Keys defined in the new Map which are present in the old Map will be overwritten.
-func MergeMaps[T any](oldMap map[string]T, newMaps ...map[string]T) map[string]T {
-	var out map[string]T
-
-	if oldMap != nil {
-		out = make(map[string]T)
-	}
-	for k, v := range oldMap {
-		out[k] = v
-	}
-
-	for _, newMap := range newMaps {
-		if newMap != nil && out == nil {
-			out = make(map[string]T)
-		}
-
-		for k, v := range newMap {
-			out[k] = v
-		}
-	}
-
-	return out
 }
