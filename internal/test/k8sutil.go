@@ -55,14 +55,13 @@ func GetUnstructured(filePath string) (*unstructured.Unstructured, error) {
 }
 
 // CreateTestNamespace creates a namespace with the given namePrefix
-func CreateTestNamespace(ctx context.Context, g *WithT, cli client.Client, name string) string {
+func CreateTestNamespace(ctx context.Context, g *WithT, cli client.Client, name string) {
 	ns := corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
 	}
 	g.Expect(cli.Create(ctx, &ns)).To(Succeed())
-	return ns.Name
 }
 
 // TeardownEnv cancels the context and stops testenv.

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package fakes
+package k8s
 
 import (
 	"context"
@@ -39,21 +39,21 @@ type ErrorsForGVK struct {
 	ListErr      *apierrors.StatusError
 }
 
-// ClientBuilder builds a client.Client which will also react to the configured errors.
-type ClientBuilder struct {
+// FakeClientBuilder builds a client.Client which will also react to the configured errors.
+type FakeClientBuilder struct {
 	delegatingClient client.Client
 	errorRecords     []errorRecord
 }
 
-// NewTestClientBuilder creates a new instance of ClientBuilder.
-func NewTestClientBuilder(existingObjects ...client.Object) *ClientBuilder {
-	return &ClientBuilder{
+// NewFakeClientBuilder creates a new instance of FakeClientBuilder.
+func NewFakeClientBuilder(existingObjects ...client.Object) *FakeClientBuilder {
+	return &FakeClientBuilder{
 		delegatingClient: fake.NewClientBuilder().WithObjects(existingObjects...).Build(),
 	}
 }
 
 // RecordErrorForObjectsWithGVK records an error for a specific client.Client method and objects in a given namespace of a given GroupVersionKind.
-func (b *ClientBuilder) RecordErrorForObjectsWithGVK(method ClientMethod, namespace string, gvk schema.GroupVersionKind, err *apierrors.StatusError) *ClientBuilder {
+func (b *FakeClientBuilder) RecordErrorForObjectsWithGVK(method ClientMethod, namespace string, gvk schema.GroupVersionKind, err *apierrors.StatusError) *FakeClientBuilder {
 	// this method records error, so if nil error is passed then there is no need to create any error record.
 	if err == nil {
 		return b
@@ -68,22 +68,22 @@ func (b *ClientBuilder) RecordErrorForObjectsWithGVK(method ClientMethod, namesp
 }
 
 // Build creates a new instance of client.Client which will react to the configured errors.
-func (b *ClientBuilder) Build() client.Client {
-	return &testClient{
+func (b *FakeClientBuilder) Build() client.Client {
+	return &fakeClient{
 		Client:       b.delegatingClient,
 		errorRecords: b.errorRecords,
 	}
 }
 
-// testClient is a client.Client implementation which reacts to the configured errors.
-type testClient struct {
+// fakeClient is a client.Client implementation which reacts to the configured errors.
+type fakeClient struct {
 	client.Client
 	errorRecords []errorRecord
 }
 
 // ---------------------------------- Implementation of client.Client ----------------------------------
 
-func (c *testClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+func (c *fakeClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 	listOpts := client.ListOptions{}
 	listOpts.ApplyOptions(opts)
 
@@ -100,7 +100,7 @@ func (c *testClient) List(ctx context.Context, list client.ObjectList, opts ...c
 
 // ---------------------------------- Helper methods ----------------------------------
 
-func (c *testClient) getRecordedObjectCollectionError(method ClientMethod, namespace string, labelSelector labels.Selector, objGVK schema.GroupVersionKind) error {
+func (c *fakeClient) getRecordedObjectCollectionError(method ClientMethod, namespace string, labelSelector labels.Selector, objGVK schema.GroupVersionKind) error {
 	for _, errRecord := range c.errorRecords {
 		if errRecord.method == method && errRecord.resourceNamespace == namespace {
 			if errRecord.resourceGVK == objGVK || (labelSelector == nil && errRecord.labels == nil) || labelSelector.Matches(errRecord.labels) {

@@ -1,4 +1,4 @@
-package fakes
+package k8s
 
 import (
 	"k8s.io/apimachinery/pkg/version"
@@ -19,8 +19,8 @@ func (t *discoveryClient) ServerVersion() (*version.Info, error) {
 	return t.DiscoveryInterface.ServerVersion()
 }
 
-// NewDiscoveryClient creates a new DiscoveryClient.
-func NewDiscoveryClient(err error) discovery.DiscoveryInterface {
+// NewFakeDiscoveryClient creates a new DiscoveryClient.
+func NewFakeDiscoveryClient(err error) discovery.DiscoveryInterface {
 	return &discoveryClient{
 		DiscoveryInterface: fake.NewSimpleClientset().Discovery(),
 		err:                err,
