@@ -14,8 +14,8 @@ type shootClientCreator struct {
 	client          client.Client
 }
 
-// NewShootClientCreator creates an instance of ClientCreator.
-func NewShootClientCreator(discoveryClient discovery.DiscoveryInterface, client client.Client) shoot.ClientCreator {
+// NewFakeShootClientCreator creates an instance of ClientCreator.
+func NewFakeShootClientCreator(discoveryClient discovery.DiscoveryInterface, client client.Client) shoot.ClientCreator {
 	return &shootClientCreator{
 		discoveryClient: discoveryClient,
 		client:          client,

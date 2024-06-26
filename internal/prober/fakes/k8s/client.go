@@ -6,13 +6,15 @@ package k8s
 
 import (
 	"context"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 // ClientMethod is a name of the method on client.Client for which an error is recorded.
@@ -41,14 +43,15 @@ type ErrorsForGVK struct {
 
 // FakeClientBuilder builds a client.Client which will also react to the configured errors.
 type FakeClientBuilder struct {
-	delegatingClient client.Client
-	errorRecords     []errorRecord
+	errorRecords    []errorRecord
+	existingObjects []client.Object
+	scheme          *runtime.Scheme
 }
 
 // NewFakeClientBuilder creates a new instance of FakeClientBuilder.
 func NewFakeClientBuilder(existingObjects ...client.Object) *FakeClientBuilder {
 	return &FakeClientBuilder{
-		delegatingClient: fake.NewClientBuilder().WithObjects(existingObjects...).Build(),
+		existingObjects: existingObjects,
 	}
 }
 
@@ -67,10 +70,19 @@ func (b *FakeClientBuilder) RecordErrorForObjectsWithGVK(method ClientMethod, na
 	return b
 }
 
+// WithScheme sets the scheme for the client.
+func (b *FakeClientBuilder) WithScheme(scheme *runtime.Scheme) *FakeClientBuilder {
+	b.scheme = scheme
+	return b
+}
+
 // Build creates a new instance of client.Client which will react to the configured errors.
 func (b *FakeClientBuilder) Build() client.Client {
+	if b.scheme == nil {
+		b.scheme = scheme.Scheme
+	}
 	return &fakeClient{
-		Client:       b.delegatingClient,
+		Client:       fake.NewClientBuilder().WithObjects(b.existingObjects...).WithScheme(b.scheme).Build(),
 		errorRecords: b.errorRecords,
 	}
 }
@@ -95,7 +107,7 @@ func (c *fakeClient) List(ctx context.Context, list client.ObjectList, opts ...c
 	if err := c.getRecordedObjectCollectionError(ClientMethodList, listOpts.Namespace, listOpts.LabelSelector, gvk); err != nil {
 		return err
 	}
-	return c.List(ctx, list, opts...)
+	return c.Client.List(ctx, list, opts...)
 }
 
 // ---------------------------------- Helper methods ----------------------------------

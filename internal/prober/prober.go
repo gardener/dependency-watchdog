@@ -6,7 +6,8 @@ package prober
 
 import (
 	"context"
-	"github.com/gardener/dependency-watchdog/internal/prober/types"
+	"github.com/gardener/dependency-watchdog/internal/prober/errors"
+	"github.com/gardener/dependency-watchdog/internal/prober/shoot"
 	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"reflect"
@@ -44,23 +45,16 @@ type Prober struct {
 	workerNodeConditions map[string][]string
 	scaler               dwdScaler.Scaler
 	seedClient           client.Client
-	shootClientCreator   ShootClientCreator
+	shootClientCreator   shoot.ClientCreator
 	backOff              *time.Timer
 	ctx                  context.Context
 	cancelFn             context.CancelFunc
 	l                    logr.Logger
+	lastErr              error // this is currently used only for unit tests
 }
 
-/*
-	prober/shoot/ShootClientCreator
-	prober/shoot/fakes -> prober/shoot/ShootClientCreator
-	prober/prober.go -> prober/shoot/ShootClientCreator
-	prober/prober_test.go -> prober/shoot/fakes
-
-*/
-
 // NewProber creates a new Prober
-func NewProber(parentCtx context.Context, seedClient client.Client, namespace string, config *papi.Config, workerNodeConditions map[string][]string, scaler dwdScaler.Scaler, shootClientCreator types.ShootClientCreator, logger logr.Logger) *Prober {
+func NewProber(parentCtx context.Context, seedClient client.Client, namespace string, config *papi.Config, workerNodeConditions map[string][]string, scaler dwdScaler.Scaler, shootClientCreator shoot.ClientCreator, logger logr.Logger) *Prober {
 	pLogger := logger.WithValues("shootNamespace", namespace)
 	ctx, cancelFn := context.WithCancel(parentCtx)
 	return &Prober{
@@ -106,6 +100,7 @@ func (p *Prober) probe(ctx context.Context) {
 	p.backOffIfNeeded()
 	err := p.probeAPIServer(ctx)
 	if err != nil {
+		p.recordError(err, errors.ErrProbeAPIServer, "Failed to probe API server")
 		p.l.Info("API server probe failed, Skipping lease probe and scaling operation", "err", err.Error())
 		return
 	}
@@ -113,11 +108,13 @@ func (p *Prober) probe(ctx context.Context) {
 
 	shootClient, err := p.setupProbeClient(ctx)
 	if err != nil {
+		p.recordError(err, errors.ErrSetupProbeClient, "Failed to setup probe client")
 		p.l.Error(err, "Failed to create shoot client using the KubeConfig secret, ignoring error, probe will be re-attempted")
 		return
 	}
 	candidateNodeLeases, err := p.probeNodeLeases(ctx, shootClient)
 	if err != nil {
+		p.recordError(err, errors.ErrProbeNodeLease, "Failed to probe node leases")
 		return
 	}
 	if len(candidateNodeLeases) > 1 {
@@ -127,15 +124,21 @@ func (p *Prober) probe(ctx context.Context) {
 	}
 }
 
+func (p *Prober) recordError(err error, code errors.ErrorCode, message string) {
+	p.lastErr = errors.WrapError(err, code, message)
+}
+
 func (p *Prober) triggerScale(ctx context.Context, candidateNodeLeases []coordinationv1.Lease) {
 	// revive:disable:early-return
 	if p.shouldPerformScaleUp(candidateNodeLeases) {
 		if err := p.scaler.ScaleUp(ctx); err != nil {
+			p.recordError(err, errors.ErrScaleUp, "Failed to scale up resources")
 			p.l.Error(err, "Failed to scale up resources")
 		}
 	} else {
 		p.l.Info("Lease probe failed, performing scale down operation if required")
 		if err := p.scaler.ScaleDown(ctx); err != nil {
+			p.recordError(err, errors.ErrScaleDown, "Failed to scale down resources")
 			p.l.Error(err, "Failed to scale down resources")
 		}
 		return

@@ -34,7 +34,7 @@ func TestSuite(t *testing.T) {
 	testCases := []struct {
 		name        string
 		description string
-		run         func(t *testing.T, namespace string)
+		run         func(ctx context.Context, t *testing.T, namespace string, k8sClient client.Client)
 	}{
 		{"testSecretNotFound", "secret not found", testSecretNotFound},
 		{"testConfigNotFound", "kubeconfig not found", testConfigNotFound},
@@ -44,28 +44,25 @@ func TestSuite(t *testing.T) {
 	t.Parallel()
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
+			ctx := context.Background()
+			k8sClient := k8s.NewFakeClientBuilder().Build()
 			testNs := test.GenerateRandomAlphanumericString(g, 4)
-			tc.run(t, testNs)
+			test.CreateTestNamespace(ctx, g, k8sClient, testNs)
+			tc.run(ctx, t, testNs, k8sClient)
 		})
 	}
 }
 
-func testSecretNotFound(t *testing.T, namespace string) {
+func testSecretNotFound(ctx context.Context, t *testing.T, namespace string, k8sClient client.Client) {
 	g := NewWithT(t)
-	ctx := context.Background()
-	k8sClient := k8s.NewFakeClientBuilder().Build()
-	test.CreateTestNamespace(ctx, g, k8sClient, namespace)
 	cc := NewClientCreator(namespace, "does-not-exist", k8sClient)
 	k8sInterface, err := cc.CreateClient(ctx, logr.Discard(), time.Second)
 	g.Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	g.Expect(k8sInterface).To(BeNil())
 }
 
-func testConfigNotFound(t *testing.T, namespace string) {
+func testConfigNotFound(ctx context.Context, t *testing.T, namespace string, k8sClient client.Client) {
 	g := NewWithT(t)
-	ctx := context.Background()
-	k8sClient := k8s.NewFakeClientBuilder().Build()
-	test.CreateTestNamespace(ctx, g, k8sClient, namespace)
 	secretName, cleanupFn := createSecret(ctx, g, secretPath, namespace, nil, k8sClient)
 	defer cleanupFn()
 	cc := NewClientCreator(namespace, secretName, k8sClient)
@@ -75,11 +72,8 @@ func testConfigNotFound(t *testing.T, namespace string) {
 	g.Expect(shootClient).To(BeNil())
 }
 
-func testCreateShootClient(t *testing.T, namespace string) {
+func testCreateShootClient(ctx context.Context, t *testing.T, namespace string, k8sClient client.Client) {
 	g := NewWithT(t)
-	ctx := context.Background()
-	k8sClient := k8s.NewFakeClientBuilder().Build()
-	test.CreateTestNamespace(ctx, g, k8sClient, namespace)
 
 	kubeConfig, err := test.ReadFile(kubeConfigPath)
 	g.Expect(err).ToNot(HaveOccurred())
