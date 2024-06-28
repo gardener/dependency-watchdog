@@ -117,10 +117,10 @@ func (p *Prober) probe(ctx context.Context) {
 		p.recordError(err, errors.ErrProbeNodeLease, "Failed to probe node leases")
 		return
 	}
-	if len(candidateNodeLeases) > 1 {
+	if len(candidateNodeLeases) != 1 {
 		p.triggerScale(ctx, candidateNodeLeases)
 	} else {
-		p.l.Info("skipping scaling operation as number of candidate node leases <= 1")
+		p.l.Info("skipping scaling operation as number of candidate node leases == 1")
 	}
 }
 
@@ -235,7 +235,7 @@ func (p *Prober) getMachines(ctx context.Context) ([]v1alpha1.Machine, error) {
 // It is assumed that the node leases have the same name as the corresponding node name for which they are created.
 func (p *Prober) getFilteredNodeLeases(ctx context.Context, shootClient client.Client, nodeNames []string) ([]coordinationv1.Lease, error) {
 	leases := &coordinationv1.LeaseList{}
-	if err := shootClient.List(ctx, leases); err != nil {
+	if err := shootClient.List(ctx, leases, client.InNamespace(nodeLeaseNamespace)); err != nil {
 		p.setBackOffIfThrottlingError(err)
 		p.l.Error(err, "Failed to list leases, will retry probe")
 		return nil, err
@@ -290,4 +290,9 @@ func (p *Prober) resetBackoff(d time.Duration) {
 // AreWorkerNodeConditionsStale checks if the worker node conditions are up-to-date
 func (p *Prober) AreWorkerNodeConditionsStale(newWorkerNodeConditions map[string][]string) bool {
 	return !reflect.DeepEqual(p.workerNodeConditions, newWorkerNodeConditions)
+}
+
+// IsInBackOff checks if the prober is in backoff. Currently, this is only used for testing purposes.
+func (p *Prober) IsInBackOff() bool {
+	return p.backOff != nil
 }

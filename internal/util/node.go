@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	workerPoolLabel                  = "worker.gardener.cloud/pool"
+	WorkerPoolLabel                  = "worker.gardener.cloud/pool"
 	nodeNameLabel                    = "node"
 	nodeNotManagedByMCMAnnotationKey = "node.machine.sapcloud.io/not-managed-by-mcm"
 )
@@ -50,7 +50,7 @@ func GetEffectiveNodeConditionsForWorkers(shoot *v1beta1.Shoot) map[string][]str
 // GetWorkerUnhealthyNodeConditions returns the configured node conditions for the pool where this node belongs.
 // Worker name is extracted from the node labels.
 func GetWorkerUnhealthyNodeConditions(node *corev1.Node, workerNodeConditions map[string][]string) []string {
-	if poolName, foundWorkerPoolLabel := node.Labels[workerPoolLabel]; foundWorkerPoolLabel {
+	if poolName, foundWorkerPoolLabel := node.Labels[WorkerPoolLabel]; foundWorkerPoolLabel {
 		if conditions, foundWorkerPoolNodeConditions := workerNodeConditions[poolName]; foundWorkerPoolNodeConditions {
 			return conditions
 		}

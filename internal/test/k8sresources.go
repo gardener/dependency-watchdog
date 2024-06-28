@@ -18,8 +18,9 @@ type NodeSpec struct {
 }
 
 type NodeLeaseSpec struct {
-	Name      string
-	IsExpired bool
+	Name          string
+	IsExpired     bool
+	IsOwnerRefSet bool
 }
 
 type MachineSpec struct {

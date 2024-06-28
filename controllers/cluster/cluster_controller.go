@@ -11,6 +11,7 @@ import (
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"github.com/gardener/dependency-watchdog/internal/prober/scaler"
+	shootclient "github.com/gardener/dependency-watchdog/internal/prober/shoot"
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -119,7 +120,7 @@ func (r *Reconciler) createAndRunProber(ctx context.Context, shoot *v1beta1.Shoo
 	probeConfig := r.getEffectiveProbeConfig(shoot, logger)
 	deploymentScaler := scaler.NewScaler(shoot.Name, probeConfig.DependentResourceInfos, r.Client, r.ScaleGetter, logger)
 	targetNamespace := shoot.Name
-	shootClientCreator := shoot.NewShootClientCreator(targetNamespace, probeConfig.KubeConfigSecretName, r.Client)
+	shootClientCreator := shootclient.NewClientCreator(targetNamespace, probeConfig.KubeConfigSecretName, r.Client)
 	p := prober.NewProber(ctx, r.Client, targetNamespace, probeConfig, workerNodeConditions, deploymentScaler, shootClientCreator, logger)
 	r.ProberMgr.Register(*p)
 	logger.Info("Starting a new prober")
