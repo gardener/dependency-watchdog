@@ -88,7 +88,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return ctrl.Result{}, nil
 }
 
-// getCluster will retrieve the cluster object given the namespace and name Not found is not treated as an error and is handled differently in the caller
+// getCluster will retrieve the cluster object given the namespace and name. Cluster not found is not treated as an error and is handled differently in the caller
 func (r *Reconciler) getCluster(ctx context.Context, namespace string, name string) (cluster *extensionsv1alpha1.Cluster, notFound bool, err error) {
 	cluster = &extensionsv1alpha1.Cluster{}
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, cluster); err != nil {

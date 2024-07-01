@@ -38,6 +38,8 @@ func createScalingTargetRefs(namespace string) []client.ObjectKey {
 	return scalingTargetRefs
 }
 
+//---------------------------------- Implementation of scaler.Scaler ----------------------------------
+
 func (f *fakeScaler) ScaleUp(ctx context.Context) error {
 	if f.scaleUpErr != nil {
 		return f.scaleUpErr

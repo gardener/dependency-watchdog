@@ -91,11 +91,6 @@ func (p *Prober) Run() {
 	wait.JitterUntilWithContext(p.ctx, p.probe, p.config.ProbeInterval.Duration, *p.config.BackoffJitterFactor, true)
 }
 
-// GetConfig returns the probe config for the prober.
-func (p *Prober) GetConfig() *papi.Config {
-	return p.config
-}
-
 func (p *Prober) probe(ctx context.Context) {
 	p.backOffIfNeeded()
 	err := p.probeAPIServer(ctx)
@@ -169,6 +164,7 @@ func (p *Prober) shouldPerformScaleUp(candidateNodeLeases []coordinationv1.Lease
 func (p *Prober) setupProbeClient(ctx context.Context) (client.Client, error) {
 	shootClient, err := p.shootClientCreator.CreateClient(ctx, p.l, p.config.ProbeTimeout.Duration)
 	if err != nil {
+		p.setBackOffIfThrottlingError(err)
 		return nil, err
 	}
 	return shootClient, nil
@@ -295,4 +291,9 @@ func (p *Prober) AreWorkerNodeConditionsStale(newWorkerNodeConditions map[string
 // IsInBackOff checks if the prober is in backoff. Currently, this is only used for testing purposes.
 func (p *Prober) IsInBackOff() bool {
 	return p.backOff != nil
+}
+
+// GetConfig returns the probe config for the prober.  Currently, this is only used for testing purposes.
+func (p *Prober) GetConfig() *papi.Config {
+	return p.config
 }

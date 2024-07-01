@@ -591,6 +591,8 @@ func TestLeaseProbeFailureShouldRunScaleDown(t *testing.T) {
 	}
 }
 
+//---------------------------------- Helper functions ----------------------------------
+
 func getDeploymentRefs(deployments []*appsv1.Deployment) []client.ObjectKey {
 	refs := make([]client.ObjectKey, 0, len(deployments))
 	for _, deploy := range deployments {

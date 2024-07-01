@@ -39,6 +39,7 @@ func TestSuite(t *testing.T) {
 		{"testSecretNotFound", "secret not found", testSecretNotFound},
 		{"testConfigNotFound", "kubeconfig not found", testConfigNotFound},
 		{"testCreateShootClient", "shootclient should be created", testCreateShootClient},
+		{"testCreateDiscoveryClient", "discoveryclient should be created", testCreateDiscoveryClient},
 	}
 	g.Expect(err).ToNot(HaveOccurred())
 	t.Parallel()
@@ -85,6 +86,21 @@ func testCreateShootClient(ctx context.Context, t *testing.T, namespace string, 
 	shootClient, err := cc.CreateClient(ctx, logr.Discard(), time.Second)
 	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(shootClient).ToNot(BeNil())
+}
+
+func testCreateDiscoveryClient(ctx context.Context, t *testing.T, namespace string, k8sClient client.Client) {
+	g := NewWithT(t)
+
+	kubeConfig, err := test.ReadFile(kubeConfigPath)
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(kubeConfig).ToNot(BeNil())
+	secretName, cleanupFn := createSecret(ctx, g, secretPath, namespace, map[string][]byte{"kubeconfig": kubeConfig.Bytes()}, k8sClient)
+	defer cleanupFn()
+
+	cc := NewClientCreator(namespace, secretName, k8sClient)
+	discoveryClient, err := cc.CreateDiscoveryClient(ctx, logr.Discard(), time.Second)
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(discoveryClient).ToNot(BeNil())
 }
 
 func createSecret(ctx context.Context, g *WithT, path, namespace string, data map[string][]byte, k8sClient client.Client) (secretName string, cleanupFn func()) {
