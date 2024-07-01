@@ -9,7 +9,6 @@
 package tools
 
 import (
-	_ "github.com/golang/mock/mockgen/model"
 	_ "k8s.io/code-generator/cmd/import-boss"
 	_ "sigs.k8s.io/controller-runtime/tools/setup-envtest"
 )

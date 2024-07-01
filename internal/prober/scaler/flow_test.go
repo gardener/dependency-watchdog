@@ -11,8 +11,6 @@ import (
 
 	"github.com/go-logr/logr"
 
-	"github.com/gardener/dependency-watchdog/internal/mock/client-go/scale"
-	"github.com/gardener/dependency-watchdog/internal/mock/controller-runtime/client"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	. "github.com/onsi/gomega"
 
@@ -34,7 +32,7 @@ func TestCreateScaleUpSequentialFlow(t *testing.T) {
 	flowName := "testCreateSequentialFlow"
 	namespace := "test-sequential"
 
-	fc := newFlowCreator(&client.MockClient{}, &scale.MockScaleInterface{}, flowTestLogger, &scalerOptions{}, depResInfos)
+	fc := newFlowCreator(nil, nil, flowTestLogger, &scalerOptions{}, depResInfos)
 	f := fc.createFlow(flowName, namespace, scaleUp)
 	g.Expect(f.flowStepInfos).To(HaveLen(3))
 
@@ -68,7 +66,7 @@ func TestCreateScaleDownSequentialAndConcurrentFlow(t *testing.T) {
 	flowName := "testCreateSequentialAndConcurrentFlow"
 	namespace := "test-sequential-and-concurrent"
 
-	fc := newFlowCreator(&client.MockClient{}, &scale.MockScaleInterface{}, flowTestLogger, &scalerOptions{}, depResInfos)
+	fc := newFlowCreator(nil, nil, flowTestLogger, &scalerOptions{}, depResInfos)
 	f := fc.createFlow(flowName, namespace, scaleDown)
 	g.Expect(f.flowStepInfos).To(HaveLen(2))
 

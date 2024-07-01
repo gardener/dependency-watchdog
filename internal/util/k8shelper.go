@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"time"
 
+	"k8s.io/client-go/discovery"
+
 	"github.com/go-logr/logr"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,7 +57,29 @@ func GetKubeConfigFromSecret(ctx context.Context, namespace, secretName string, 
 
 // CreateClientFromKubeConfigBytes creates a client to connect to the Kube ApiServer using the kubeConfigBytes passed as a parameter
 // It will also set a connection timeout and will disable KeepAlive.
-func CreateClientFromKubeConfigBytes(kubeConfigBytes []byte, connectionTimeout time.Duration) (kubernetes.Interface, error) {
+func CreateClientFromKubeConfigBytes(kubeConfigBytes []byte, connectionTimeout time.Duration) (client.Client, error) {
+	config, err := createRestConfigFromKubeConfigBytes(kubeConfigBytes, connectionTimeout)
+	if err != nil {
+		return nil, err
+	}
+	return client.New(config, client.Options{})
+}
+
+// CreateDiscoveryInterfaceFromKubeConfigBytes creates a discovery interface to connect to the Kube ApiServer using the kubeConfigBytes passed as a parameter
+// It will also set a connection timeout and will disable KeepAlive.
+func CreateDiscoveryInterfaceFromKubeConfigBytes(kubeConfigBytes []byte, connectionTimeout time.Duration) (discovery.DiscoveryInterface, error) {
+	config, err := createRestConfigFromKubeConfigBytes(kubeConfigBytes, connectionTimeout)
+	if err != nil {
+		return nil, err
+	}
+	clientSet, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	return clientSet.Discovery(), nil
+}
+
+func createRestConfigFromKubeConfigBytes(kubeConfigBytes []byte, connectionTimeout time.Duration) (*rest.Config, error) {
 	clientConfig, err := clientcmd.NewClientConfigFromBytes(kubeConfigBytes)
 	if err != nil {
 		return nil, err
@@ -72,7 +96,7 @@ func CreateClientFromKubeConfigBytes(kubeConfigBytes []byte, connectionTimeout t
 	config.Wrap(func(rt http.RoundTripper) http.RoundTripper {
 		return transport
 	})
-	return kubernetes.NewForConfig(config)
+	return config, nil
 }
 
 // Client created for probing the Kube ApiServer needs to have 'KeepAlive` disabled to ensure

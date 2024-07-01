@@ -174,31 +174,7 @@ func (kc *kindCluster) CreateNamespace(name string) error {
 }
 
 func (kc *kindCluster) CreateDeployment(name, namespace, imageName string, replicas int32, annotations map[string]string) error {
-	labels := map[string]string{"app": name}
-	deployment := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        name,
-			Namespace:   namespace,
-			Labels:      labels,
-			Annotations: annotations,
-		},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
-				},
-				Spec: corev1.PodSpec{
-					Volumes:        nil,
-					InitContainers: nil,
-					Containers:     []corev1.Container{{Name: name, Image: imageName, Ports: []corev1.ContainerPort{{ContainerPort: 80}}}},
-				},
-			},
-		},
-	}
+	deployment := GenerateDeployment(name, namespace, imageName, replicas, annotations)
 	return kc.client.Create(context.Background(), deployment)
 }
 

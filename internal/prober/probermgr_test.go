@@ -37,7 +37,7 @@ func TestRegisterNewProberAndCheckIfItExistsAndIsNotClosed(t *testing.T) {
 	mgr, tearDownTest := setupMgrTest(t)
 	defer tearDownTest(mgr)
 
-	p := NewProber(context.Background(), proberMgrTestNamespace, &papi.Config{}, nil, nil, pmLogger)
+	p := NewProber(context.Background(), nil, proberMgrTestNamespace, &papi.Config{}, nil, nil, nil, pmLogger)
 	g.Expect(p).ShouldNot(BeNil(), "NewProber should have returned a non nil Prober")
 	g.Expect(p.namespace).Should(Equal(proberMgrTestNamespace), "The namespace of the created prober should match")
 	g.Expect(mgr.Register(*p)).To(BeTrue(), "mgr.Register should register a new prober")
@@ -56,10 +56,10 @@ func TestProberRegistrationWithSameKeyShouldNotOverwriteExistingProber(t *testin
 	mgr, tearDownTest := setupMgrTest(t)
 	defer tearDownTest(mgr)
 
-	p1 := NewProber(context.Background(), proberMgrTestNamespace, &papi.Config{KubeConfigSecretName: "bingo"}, nil, nil, pmLogger)
+	p1 := NewProber(context.Background(), nil, proberMgrTestNamespace, &papi.Config{KubeConfigSecretName: "bingo"}, nil, nil, nil, pmLogger)
 	g.Expect(mgr.Register(*p1)).To(BeTrue(), "mgr.Register should register a new prober")
 
-	p2 := NewProber(context.Background(), proberMgrTestNamespace, &papi.Config{KubeConfigSecretName: "zingo"}, nil, nil, pmLogger)
+	p2 := NewProber(context.Background(), nil, proberMgrTestNamespace, &papi.Config{KubeConfigSecretName: "zingo"}, nil, nil, nil, pmLogger)
 	g.Expect(mgr.Register(*p2)).To(BeFalse(), "mgr.Register should return false if a prober with the same key is already registered")
 
 	foundProber, ok := mgr.GetProber(proberMgrTestNamespace)
@@ -75,7 +75,7 @@ func TestUnregisterExistingProberShouldCloseItAndRemoveItFromManager(t *testing.
 	mgr, tearDownTest := setupMgrTest(t)
 	defer tearDownTest(mgr)
 
-	p := NewProber(context.Background(), proberMgrTestNamespace, &papi.Config{}, nil, nil, pmLogger)
+	p := NewProber(context.Background(), nil, proberMgrTestNamespace, &papi.Config{}, nil, nil, nil, pmLogger)
 	g.Expect(mgr.Register(*p)).To(BeTrue(), "mgr.Register should register a new prober")
 
 	mgr.Unregister(proberMgrTestNamespace)

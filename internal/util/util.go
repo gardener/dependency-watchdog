@@ -50,3 +50,11 @@ func GetValOrDefault[T any](val *T, defaultVal T) *T {
 	}
 	return val
 }
+
+// GetSliceOrDefault assigns the default value if the slice is nil or empty
+func GetSliceOrDefault[T any](val []T, defaultVal []T) []T {
+	if len(val) == 0 {
+		return defaultVal
+	}
+	return val
+}
