@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+//go:build !kind_tests
+
 package cluster
 
 import (
@@ -24,17 +26,17 @@ func TestCreateAndDeletePredicateFunc(t *testing.T) {
 		workerNames    []string
 		expectedResult bool
 	}{
-		{"test: create predicate func for cluster having workers", testCreatePredicateFunc, []string{workerOneName, workerTwoName}, true},
+		{"test: create predicate func for cluster having workers", testCreatePredicateFunc, []string{test.Worker1Name, test.Worker2Name}, true},
 		{"test: create predicate func for cluster having no workers", testCreatePredicateFunc, nil, false},
-		{"test: delete predicate func for cluster having workers", testDeletePredicateFunc, []string{workerOneName, workerTwoName}, true},
+		{"test: delete predicate func for cluster having workers", testDeletePredicateFunc, []string{test.Worker1Name, test.Worker2Name}, true},
 		{"test: delete predicate func for cluster having no workers", testDeletePredicateFunc, nil, false},
 	}
 
-	for _, test := range tests {
-		t.Run(test.title, func(t *testing.T) {
+	for _, entry := range tests {
+		t.Run(entry.title, func(t *testing.T) {
 			g := NewWithT(t)
-			predicateResult := test.run(g, test.workerNames)
-			g.Expect(predicateResult).To(Equal(test.expectedResult))
+			predicateResult := entry.run(g, entry.workerNames)
+			g.Expect(predicateResult).To(Equal(entry.expectedResult))
 		})
 	}
 }
@@ -63,17 +65,17 @@ func TestUpdatePredicateFunc(t *testing.T) {
 		expectedResult bool
 	}{
 		{"test: both old and new cluster do not have workers", nil, nil, false},
-		{"test: old cluster has no workers and new cluster has workers", nil, []string{workerOneName}, true},
-		{"test: old cluster has workers and new cluster do not have workers", []string{workerOneName, workerTwoName}, nil, true},
-		{"test: both old and new cluster have workers and there is no change", []string{workerOneName}, []string{workerOneName}, true},
-		{"test: both old and new cluster have workers and are different in number", []string{workerOneName}, []string{workerOneName, workerTwoName}, true},
+		{"test: old cluster has no workers and new cluster has workers", nil, []string{test.Worker1Name}, true},
+		{"test: old cluster has workers and new cluster do not have workers", []string{test.Worker1Name, test.Worker2Name}, nil, true},
+		{"test: both old and new cluster have workers and there is no change", []string{test.Worker1Name}, []string{test.Worker1Name}, true},
+		{"test: both old and new cluster have workers and are different in number", []string{test.Worker1Name}, []string{test.Worker1Name, test.Worker2Name}, true},
 	}
 
-	for _, test := range tests {
-		t.Run(test.title, func(t *testing.T) {
+	for _, entry := range tests {
+		t.Run(entry.title, func(t *testing.T) {
 			g := NewWithT(t)
-			predicateResult := testUpdatePredicateFunc(g, test.oldWorkerNames, test.newWorkerNames)
-			g.Expect(predicateResult).To(Equal(test.expectedResult))
+			predicateResult := testUpdatePredicateFunc(g, entry.oldWorkerNames, entry.newWorkerNames)
+			g.Expect(predicateResult).To(Equal(entry.expectedResult))
 		})
 	}
 }
