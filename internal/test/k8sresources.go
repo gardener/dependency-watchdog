@@ -1,15 +1,17 @@
 package test
 
 import (
+	"time"
+
 	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
-	"time"
 )
 
+// NodeSpec is a specification for a node.
 type NodeSpec struct {
 	Name        string
 	Annotations map[string]string
@@ -17,12 +19,14 @@ type NodeSpec struct {
 	Conditions  []corev1.NodeCondition
 }
 
+// NodeLeaseSpec is a specification for a node lease.
 type NodeLeaseSpec struct {
 	Name          string
 	IsExpired     bool
 	IsOwnerRefSet bool
 }
 
+// MachineSpec is a specification for a machine.
 type MachineSpec struct {
 	Name          string
 	Labels        map[string]string
@@ -59,6 +63,7 @@ func GenerateDeployment(name, namespace, imageName string, replicas int32, annot
 	}
 }
 
+// GenerateNodeLeases generates leases based on the given lease specs.
 func GenerateNodeLeases(leaseSpecs []NodeLeaseSpec) []*coordinationv1.Lease {
 	var leases []*coordinationv1.Lease
 	for _, leaseSpec := range leaseSpecs {
@@ -67,6 +72,7 @@ func GenerateNodeLeases(leaseSpecs []NodeLeaseSpec) []*coordinationv1.Lease {
 	return leases
 }
 
+// GenerateNodes generates nodes based on the given node specs.
 func GenerateNodes(nodeSpecs []NodeSpec) []*corev1.Node {
 	var nodes []*corev1.Node
 	for _, nodeSpec := range nodeSpecs {
@@ -84,6 +90,7 @@ func GenerateNodes(nodeSpecs []NodeSpec) []*corev1.Node {
 	return nodes
 }
 
+// GenerateMachines generates machines based on the given machine specs.
 func GenerateMachines(machineSpecs []MachineSpec, namespace string) []*v1alpha1.Machine {
 	var machines []*v1alpha1.Machine
 	for _, machineSpec := range machineSpecs {

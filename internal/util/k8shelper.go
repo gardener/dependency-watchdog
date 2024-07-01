@@ -7,9 +7,10 @@ package util
 import (
 	"context"
 	"fmt"
-	"k8s.io/client-go/discovery"
 	"net/http"
 	"time"
+
+	"k8s.io/client-go/discovery"
 
 	"github.com/go-logr/logr"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
@@ -64,6 +65,8 @@ func CreateClientFromKubeConfigBytes(kubeConfigBytes []byte, connectionTimeout t
 	return client.New(config, client.Options{})
 }
 
+// CreateDiscoveryInterfaceFromKubeConfigBytes creates a discovery interface to connect to the Kube ApiServer using the kubeConfigBytes passed as a parameter
+// It will also set a connection timeout and will disable KeepAlive.
 func CreateDiscoveryInterfaceFromKubeConfigBytes(kubeConfigBytes []byte, connectionTimeout time.Duration) (discovery.DiscoveryInterface, error) {
 	config, err := createRestConfigFromKubeConfigBytes(kubeConfigBytes, connectionTimeout)
 	if err != nil {

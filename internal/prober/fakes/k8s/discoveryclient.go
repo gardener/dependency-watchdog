@@ -12,6 +12,7 @@ type discoveryClient struct {
 	err error
 }
 
+// ServerVersion is the implementation of the DiscoveryInterface method for discoveryClient
 func (t *discoveryClient) ServerVersion() (*version.Info, error) {
 	if t.err != nil {
 		return nil, t.err

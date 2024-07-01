@@ -7,8 +7,9 @@ package shoot
 import (
 	"context"
 	"fmt"
-	"k8s.io/client-go/discovery"
 	"time"
+
+	"k8s.io/client-go/discovery"
 
 	"github.com/gardener/dependency-watchdog/internal/util"
 	"github.com/go-logr/logr"

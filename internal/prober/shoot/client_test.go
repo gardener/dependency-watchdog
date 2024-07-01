@@ -8,12 +8,13 @@ package shoot
 
 import (
 	"context"
-	"github.com/gardener/dependency-watchdog/internal/prober/fakes/k8s"
-	corev1 "k8s.io/api/core/v1"
 	"path/filepath"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"testing"
 	"time"
+
+	"github.com/gardener/dependency-watchdog/internal/prober/fakes/k8s"
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/gardener/dependency-watchdog/internal/test"
 	"github.com/go-logr/logr"

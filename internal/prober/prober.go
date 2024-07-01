@@ -6,14 +6,15 @@ package prober
 
 import (
 	"context"
+	"reflect"
+	"slices"
+	"time"
+
 	"github.com/gardener/dependency-watchdog/internal/prober/errors"
 	"github.com/gardener/dependency-watchdog/internal/prober/shoot"
 	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"slices"
-	"time"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	dwdScaler "github.com/gardener/dependency-watchdog/internal/prober/scaler"
@@ -115,7 +116,7 @@ func (p *Prober) probe(ctx context.Context) {
 	if len(candidateNodeLeases) != 1 {
 		p.triggerScale(ctx, candidateNodeLeases)
 	} else {
-		p.l.Info("skipping scaling operation as number of candidate node leases == 1")
+		p.l.Info("Skipping scaling operation as number of candidate node leases == 1")
 	}
 }
 

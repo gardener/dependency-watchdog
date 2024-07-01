@@ -7,6 +7,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+
 	"github.com/gardener/dependency-watchdog/internal/util"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
@@ -109,7 +110,7 @@ func (r *Reconciler) startProber(ctx context.Context, shoot *v1beta1.Shoot, logg
 		r.createAndRunProber(ctx, shoot, workerNodeConditions, logger)
 	} else {
 		if existingProber.AreWorkerNodeConditionsStale(workerNodeConditions) {
-			logger.Info("restarting prober due to change in node conditions for workers")
+			logger.Info("Restarting prober due to change in node conditions for workers")
 			_ = r.ProberMgr.Unregister(shoot.Name)
 			r.createAndRunProber(ctx, shoot, workerNodeConditions, logger)
 		}

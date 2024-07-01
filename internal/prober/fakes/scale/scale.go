@@ -2,6 +2,7 @@ package scale
 
 import (
 	"context"
+
 	"github.com/gardener/dependency-watchdog/internal/prober/scaler"
 	"github.com/gardener/dependency-watchdog/internal/test"
 	appsv1 "k8s.io/api/apps/v1"
@@ -18,6 +19,7 @@ type fakeScaler struct {
 	scaleDownErr      error
 }
 
+// NewFakeScaler creates a new instance of fakeScaler.
 func NewFakeScaler(client client.Client, namespace string, scaleUpErr, scaleDownErr error) scaler.Scaler {
 	return &fakeScaler{
 		client:            client,

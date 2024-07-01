@@ -1,14 +1,16 @@
 package util
 
 import (
+	"slices"
+
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"slices"
 )
 
 const (
+	// WorkerPoolLabel is the label key for the worker pool. It is used to determine the worker pool to which the node belongs.
 	WorkerPoolLabel                  = "worker.gardener.cloud/pool"
 	nodeNameLabel                    = "node"
 	nodeNotManagedByMCMAnnotationKey = "node.machine.sapcloud.io/not-managed-by-mcm"

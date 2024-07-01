@@ -9,6 +9,9 @@ package prober
 import (
 	"context"
 	"errors"
+	"testing"
+	"time"
+
 	perrors "github.com/gardener/dependency-watchdog/internal/prober/errors"
 	k8sfakes "github.com/gardener/dependency-watchdog/internal/prober/fakes/k8s"
 	scalefakes "github.com/gardener/dependency-watchdog/internal/prober/fakes/scale"
@@ -21,8 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"testing"
-	"time"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
@@ -63,6 +64,7 @@ func TestAPIServerProbeFailure(t *testing.T) {
 	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
+			entry := entry
 			t.Parallel()
 			scc := shootfakes.NewFakeShootClientBuilder(k8sfakes.NewFakeDiscoveryClient(entry.discoveryErr), k8sfakes.NewFakeClientBuilder().Build()).Build()
 			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
@@ -92,6 +94,7 @@ func TestDiscoveryClientCreationFailed(t *testing.T) {
 	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
+			entry := entry
 			t.Parallel()
 			scc := shootfakes.NewFakeShootClientBuilder(nil, nil).WithDiscoveryClientCreationError(entry.discoveryClientCreationErr).Build()
 			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
@@ -123,6 +126,7 @@ func TestClientCreationFailed(t *testing.T) {
 	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
+			entry := entry
 			t.Parallel()
 			scc := shootfakes.NewFakeShootClientBuilder(shootDiscoveryClient, nil).WithClientCreationError(entry.clientCreationErr).Build()
 			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
@@ -160,6 +164,7 @@ func TestNoScalingIfErrorInListingNodes(t *testing.T) {
 	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
+			entry := entry
 			t.Parallel()
 			ctx := context.Background()
 			leases := test.GenerateNodeLeases([]test.NodeLeaseSpec{{Name: test.Node1Name, IsExpired: entry.areLeasesExpired}, {Name: test.Node2Name, IsExpired: entry.areLeasesExpired}})
@@ -205,6 +210,7 @@ func TestNoScalingIfErrorInListingMachines(t *testing.T) {
 	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
+			entry := entry
 			t.Parallel()
 			ctx := context.Background()
 			leases := test.GenerateNodeLeases([]test.NodeLeaseSpec{{Name: test.Node1Name, IsExpired: entry.areLeasesExpired}, {Name: test.Node2Name, IsExpired: entry.areLeasesExpired}})
@@ -281,6 +287,7 @@ func TestLeaseProbeShouldNotConsiderFailedOrTerminatingMachines(t *testing.T) {
 	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
+			entry := entry
 			t.Parallel()
 			ctx := context.Background()
 			leases := test.GenerateNodeLeases([]test.NodeLeaseSpec{
@@ -335,6 +342,7 @@ func TestLeaseProbeShouldNotConsiderUnhealthyNodes(t *testing.T) {
 	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
+			entry := entry
 			t.Parallel()
 			ctx := context.Background()
 			leases := test.GenerateNodeLeases([]test.NodeLeaseSpec{
@@ -382,6 +390,7 @@ func TestNoScalingIfErrorInListingLeases(t *testing.T) {
 	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
+			entry := entry
 			t.Parallel()
 			ctx := context.Background()
 			leases := test.GenerateNodeLeases([]test.NodeLeaseSpec{{Name: test.Node1Name, IsExpired: entry.areLeasesExpired}, {Name: test.Node2Name, IsExpired: entry.areLeasesExpired}})
@@ -422,6 +431,7 @@ func TestNoScalingInSingleNodeClusters(t *testing.T) {
 	t.Parallel()
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
+			entry := entry
 			t.Parallel()
 			ctx := context.Background()
 			scaleTargetDeployments := generateScaleTargetDeployments(entry.initialDeploymentReplicas)
@@ -466,6 +476,7 @@ func TestLeaseProbeShouldNotConsiderOrphanedLeases(t *testing.T) {
 	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
+			entry := entry
 			t.Parallel()
 			ctx := context.Background()
 			leases := test.GenerateNodeLeases([]test.NodeLeaseSpec{
@@ -520,6 +531,7 @@ func TestSuccessfulProbesShouldRunScaleUp(t *testing.T) {
 
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
+			entry := entry
 			t.Parallel()
 			ctx := context.Background()
 			scaler := scalefakes.NewFakeScaler(seedClient, test.DefaultNamespace, entry.scaleUpErr, nil)
@@ -570,6 +582,7 @@ func TestLeaseProbeFailureShouldRunScaleDown(t *testing.T) {
 
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
+			entry := entry
 			t.Parallel()
 			ctx := context.Background()
 			scaler := scalefakes.NewFakeScaler(seedClient, test.DefaultNamespace, nil, entry.scaleDownErr)

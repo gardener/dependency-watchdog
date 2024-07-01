@@ -15,6 +15,7 @@ import (
 	"k8s.io/utils/pointer"
 )
 
+// ClusterBuilder is a builder for the cluster resource.
 type ClusterBuilder struct {
 	workerNames            []string
 	nodeMonitorGracePeriod *metav1.Duration
@@ -22,30 +23,36 @@ type ClusterBuilder struct {
 	workerNodeConditions   map[string][]string
 }
 
+// NewClusterBuilder creates a new instance of ClusterBuilder.
 func NewClusterBuilder() *ClusterBuilder {
 	return &ClusterBuilder{}
 }
 
+// WithWorkerNames sets the worker names for the cluster.
 func (b *ClusterBuilder) WithWorkerNames(workerNames []string) *ClusterBuilder {
 	b.workerNames = workerNames
 	return b
 }
 
+// WithNodeMonitorGracePeriod sets the node monitor grace period for the cluster.
 func (b *ClusterBuilder) WithNodeMonitorGracePeriod(nodeMonitorGracePeriod *metav1.Duration) *ClusterBuilder {
 	b.nodeMonitorGracePeriod = nodeMonitorGracePeriod
 	return b
 }
 
+// WithRawShoot sets the raw shoot for the cluster.
 func (b *ClusterBuilder) WithRawShoot(rawShoot bool) *ClusterBuilder {
 	b.rawShoot = rawShoot
 	return b
 }
 
+// WithWorkerNodeConditions sets the worker node conditions for the cluster.
 func (b *ClusterBuilder) WithWorkerNodeConditions(workerNodeConditions map[string][]string) *ClusterBuilder {
 	b.workerNodeConditions = workerNodeConditions
 	return b
 }
 
+// Build builds the cluster resource.
 func (b *ClusterBuilder) Build() (*gardenerv1alpha1.Cluster, *gardencorev1beta1.Shoot, error) {
 	cloudProfile := gardencorev1beta1.CloudProfile{
 		ObjectMeta: metav1.ObjectMeta{
@@ -122,6 +129,7 @@ func createShoot(seedName string, workerNames []string, workerNodeConditions map
 	}
 }
 
+// CreateWorkers creates worker resources with the given names and corresponding node conditions.
 func CreateWorkers(workerNames []string, workerNodeConditions map[string][]string) []gardencorev1beta1.Worker {
 	workers := make([]gardencorev1beta1.Worker, 0, len(workerNames))
 	for _, name := range workerNames {

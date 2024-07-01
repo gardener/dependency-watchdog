@@ -6,6 +6,7 @@ package k8s
 
 import (
 	"context"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -35,6 +36,7 @@ type errorRecord struct {
 	err               error
 }
 
+// ErrorsForGVK contains the recorded errors for a specific GroupVersionKind.
 type ErrorsForGVK struct {
 	GVK          schema.GroupVersionKind
 	DeleteAllErr *apierrors.StatusError

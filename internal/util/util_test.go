@@ -93,7 +93,7 @@ func TestFillDefaultIfNil(t *testing.T) {
 }
 
 func TestGetSliceOrDefault(t *testing.T) {
-	defaultSlice := []string{"bingo"};
+	defaultSlice := []string{"bingo"}
 
 	tests := []struct {
 		description         string
