@@ -114,7 +114,7 @@ func (p *Prober) probe(ctx context.Context) {
 		return
 	}
 	if len(candidateNodeLeases) != 1 {
-		p.triggerScale(ctx, candidateNodeLeases)
+		p.checkAndTriggerScale(ctx, candidateNodeLeases)
 	} else {
 		p.l.Info("Skipping scaling operation as number of candidate node leases == 1")
 	}
@@ -124,7 +124,7 @@ func (p *Prober) recordError(err error, code errors.ErrorCode, message string) {
 	p.lastErr = errors.WrapError(err, code, message)
 }
 
-func (p *Prober) triggerScale(ctx context.Context, candidateNodeLeases []coordinationv1.Lease) {
+func (p *Prober) checkAndTriggerScale(ctx context.Context, candidateNodeLeases []coordinationv1.Lease) {
 	// revive:disable:early-return
 	if p.shouldPerformScaleUp(candidateNodeLeases) {
 		if err := p.scaler.ScaleUp(ctx); err != nil {

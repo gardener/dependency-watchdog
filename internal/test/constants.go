@@ -7,6 +7,8 @@ const DefaultNamespace = "test"
 const (
 	NodeConditionDiskPressure   = "DiskPressure"
 	NodeConditionMemoryPressure = "MemoryPressure"
+	NodeConditionPIDPressure    = "PIDPressure"
+	NodeConditionNetworkReady   = "NetworkReady"
 )
 
 // Constants for worker names

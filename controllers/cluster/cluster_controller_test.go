@@ -188,14 +188,14 @@ func testShootWorkerNodeConditions(g *WithT, crClient client.Client, reconciler 
 	expectedWorkerNodeConditions := util.GetEffectiveNodeConditionsForWorkers(shoot)
 	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod, expectedWorkerNodeConditions)
 	// update the workers
-	updatedWorkers := testutil.CreateWorkers([]string{testutil.Worker1Name, testutil.Worker2Name}, workerNodeConditions)
+	updatedWorkerNodeConditions := map[string][]string{testutil.Worker1Name: {testutil.NodeConditionPIDPressure, testutil.NodeConditionNetworkReady}}
+	updatedWorkers := testutil.CreateWorkers([]string{testutil.Worker1Name}, updatedWorkerNodeConditions)
 	shoot.Spec.Provider.Workers = updatedWorkers
 	cluster.Spec.Shoot = runtime.RawExtension{
 		Object: shoot,
 	}
 	updateCluster(g, crClient, cluster)
-	expectedWorkerNodeConditions = util.GetEffectiveNodeConditionsForWorkers(shoot)
-	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod, expectedWorkerNodeConditions)
+	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod, updatedWorkerNodeConditions)
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
