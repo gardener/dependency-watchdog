@@ -7,6 +7,7 @@ package cmd
 import (
 	"flag"
 	"fmt"
+	machinev1alpha1 "github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/gardener/dependency-watchdog/controllers/cluster"
@@ -76,6 +77,7 @@ func init() {
 	localSchemeBuilder := runtime.NewSchemeBuilder(
 		clientgoscheme.AddToScheme,
 		extensionsv1alpha1.AddToScheme,
+		machinev1alpha1.AddToScheme,
 	)
 	utilruntime.Must(localSchemeBuilder.AddToScheme(scheme))
 }
