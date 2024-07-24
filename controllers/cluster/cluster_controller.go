@@ -84,7 +84,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	if canStartProber(shoot, log) {
-		r.startProber(ctx, shoot, log)
+		// cluster.Name is the shoot control namespace
+		r.startProber(ctx, cluster.Name, shoot, log)
 	}
 	return ctrl.Result{}, nil
 }
@@ -103,26 +104,25 @@ func (r *Reconciler) getCluster(ctx context.Context, namespace string, name stri
 
 // startProber sets up a new probe against a given key which uniquely identifies the probe.
 // Typically, the key in case of a shoot cluster is the shoot namespace
-func (r *Reconciler) startProber(ctx context.Context, shoot *v1beta1.Shoot, logger logr.Logger) {
+func (r *Reconciler) startProber(ctx context.Context, shootNamespace string, shoot *v1beta1.Shoot, logger logr.Logger) {
 	workerNodeConditions := util.GetEffectiveNodeConditionsForWorkers(shoot)
 	existingProber, ok := r.ProberMgr.GetProber(shoot.Name)
 	if !ok {
-		r.createAndRunProber(ctx, shoot, workerNodeConditions, logger)
+		r.createAndRunProber(ctx, shootNamespace, shoot, workerNodeConditions, logger)
 	} else {
 		if existingProber.AreWorkerNodeConditionsStale(workerNodeConditions) {
 			logger.Info("Restarting prober due to change in node conditions for workers")
 			_ = r.ProberMgr.Unregister(shoot.Name)
-			r.createAndRunProber(ctx, shoot, workerNodeConditions, logger)
+			r.createAndRunProber(ctx, "", shoot, workerNodeConditions, logger)
 		}
 	}
 }
 
-func (r *Reconciler) createAndRunProber(ctx context.Context, shoot *v1beta1.Shoot, workerNodeConditions map[string][]string, logger logr.Logger) {
+func (r *Reconciler) createAndRunProber(ctx context.Context, shootNamespace string, shoot *v1beta1.Shoot, workerNodeConditions map[string][]string, logger logr.Logger) {
 	probeConfig := r.getEffectiveProbeConfig(shoot, logger)
 	deploymentScaler := scaler.NewScaler(shoot.Name, probeConfig.DependentResourceInfos, r.Client, r.ScaleGetter, logger)
-	targetNamespace := shoot.Name
-	shootClientCreator := shootclient.NewClientCreator(targetNamespace, probeConfig.KubeConfigSecretName, r.Client)
-	p := prober.NewProber(ctx, r.Client, targetNamespace, probeConfig, workerNodeConditions, deploymentScaler, shootClientCreator, logger)
+	shootClientCreator := shootclient.NewClientCreator(shootNamespace, probeConfig.KubeConfigSecretName, r.Client)
+	p := prober.NewProber(ctx, r.Client, shootNamespace, probeConfig, workerNodeConditions, deploymentScaler, shootClientCreator, logger)
 	r.ProberMgr.Register(*p)
 	logger.Info("Starting a new prober")
 	go p.Run()
