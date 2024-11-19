@@ -121,7 +121,7 @@ func (r *Reconciler) startProber(ctx context.Context, shootControlNs string, sho
 
 func (r *Reconciler) createAndRunProber(ctx context.Context, shootNamespace string, shoot *v1beta1.Shoot, workerNodeConditions map[string][]string, logger logr.Logger) {
 	probeConfig := r.getEffectiveProbeConfig(shoot, logger)
-	deploymentScaler := scaler.NewScaler(shoot.Name, probeConfig.DependentResourceInfos, r.Client, r.ScaleGetter, logger)
+	deploymentScaler := scaler.NewScaler(shootNamespace, probeConfig.DependentResourceInfos, r.Client, r.ScaleGetter, logger)
 	shootClientCreator := shootclient.NewClientCreator(shootNamespace, probeConfig.KubeConfigSecretName, r.Client)
 	p := prober.NewProber(ctx, r.Client, shootNamespace, probeConfig, workerNodeConditions, deploymentScaler, shootClientCreator, logger)
 	r.ProberMgr.Register(*p)
@@ -204,6 +204,6 @@ func canStartProber(shoot *v1beta1.Shoot, logger logr.Logger) bool {
 		(shoot.Status.LastOperation.Type == v1beta1.LastOperationTypeCreate && shoot.Status.LastOperation.State == v1beta1.LastOperationStateSucceeded) {
 		return true
 	}
-	logger.Info("Cannot start probe. Cluster is either in migration or in creation phase")
+	logger.Info("Cannot start probe. Cluster is either in migration/restore or in creation phase")
 	return false
 }
