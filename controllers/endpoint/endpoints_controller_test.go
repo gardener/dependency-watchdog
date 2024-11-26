@@ -9,9 +9,10 @@ package endpoint
 import (
 	"context"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/rand"
 
 	testutil "github.com/gardener/dependency-watchdog/internal/test"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -127,9 +128,10 @@ func testWeederSharedEnvTest(t *testing.T) {
 
 	for _, test := range tests {
 		childCtx, chileCancelFn := context.WithCancel(ctx)
-		ns := testutil.CreateTestNamespace(childCtx, g, reconciler.Client, strings.ToLower(test.name))
+		testNs := rand.String(4)
+		testutil.CreateTestNamespace(childCtx, g, reconciler.Client, testNs)
 		t.Run(test.description, func(t *testing.T) {
-			test.run(childCtx, chileCancelFn, g, reconciler, ns)
+			test.run(childCtx, chileCancelFn, g, reconciler, testNs)
 		})
 		deleteAllPods(childCtx, g, reconciler.Client)
 		deleteAllEp(childCtx, g, reconciler.Client)
@@ -150,9 +152,10 @@ func testWeederDedicatedEnvTest(t *testing.T) {
 	for _, test := range tests {
 		ctx, cancelFn := context.WithCancel(context.Background())
 		testEnv, reconciler := setupWeederEnv(ctx, t, test.apiServerFlags)
-		ns := testutil.CreateTestNamespace(ctx, g, reconciler.Client, strings.ToLower(test.name))
+		testNs := rand.String(4)
+		testutil.CreateTestNamespace(ctx, g, reconciler.Client, testNs)
 		t.Run(test.description, func(t *testing.T) {
-			test.run(ctx, cancelFn, g, reconciler, ns)
+			test.run(ctx, cancelFn, g, reconciler, testNs)
 		})
 		testutil.TeardownEnv(g, testEnv, cancelFn)
 	}

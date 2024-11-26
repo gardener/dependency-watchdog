@@ -4,7 +4,9 @@
 
 package prober
 
-import "sync"
+import (
+	"sync"
+)
 
 // Manager is the convenience interface to manage lifecycle of probers.
 type Manager interface {

@@ -18,6 +18,7 @@ const (
 	defaultConcurrentReconciles = 1
 	defaultMetricsBindAddress   = ":9643"
 	defaultHealthBindAddress    = ":9644"
+	defaultPprofBindAddress     = ":8081"
 	defaultLeaseDuration        = 15 * time.Second
 	defaultRenewDeadline        = 10 * time.Second
 	defaultRetryPeriod          = 2 * time.Second
@@ -57,6 +58,8 @@ type SharedOpts struct {
 	MetricsBindAddress string
 	// HealthBindAddress is the TCP address that the controller should bind to for serving health probes
 	HealthBindAddress string
+	// PprofBindAddress is the TCP address that the controller should bind to for serving profiling endpoint.
+	PprofBindAddress string
 }
 
 // LeaderElectionOpts defines the configuration of leader election
@@ -94,6 +97,7 @@ func SetSharedOpts(fs *flag.FlagSet, opts *SharedOpts) {
 	fs.Float64Var(&opts.KubeApiQps, "kube-api-qps", float64(rest.DefaultQPS), "Maximum QPS (queries per second) allowed from the client to the API server")
 	fs.StringVar(&opts.MetricsBindAddress, "metrics-bind-addr", defaultMetricsBindAddress, "The TCP address that the controller should bind to for serving prometheus metrics")
 	fs.StringVar(&opts.HealthBindAddress, "health-bind-addr", defaultHealthBindAddress, "The TCP address that the controller should bind to for serving health probes")
+	fs.StringVar(&opts.PprofBindAddress, "pprof-bind-addr", defaultPprofBindAddress, "The TCP address that the controller should bind to for serving profiling endpoint")
 	bindLeaderElectionFlags(fs, opts)
 }
 

@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+//go:build !kind_tests
+
 package cluster
 
 import (
@@ -30,25 +32,25 @@ func TestCreateAndDeletePredicateFunc(t *testing.T) {
 		{"test: delete predicate func for cluster having no workers", testDeletePredicateFunc, 0, false},
 	}
 
-	for _, test := range tests {
-		t.Run(test.title, func(t *testing.T) {
+	for _, entry := range tests {
+		t.Run(entry.title, func(t *testing.T) {
 			g := NewWithT(t)
-			predicateResult := test.run(g, test.numWorkers)
-			g.Expect(predicateResult).To(Equal(test.expectedResult))
+			predicateResult := entry.run(g, entry.numWorkers)
+			g.Expect(predicateResult).To(Equal(entry.expectedResult))
 		})
 	}
 }
 
-func testCreatePredicateFunc(g *WithT, numWorkers int) bool {
-	cluster, _, err := test.CreateClusterResource(numWorkers, nil, true)
+func testCreatePredicateFunc(g *WithT, workerCount int) bool {
+	cluster, _, err := test.NewClusterBuilder().WithWorkerCount(workerCount).WithRawShoot(true).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	e := event.CreateEvent{Object: cluster}
 	predicateFuncs := workerLessShoot(logr.Discard())
 	return predicateFuncs.Create(e)
 }
 
-func testDeletePredicateFunc(g *WithT, numWorkers int) bool {
-	cluster, _, err := test.CreateClusterResource(numWorkers, nil, true)
+func testDeletePredicateFunc(g *WithT, workerCount int) bool {
+	cluster, _, err := test.NewClusterBuilder().WithWorkerCount(workerCount).WithRawShoot(true).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	e := event.DeleteEvent{Object: cluster}
 	predicateFuncs := workerLessShoot(logr.Discard())
@@ -69,19 +71,19 @@ func TestUpdatePredicateFunc(t *testing.T) {
 		{"test: both old and new cluster have workers and are different in number", 1, 2, true},
 	}
 
-	for _, test := range tests {
-		t.Run(test.title, func(t *testing.T) {
+	for _, entry := range tests {
+		t.Run(entry.title, func(t *testing.T) {
 			g := NewWithT(t)
-			predicateResult := testUpdatePredicateFunc(g, test.oldNumWorkers, test.newNumWorkers)
-			g.Expect(predicateResult).To(Equal(test.expectedResult))
+			predicateResult := testUpdatePredicateFunc(g, entry.oldNumWorkers, entry.newNumWorkers)
+			g.Expect(predicateResult).To(Equal(entry.expectedResult))
 		})
 	}
 }
 
-func testUpdatePredicateFunc(g *WithT, oldNumWorker, newNumWorkers int) bool {
-	oldCluster, _, err := test.CreateClusterResource(oldNumWorker, nil, true)
+func testUpdatePredicateFunc(g *WithT, oldNumWorkers, newNumWorkers int) bool {
+	oldCluster, _, err := test.NewClusterBuilder().WithWorkerCount(oldNumWorkers).WithRawShoot(true).Build()
 	g.Expect(err).ToNot(HaveOccurred())
-	newCluster, _, err := test.CreateClusterResource(newNumWorkers, nil, true)
+	newCluster, _, err := test.NewClusterBuilder().WithWorkerCount(newNumWorkers).WithRawShoot(true).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	e := event.UpdateEvent{
 		ObjectOld: oldCluster,
@@ -111,7 +113,7 @@ func TestShootHasWorkersForNonShootResource(t *testing.T) {
 
 func TestShootHasWorkersForInvalidShootResource(t *testing.T) {
 	g := NewWithT(t)
-	cluster, _, err := test.CreateClusterResource(0, nil, false)
+	cluster, _, err := test.NewClusterBuilder().WithRawShoot(true).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	seed := gardencorev1beta1.Seed{
 		ObjectMeta: metav1.ObjectMeta{
