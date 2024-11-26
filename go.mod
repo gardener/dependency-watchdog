@@ -1,6 +1,6 @@
 module github.com/gardener/dependency-watchdog
 
-go 1.22.0
+go 1.23.0
 
 require (
 	github.com/gardener/gardener v1.99.1
@@ -8,11 +8,14 @@ require (
 	github.com/go-logr/logr v1.4.1
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/onsi/gomega v1.33.1
+	github.com/spf13/pflag v1.0.5
 	go.uber.org/zap v1.27.0
+	golang.org/x/tools v0.23.0
 	k8s.io/api v0.29.6
 	k8s.io/apimachinery v0.29.6
 	k8s.io/client-go v0.29.6
 	k8s.io/code-generator v0.29.6
+	k8s.io/klog/v2 v2.120.1
 	k8s.io/utils v0.0.0-20240502163921-fe8a2dddb1d0
 	sigs.k8s.io/controller-runtime v0.17.5
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20231015215740-bf15e44028f9
@@ -81,7 +84,6 @@ require (
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
@@ -96,7 +98,6 @@ require (
 	golang.org/x/term v0.22.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
-	golang.org/x/tools v0.23.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240318140521-94a12d6c2237 // indirect
 	google.golang.org/protobuf v1.34.0 // indirect
@@ -110,7 +111,6 @@ require (
 	k8s.io/autoscaler/vertical-pod-autoscaler v1.1.2 // indirect
 	k8s.io/component-base v0.29.6 // indirect
 	k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01 // indirect
-	k8s.io/klog/v2 v2.120.1 // indirect
 	k8s.io/kube-aggregator v0.29.6 // indirect
 	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00 // indirect
 	k8s.io/kubelet v0.29.6 // indirect
