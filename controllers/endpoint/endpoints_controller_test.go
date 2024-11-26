@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/rand"
+
 	testutil "github.com/gardener/dependency-watchdog/internal/test"
 	"k8s.io/client-go/kubernetes/scheme"
 
@@ -126,7 +128,7 @@ func testWeederSharedEnvTest(t *testing.T) {
 
 	for _, test := range tests {
 		childCtx, chileCancelFn := context.WithCancel(ctx)
-		testNs := testutil.GenerateRandomAlphanumericString(g, 4)
+		testNs := rand.String(4)
 		testutil.CreateTestNamespace(childCtx, g, reconciler.Client, testNs)
 		t.Run(test.description, func(t *testing.T) {
 			test.run(childCtx, chileCancelFn, g, reconciler, testNs)
@@ -150,7 +152,7 @@ func testWeederDedicatedEnvTest(t *testing.T) {
 	for _, test := range tests {
 		ctx, cancelFn := context.WithCancel(context.Background())
 		testEnv, reconciler := setupWeederEnv(ctx, t, test.apiServerFlags)
-		testNs := testutil.GenerateRandomAlphanumericString(g, 4)
+		testNs := rand.String(4)
 		testutil.CreateTestNamespace(ctx, g, reconciler.Client, testNs)
 		t.Run(test.description, func(t *testing.T) {
 			test.run(ctx, cancelFn, g, reconciler, testNs)

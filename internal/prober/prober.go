@@ -111,6 +111,7 @@ func (p *Prober) probe(ctx context.Context) {
 	candidateNodeLeases, err := p.probeNodeLeases(ctx, shootClient)
 	if err != nil {
 		p.recordError(err, errors.ErrProbeNodeLease, "Failed to probe node leases")
+		p.l.Error(err, "Failed to probe node leases, ignoring error, probe will be re-attempted")
 		return
 	}
 	if len(candidateNodeLeases) != 1 {

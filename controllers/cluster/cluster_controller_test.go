@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -137,7 +138,7 @@ func testProberDedicatedEnvTest(t *testing.T) {
 func testReconciliationAfterAPIServerIsDown(ctx context.Context, t *testing.T, testEnv *envtest.Environment, _ client.Client, reconciler *Reconciler, _ manager.Manager, cancelFn context.CancelFunc) {
 	var err error
 	g := NewWithT(t)
-	cluster, _, err := testutil.NewClusterBuilder().WithWorkerNames([]string{testutil.Worker1Name}).Build()
+	cluster, _, err := testutil.NewClusterBuilder().WithWorkerCount(1).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	cancelFn()
 	err = testEnv.ControlPlane.APIServer.Stop()
@@ -181,21 +182,21 @@ func testProberSharedEnvTest(t *testing.T) {
 }
 
 func testShootWorkerNodeConditions(g *WithT, crClient client.Client, reconciler *Reconciler) {
-	workerNodeConditions := map[string][]string{testutil.Worker1Name: {testutil.NodeConditionDiskPressure, testutil.NodeConditionMemoryPressure}}
-	cluster, shoot, err := testutil.NewClusterBuilder().WithWorkerNames([]string{testutil.Worker1Name}).WithWorkerNodeConditions(workerNodeConditions).Build()
+	workerNodeConditions := [][]string{{testutil.NodeConditionDiskPressure, testutil.NodeConditionMemoryPressure}}
+	cluster, shoot, err := testutil.NewClusterBuilder().WithWorkerCount(1).WithWorkerNodeConditions(workerNodeConditions).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	createCluster(g, crClient, cluster)
 	expectedWorkerNodeConditions := util.GetEffectiveNodeConditionsForWorkers(shoot)
 	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod, expectedWorkerNodeConditions)
 	// update the workers
-	updatedWorkerNodeConditions := map[string][]string{testutil.Worker1Name: {testutil.NodeConditionPIDPressure, testutil.NodeConditionNetworkReady}}
-	updatedWorkers := testutil.CreateWorkers([]string{testutil.Worker1Name}, updatedWorkerNodeConditions)
-	shoot.Spec.Provider.Workers = updatedWorkers
+	updatedWorkerNodeConditions := []string{testutil.NodeConditionPIDPressure, testutil.NodeConditionNetworkReady}
+	shoot.Spec.Provider.Workers[0].MachineControllerManagerSettings.NodeConditions = updatedWorkerNodeConditions
 	cluster.Spec.Shoot = runtime.RawExtension{
 		Object: shoot,
 	}
 	updateCluster(g, crClient, cluster)
-	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod, updatedWorkerNodeConditions)
+	expectedWorkerNodeConditions = util.GetEffectiveNodeConditionsForWorkers(shoot)
+	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod, expectedWorkerNodeConditions)
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
@@ -231,7 +232,7 @@ func updateShootHibernationSpec(g *WithT, crClient client.Client, cluster *garde
 }
 
 func testShootHibernation(g *WithT, crClient client.Client, reconciler *Reconciler) {
-	cluster, shoot, err := testutil.NewClusterBuilder().WithWorkerNames([]string{testutil.Worker1Name}).Build()
+	cluster, shoot, err := testutil.NewClusterBuilder().WithWorkerCount(1).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	createCluster(g, crClient, cluster)
 	expectedWorkerNodeConditions := util.GetEffectiveNodeConditionsForWorkers(shoot)
@@ -259,7 +260,7 @@ func updateShootHibernationStatus(g *WithT, crClient client.Client, cluster *gar
 }
 
 func testInvalidShootInClusterSpec(g *WithT, crClient client.Client, reconciler *Reconciler) {
-	cluster, _, err := testutil.NewClusterBuilder().WithWorkerNames([]string{testutil.Worker1Name}).Build()
+	cluster, _, err := testutil.NewClusterBuilder().WithWorkerCount(1).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	cluster.Spec.Shoot.Object = nil
 	cluster.Spec.Shoot.Raw = []byte(`{"apiVersion": 8}`)
@@ -281,7 +282,7 @@ func updateShootDeletionTimeStamp(g *WithT, crClient client.Client, cluster *gar
 }
 
 func testProberShouldBeRemovedIfDeletionTimeStampIsSet(g *WithT, crClient client.Client, reconciler *Reconciler) {
-	cluster, shoot, err := testutil.NewClusterBuilder().WithWorkerNames([]string{testutil.Worker1Name}).Build()
+	cluster, shoot, err := testutil.NewClusterBuilder().WithWorkerCount(1).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	createCluster(g, crClient, cluster)
 	expectedWorkerNodeConditions := util.GetEffectiveNodeConditionsForWorkers(shoot)
@@ -314,7 +315,7 @@ func testShootCreationNotComplete(g *WithT, crClient client.Client, reconciler *
 	}
 
 	for _, testCase := range testCases {
-		cluster, shoot, err := testutil.NewClusterBuilder().WithWorkerNames([]string{testutil.Worker1Name}).WithNodeMonitorGracePeriod(shootKCMNodeMonitorGracePeriod).Build()
+		cluster, shoot, err := testutil.NewClusterBuilder().WithWorkerCount(1).WithNodeMonitorGracePeriod(shootKCMNodeMonitorGracePeriod).Build()
 		g.Expect(err).ToNot(HaveOccurred())
 		setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeCreate, testCase.lastOpState)
 		createCluster(g, crClient, cluster)
@@ -329,7 +330,7 @@ func testShootCreationNotComplete(g *WithT, crClient client.Client, reconciler *
 }
 
 func testShootIsMigrating(g *WithT, crClient client.Client, reconciler *Reconciler) {
-	cluster, shoot, err := testutil.NewClusterBuilder().WithWorkerNames([]string{testutil.Worker1Name}).Build()
+	cluster, shoot, err := testutil.NewClusterBuilder().WithWorkerCount(1).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	createCluster(g, crClient, cluster)
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeMigrate, "")
@@ -339,7 +340,7 @@ func testShootIsMigrating(g *WithT, crClient client.Client, reconciler *Reconcil
 }
 
 func testShootRestoringIsNotComplete(g *WithT, crClient client.Client, reconciler *Reconciler) {
-	cluster, shoot, err := testutil.NewClusterBuilder().WithWorkerNames([]string{testutil.Worker1Name}).Build()
+	cluster, shoot, err := testutil.NewClusterBuilder().WithWorkerCount(1).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	createCluster(g, crClient, cluster)
 	expectedWorkerNodeConditions := util.GetEffectiveNodeConditionsForWorkers(shoot)
@@ -356,7 +357,7 @@ func testShootRestoringIsNotComplete(g *WithT, crClient client.Client, reconcile
 }
 
 func testLastOperationIsRestoreAndSuccessful(g *WithT, crClient client.Client, reconciler *Reconciler) {
-	cluster, shoot, err := testutil.NewClusterBuilder().WithWorkerNames([]string{testutil.Worker1Name}).Build()
+	cluster, shoot, err := testutil.NewClusterBuilder().WithWorkerCount(1).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeRestore, gardencorev1beta1.LastOperationStateSucceeded)
 	createCluster(g, crClient, cluster)
@@ -366,7 +367,7 @@ func testLastOperationIsRestoreAndSuccessful(g *WithT, crClient client.Client, r
 }
 
 func testLastOperationIsShootReconciliation(g *WithT, crClient client.Client, reconciler *Reconciler) {
-	cluster, shoot, err := testutil.NewClusterBuilder().WithWorkerNames([]string{testutil.Worker1Name}).Build()
+	cluster, shoot, err := testutil.NewClusterBuilder().WithWorkerCount(1).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeReconcile, "")
 	createCluster(g, crClient, cluster)
@@ -383,12 +384,10 @@ func testShootHasNoWorkers(g *WithT, crClient client.Client, reconciler *Reconci
 }
 
 func proberShouldBePresent(g *WithT, reconciler *Reconciler, cluster *gardenerv1alpha1.Cluster, expectedKCMNodeMonitorGraceDuration metav1.Duration, expectedWorkerNodeConditions map[string][]string) {
-	g.Eventually(func() int { return len(reconciler.ProberMgr.GetAllProbers()) }, 10*time.Second, 1*time.Second).Should(Equal(1))
-	prober, ok := reconciler.ProberMgr.GetProber(cluster.ObjectMeta.Name)
-	g.Expect(ok).To(BeTrue())
-	g.Expect(*prober.GetConfig().KCMNodeMonitorGraceDuration).To(Equal(expectedKCMNodeMonitorGraceDuration))
-	g.Expect(prober.AreWorkerNodeConditionsStale(expectedWorkerNodeConditions)).To(BeFalse())
-	g.Expect(prober.IsClosed()).To(BeFalse())
+	g.Eventually(func() bool {
+		prober, ok := reconciler.ProberMgr.GetProber(cluster.ObjectMeta.Name)
+		return ok && reflect.DeepEqual(*prober.GetConfig().KCMNodeMonitorGraceDuration, expectedKCMNodeMonitorGraceDuration) && !prober.AreWorkerNodeConditionsStale(expectedWorkerNodeConditions) && !prober.IsClosed()
+	}, 10*time.Second, 1*time.Second).Should(BeTrue())
 }
 
 func proberShouldNotBePresent(g *WithT, reconciler *Reconciler, cluster *gardenerv1alpha1.Cluster) {

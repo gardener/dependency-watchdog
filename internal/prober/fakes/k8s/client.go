@@ -116,10 +116,11 @@ func (c *fakeClient) List(ctx context.Context, list client.ObjectList, opts ...c
 
 func (c *fakeClient) getRecordedObjectCollectionError(method ClientMethod, namespace string, labelSelector labels.Selector, objGVK schema.GroupVersionKind) error {
 	for _, errRecord := range c.errorRecords {
-		if errRecord.method == method && errRecord.resourceNamespace == namespace {
-			if errRecord.resourceGVK == objGVK || (labelSelector == nil && errRecord.labels == nil) || labelSelector.Matches(errRecord.labels) {
-				return errRecord.err
-			}
+		if errRecord.method == method && errRecord.resourceNamespace == namespace &&
+			(errRecord.resourceGVK == objGVK || // if the GVK is set, we need to match it
+				(labelSelector == nil && errRecord.labels == nil) || // if there is no label selector and no labels in the error record
+				labelSelector.Matches(errRecord.labels)) { // if there is a label selector, and it matches the labels in the error record
+			return errRecord.err
 		}
 	}
 	return nil

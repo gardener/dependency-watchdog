@@ -21,8 +21,11 @@ const (
 // ProbeError is the error type for probe errors. It contains the error code, the cause of the error, and the error message.
 // It is used by prober to record its last error and is currently only used for unit tests.
 type ProbeError struct {
-	Code    ErrorCode
-	Cause   error
+	// Code is the error code that is returned by the probe.
+	Code ErrorCode
+	// Cause is the error that happened during the probe.
+	Cause error
+	// Message is used for mentioning additional details describing the error.
 	Message string
 }
 

@@ -2,8 +2,6 @@ package test
 
 import (
 	"bytes"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"log"
 	"os"
@@ -47,12 +45,4 @@ func ValidateIfFileExists(file string, t *testing.T) {
 		t.Fatalf("%s does not exist. This should not have happened. Check testdata directory.\n", file)
 	}
 	g.Expect(err).ToNot(HaveOccurred(), "File at path %v should exist")
-}
-
-// GenerateRandomAlphanumericString generates a random alphanumeric string of the given length.
-func GenerateRandomAlphanumericString(g *WithT, length int) string {
-	b := make([]byte, length)
-	_, err := rand.Read(b)
-	g.Expect(err).ToNot(HaveOccurred())
-	return hex.EncodeToString(b)
 }

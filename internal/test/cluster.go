@@ -5,22 +5,21 @@
 package test
 
 import (
-	"math/rand"
-
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardenerv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/utils/pointer"
 )
 
 // ClusterBuilder is a builder for the cluster resource.
 type ClusterBuilder struct {
-	workerNames            []string
+	numWorkers             int
 	nodeMonitorGracePeriod *metav1.Duration
 	rawShoot               bool
-	workerNodeConditions   map[string][]string
+	workerNodeConditions   [][]string
 }
 
 // NewClusterBuilder creates a new instance of ClusterBuilder.
@@ -28,9 +27,9 @@ func NewClusterBuilder() *ClusterBuilder {
 	return &ClusterBuilder{}
 }
 
-// WithWorkerNames sets the worker names for the cluster.
-func (b *ClusterBuilder) WithWorkerNames(workerNames []string) *ClusterBuilder {
-	b.workerNames = workerNames
+// WithWorkerCount sets the worker count for the cluster.
+func (b *ClusterBuilder) WithWorkerCount(workerCount int) *ClusterBuilder {
+	b.numWorkers = workerCount
 	return b
 }
 
@@ -47,7 +46,7 @@ func (b *ClusterBuilder) WithRawShoot(rawShoot bool) *ClusterBuilder {
 }
 
 // WithWorkerNodeConditions sets the worker node conditions for the cluster.
-func (b *ClusterBuilder) WithWorkerNodeConditions(workerNodeConditions map[string][]string) *ClusterBuilder {
+func (b *ClusterBuilder) WithWorkerNodeConditions(workerNodeConditions [][]string) *ClusterBuilder {
 	b.workerNodeConditions = workerNodeConditions
 	return b
 }
@@ -77,7 +76,7 @@ func (b *ClusterBuilder) Build() (*gardenerv1alpha1.Cluster, *gardencorev1beta1.
 			},
 		},
 	}
-	shoot := createShoot(seed.Name, b.workerNames, b.workerNodeConditions, b.nodeMonitorGracePeriod)
+	shoot := createShoot(seed.Name, b.numWorkers, b.workerNodeConditions, b.nodeMonitorGracePeriod)
 	if b.rawShoot {
 		shootBytes, err := json.Marshal(shoot)
 		if err != nil {
@@ -92,7 +91,7 @@ func (b *ClusterBuilder) Build() (*gardenerv1alpha1.Cluster, *gardencorev1beta1.
 
 // createShoot creates a shoot resources.
 // This should only be used for unit testing.
-func createShoot(seedName string, workerNames []string, workerNodeConditions map[string][]string, nodeMonitorGracePeriod *metav1.Duration) gardencorev1beta1.Shoot {
+func createShoot(seedName string, workerCount int, workerNodeConditions [][]string, nodeMonitorGracePeriod *metav1.Duration) gardencorev1beta1.Shoot {
 	end := "00 08 * * 1,2,3,4,5"
 	start := "30 19 * * 1,2,3,4,5"
 	location := "Asia/Calcutta"
@@ -115,7 +114,7 @@ func createShoot(seedName string, workerNames []string, workerNodeConditions map
 			},
 			Provider: gardencorev1beta1.Provider{
 				Type:    "aws",
-				Workers: CreateWorkers(workerNames, workerNodeConditions),
+				Workers: createWorkers(workerCount, workerNodeConditions),
 			},
 		},
 		Status: gardencorev1beta1.ShootStatus{
@@ -129,19 +128,21 @@ func createShoot(seedName string, workerNames []string, workerNodeConditions map
 	}
 }
 
-// CreateWorkers creates worker resources with the given names and corresponding node conditions.
-func CreateWorkers(workerNames []string, workerNodeConditions map[string][]string) []gardencorev1beta1.Worker {
-	workers := make([]gardencorev1beta1.Worker, 0, len(workerNames))
-	for _, name := range workerNames {
-		mx := rand.Int31n(5)
+// createWorkers creates worker resources with the given count and corresponding node conditions.
+func createWorkers(workerCount int, workerNodeConditions [][]string) []gardencorev1beta1.Worker {
+	workers := make([]gardencorev1beta1.Worker, 0, workerCount)
+	for i := 0; i < workerCount; i++ {
+		mx := rand.Intn(5)
 		w := gardencorev1beta1.Worker{
-			Name:    name,
+			Name:    rand.String(4),
 			Machine: gardencorev1beta1.Machine{},
-			Maximum: mx,
+			Maximum: int32(mx),
 			Minimum: 1,
-			MachineControllerManagerSettings: &gardencorev1beta1.MachineControllerManagerSettings{
-				NodeConditions: workerNodeConditions[name],
-			},
+		}
+		if i < len(workerNodeConditions) {
+			w.MachineControllerManagerSettings = &gardencorev1beta1.MachineControllerManagerSettings{
+				NodeConditions: workerNodeConditions[i],
+			}
 		}
 		workers = append(workers, w)
 	}

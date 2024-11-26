@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/rand"
+
 	"github.com/gardener/dependency-watchdog/internal/prober/fakes/k8s"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -48,7 +50,7 @@ func TestSuite(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			ctx := context.Background()
 			k8sClient := k8s.NewFakeClientBuilder().Build()
-			testNs := test.GenerateRandomAlphanumericString(g, 4)
+			testNs := rand.String(4)
 			test.CreateTestNamespace(ctx, g, k8sClient, testNs)
 			tc.run(ctx, t, testNs, k8sClient)
 		})

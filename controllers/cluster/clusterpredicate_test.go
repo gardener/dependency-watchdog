@@ -22,35 +22,35 @@ import (
 func TestCreateAndDeletePredicateFunc(t *testing.T) {
 	tests := []struct {
 		title          string
-		run            func(g *WithT, workerNames []string) bool
-		workerNames    []string
+		run            func(g *WithT, numWorkers int) bool
+		numWorkers     int
 		expectedResult bool
 	}{
-		{"test: create predicate func for cluster having workers", testCreatePredicateFunc, []string{test.Worker1Name, test.Worker2Name}, true},
-		{"test: create predicate func for cluster having no workers", testCreatePredicateFunc, nil, false},
-		{"test: delete predicate func for cluster having workers", testDeletePredicateFunc, []string{test.Worker1Name, test.Worker2Name}, true},
-		{"test: delete predicate func for cluster having no workers", testDeletePredicateFunc, nil, false},
+		{"test: create predicate func for cluster having workers", testCreatePredicateFunc, 2, true},
+		{"test: create predicate func for cluster having no workers", testCreatePredicateFunc, 0, false},
+		{"test: delete predicate func for cluster having workers", testDeletePredicateFunc, 2, true},
+		{"test: delete predicate func for cluster having no workers", testDeletePredicateFunc, 0, false},
 	}
 
 	for _, entry := range tests {
 		t.Run(entry.title, func(t *testing.T) {
 			g := NewWithT(t)
-			predicateResult := entry.run(g, entry.workerNames)
+			predicateResult := entry.run(g, entry.numWorkers)
 			g.Expect(predicateResult).To(Equal(entry.expectedResult))
 		})
 	}
 }
 
-func testCreatePredicateFunc(g *WithT, workerNames []string) bool {
-	cluster, _, err := test.NewClusterBuilder().WithWorkerNames(workerNames).WithRawShoot(true).Build()
+func testCreatePredicateFunc(g *WithT, workerCount int) bool {
+	cluster, _, err := test.NewClusterBuilder().WithWorkerCount(workerCount).WithRawShoot(true).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	e := event.CreateEvent{Object: cluster}
 	predicateFuncs := workerLessShoot(logr.Discard())
 	return predicateFuncs.Create(e)
 }
 
-func testDeletePredicateFunc(g *WithT, workerNames []string) bool {
-	cluster, _, err := test.NewClusterBuilder().WithWorkerNames(workerNames).WithRawShoot(true).Build()
+func testDeletePredicateFunc(g *WithT, workerCount int) bool {
+	cluster, _, err := test.NewClusterBuilder().WithWorkerCount(workerCount).WithRawShoot(true).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	e := event.DeleteEvent{Object: cluster}
 	predicateFuncs := workerLessShoot(logr.Discard())
@@ -60,30 +60,30 @@ func testDeletePredicateFunc(g *WithT, workerNames []string) bool {
 func TestUpdatePredicateFunc(t *testing.T) {
 	tests := []struct {
 		title          string
-		oldWorkerNames []string
-		newWorkerNames []string
+		oldNumWorkers  int
+		newNumWorkers  int
 		expectedResult bool
 	}{
-		{"test: both old and new cluster do not have workers", nil, nil, false},
-		{"test: old cluster has no workers and new cluster has workers", nil, []string{test.Worker1Name}, true},
-		{"test: old cluster has workers and new cluster do not have workers", []string{test.Worker1Name, test.Worker2Name}, nil, true},
-		{"test: both old and new cluster have workers and there is no change", []string{test.Worker1Name}, []string{test.Worker1Name}, true},
-		{"test: both old and new cluster have workers and are different in number", []string{test.Worker1Name}, []string{test.Worker1Name, test.Worker2Name}, true},
+		{"test: both old and new cluster do not have workers", 0, 0, false},
+		{"test: old cluster has no workers and new cluster has workers", 0, 1, true},
+		{"test: old cluster has workers and new cluster do not have workers", 2, 0, true},
+		{"test: both old and new cluster have workers and there is no change", 1, 1, true},
+		{"test: both old and new cluster have workers and are different in number", 1, 2, true},
 	}
 
 	for _, entry := range tests {
 		t.Run(entry.title, func(t *testing.T) {
 			g := NewWithT(t)
-			predicateResult := testUpdatePredicateFunc(g, entry.oldWorkerNames, entry.newWorkerNames)
+			predicateResult := testUpdatePredicateFunc(g, entry.oldNumWorkers, entry.newNumWorkers)
 			g.Expect(predicateResult).To(Equal(entry.expectedResult))
 		})
 	}
 }
 
-func testUpdatePredicateFunc(g *WithT, oldWorkerNames, newWorkerNames []string) bool {
-	oldCluster, _, err := test.NewClusterBuilder().WithWorkerNames(oldWorkerNames).WithRawShoot(true).Build()
+func testUpdatePredicateFunc(g *WithT, oldNumWorkers, newNumWorkers int) bool {
+	oldCluster, _, err := test.NewClusterBuilder().WithWorkerCount(oldNumWorkers).WithRawShoot(true).Build()
 	g.Expect(err).ToNot(HaveOccurred())
-	newCluster, _, err := test.NewClusterBuilder().WithWorkerNames(newWorkerNames).WithRawShoot(true).Build()
+	newCluster, _, err := test.NewClusterBuilder().WithWorkerCount(newNumWorkers).WithRawShoot(true).Build()
 	g.Expect(err).ToNot(HaveOccurred())
 	e := event.UpdateEvent{
 		ObjectOld: oldCluster,
