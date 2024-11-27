@@ -130,7 +130,7 @@ func testWeederSharedEnvTest(t *testing.T) {
 		childCtx, chileCancelFn := context.WithCancel(ctx)
 		testNs := rand.String(4)
 		testutil.CreateTestNamespace(childCtx, g, reconciler.Client, testNs)
-		t.Run(test.description, func(t *testing.T) {
+		t.Run(test.description, func(_ *testing.T) {
 			test.run(childCtx, chileCancelFn, g, reconciler, testNs)
 		})
 		deleteAllPods(childCtx, g, reconciler.Client)
@@ -154,7 +154,7 @@ func testWeederDedicatedEnvTest(t *testing.T) {
 		testEnv, reconciler := setupWeederEnv(ctx, t, test.apiServerFlags)
 		testNs := rand.String(4)
 		testutil.CreateTestNamespace(ctx, g, reconciler.Client, testNs)
-		t.Run(test.description, func(t *testing.T) {
+		t.Run(test.description, func(_ *testing.T) {
 			test.run(ctx, cancelFn, g, reconciler, testNs)
 		})
 		testutil.TeardownEnv(g, testEnv, cancelFn)

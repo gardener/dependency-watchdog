@@ -5,6 +5,7 @@ rules:
   - selectorRegexp: github[.]com/gardener
     allowedPrefixes:
       - github.com/gardener/gardener/pkg/apis
+      - github.com/gardener/machine-controller-manager/pkg/apis
   - selectorRegexp: github[.]com/gardener/dependency-watchdog
     allowedPrefixes:
     # should be self-contained and must not import any other dependency watchdog packages

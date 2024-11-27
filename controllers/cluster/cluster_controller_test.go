@@ -174,7 +174,7 @@ func testProberSharedEnvTest(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		t.Run(test.title, func(t *testing.T) {
+		t.Run(test.title, func(_ *testing.T) {
 			test.run(g, crClient, reconciler)
 		})
 		deleteAllClusters(g, crClient)
