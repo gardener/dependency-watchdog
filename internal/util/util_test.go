@@ -107,7 +107,7 @@ func TestGetSliceOrDefault(t *testing.T) {
 	g := NewWithT(t)
 	t.Parallel()
 	for _, test := range tests {
-		t.Run(test.description, func(t *testing.T) {
+		t.Run(test.description, func(_ *testing.T) {
 			g.Expect(GetSliceOrDefault(test.inputSlice, test.expectedOutputSlice)).To(Equal(test.expectedOutputSlice))
 		})
 	}

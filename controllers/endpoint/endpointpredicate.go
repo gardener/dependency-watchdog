@@ -47,7 +47,7 @@ func ReadyEndpoints(logger logr.Logger) predicate.Predicate {
 			return false
 		},
 
-		DeleteFunc: func(event event.DeleteEvent) bool {
+		DeleteFunc: func(_ event.DeleteEvent) bool {
 			return false
 		},
 
@@ -77,7 +77,7 @@ func MatchingEndpoints(epMap map[string]wapi.DependantSelectors) predicate.Predi
 			return isMatchingEndpoints(event.ObjectNew, epMap)
 		},
 
-		DeleteFunc: func(event event.DeleteEvent) bool {
+		DeleteFunc: func(_ event.DeleteEvent) bool {
 			return false
 		},
 

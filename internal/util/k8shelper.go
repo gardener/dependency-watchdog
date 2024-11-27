@@ -93,7 +93,7 @@ func createRestConfigFromKubeConfigBytes(kubeConfigBytes []byte, connectionTimeo
 	if err != nil {
 		return nil, err
 	}
-	config.Wrap(func(rt http.RoundTripper) http.RoundTripper {
+	config.Wrap(func(_ http.RoundTripper) http.RoundTripper {
 		return transport
 	})
 	return config, nil

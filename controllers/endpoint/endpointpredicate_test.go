@@ -104,7 +104,7 @@ func TestReadyEndpoints(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.name, func(_ *testing.T) {
 			createEv := event.CreateEvent{
 				Object: tc.ep,
 			}
@@ -228,7 +228,7 @@ func TestMatchingEndpointsPredicate(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.name, func(_ *testing.T) {
 			createEv := event.CreateEvent{
 				Object: tc.ep,
 			}
