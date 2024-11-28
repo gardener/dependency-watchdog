@@ -9,6 +9,5 @@
 package tools
 
 import (
-	_ "k8s.io/code-generator/cmd/import-boss"
 	_ "sigs.k8s.io/controller-runtime/tools/setup-envtest"
 )

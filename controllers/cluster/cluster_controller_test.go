@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/config"
+
 	"go.uber.org/zap/zapcore"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -71,6 +73,9 @@ func setupProberEnv(ctx context.Context, g *WithT) (client.Client, *envtest.Envi
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme,
 		Logger: testLogger,
+		Controller: config.Controller{
+			SkipNameValidation: pointer.Bool(true),
+		},
 	})
 	g.Expect(err).ToNot(HaveOccurred())
 
