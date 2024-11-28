@@ -8,7 +8,7 @@ set -e
 
 echo "> test"
 
-ENVTEST_K8S_VERSION="1.26"
+ENVTEST_K8S_VERSION="1.31"
 export KUBEBUILDER_ASSETS="$(setup-envtest --os $(go env GOOS) --arch $(go env GOARCH) use $ENVTEST_K8S_VERSION -p path)"
 echo "Running tests using KUBEBUILDER_ASSETS=$KUBEBUILDER_ASSETS"
 export KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT=true
