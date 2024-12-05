@@ -27,4 +27,4 @@ for p in "$@"; do
   packages+=("$this_module/${p#./}")
 done
 
-import-boss --include-test-files=true --verify-only --input-dirs "$(IFS=, ; echo "${packages[*]}")"
+import-boss -v 1 "$(IFS=, ; echo "${packages[*]}")" 2>&1 | grep -Ev "Ignoring child directory"

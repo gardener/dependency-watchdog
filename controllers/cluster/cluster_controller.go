@@ -141,7 +141,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return err
 	}
-	return c.Watch(source.Kind(mgr.GetCache(), &extensionsv1alpha1.Cluster{}), &handler.EnqueueRequestForObject{}, workerLessShoot(c.GetLogger()))
+	return c.Watch(source.Kind[client.Object](mgr.GetCache(), &extensionsv1alpha1.Cluster{}, &handler.EnqueueRequestForObject{}, workerLessShoot(c.GetLogger())))
 }
 
 // getEffectiveProbeConfig returns the updated probe config after checking the shoot KCM configuration for NodeMonitorGracePeriod.

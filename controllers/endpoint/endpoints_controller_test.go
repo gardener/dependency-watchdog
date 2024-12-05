@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/config"
+
 	"k8s.io/apimachinery/pkg/util/rand"
 
 	testutil "github.com/gardener/dependency-watchdog/internal/test"
@@ -80,6 +82,9 @@ func setupWeederEnv(ctx context.Context, t *testing.T, kubeApiServerFlags map[st
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: s,
+		Controller: config.Controller{
+			SkipNameValidation: pointer.Bool(true),
+		},
 	})
 
 	g.Expect(err).ToNot(HaveOccurred())
