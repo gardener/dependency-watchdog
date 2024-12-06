@@ -89,7 +89,7 @@ func CreateKindCluster(config KindConfig) (KindCluster, error) {
 		return nil, err
 	}
 	// store the kubeconfig file at kubeConfigPath, this will be later used to delete the cluster or perform operations on the cluster
-	err = os.WriteFile(kubeConfigPath, kubeConfigBytes, 0644)
+	err = os.WriteFile(kubeConfigPath, kubeConfigBytes, 0644) // #nosec G306 -- Test only
 	if err != nil {
 		return nil, fmt.Errorf("failed to store the kubeconfig file at %s :%w", kubeConfigPath, err)
 	}
