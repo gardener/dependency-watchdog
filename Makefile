@@ -87,3 +87,11 @@ stress_args = test-package test-func tool-params
 .PHONY: stress
 stress: $(GO_STRESS)
 	@./hack/stress-test.sh $@ $(call args,$@)
+
+.PHONY: sast
+sast: $(GOSEC)
+	@./hack/sast.sh
+
+.PHONY: sast-report
+sast-report:$(GOSEC)
+	@./hack/sast.sh --gosec-report true

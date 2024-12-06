@@ -11,12 +11,13 @@ GO_IMPORT_BOSS    := $(TOOLS_BIN_DIR)/import-boss
 GO_STRESS         := $(TOOLS_BIN_DIR)/stress
 SETUP_ENVTEST     := $(TOOLS_BIN_DIR)/setup-envtest
 GOTESTFMT 	   	  := $(TOOLS_BIN_DIR)/gotestfmt
+GOSEC             := $(TOOLS_BIN_DIR)/gosec
 
 # Use this function to get the version of a go module from go.mod
 version_gomod = $(shell go list -mod=mod -f '{{ .Version }}' -m $(1))
 
 #default tool versions
-GOLANGCI_LINT_VERSION ?= v1.60.1
+GOLANGCI_LINT_VERSION ?= v1.60.3
 GO_VULN_CHECK_VERSION ?= latest
 GOIMPORTS_VERSION ?= latest
 LOGCHECK_VERSION ?= 282c229e4dc4b4088523b97a2a696a48e8506975 # this commit hash corresponds to v1.108.1 which is the gardener/gardener version in go.mod - we could use regular tags when https://github.com/gardener/gardener/issues/8811 is resolved
@@ -26,6 +27,7 @@ K8S_VERSION ?= $(subst v0,v1,$(call version_gomod,k8s.io/api))
 GO_STRESS_VERSION ?= latest
 SETUP_ENVTEST_VERSION ?= latest
 GOTESTFMT_VERSION ?= v2.5.0
+GOSEC_VERSION ?= v2.21.4
 
 # add ./hack/tools/bin to the PATH
 export TOOLS_BIN_DIR := $(TOOLS_BIN_DIR)
@@ -61,3 +63,6 @@ $(SETUP_ENVTEST):
 
 $(GOTESTFMT):
 	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@$(GOTESTFMT_VERSION)
+
+$(GOSEC):
+	GOSEC_VERSION=$(GOSEC_VERSION) bash $(TOOLS_DIR)/install-gosec.sh
