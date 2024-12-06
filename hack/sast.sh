@@ -35,10 +35,7 @@ if [[ "$gosec_report" != "false" ]]; then
   gosec_report_parse_flags="-track-suppressions -fmt=sarif -out=gosec-report.sarif -stdout"
 fi
 
-# DWD uses code-generators https://github.com/kubernetes/code-generator which create lots of G103 (CWE-242:
-# Use of unsafe calls should be audited) & G104 (CWE-703: Errors unhandled) errors.
-# However, those generators are best-pratice in Kubernetes environment and their results are tested well.
-# Thus, generated code is excluded from gosec scan.
+# Generated code is excluded from gosec scan.
 # Nested go modules are not supported by gosec (see https://github.com/securego/gosec/issues/501), so the ./hack folder
 # is excluded too. It does not contain productive code anyway.
 gosec -exclude-generated -exclude-dir=hack -exclude-dir=tmp $gosec_report_parse_flags ./...
