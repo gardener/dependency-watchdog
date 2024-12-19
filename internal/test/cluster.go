@@ -136,7 +136,7 @@ func createWorkers(workerCount int, workerNodeConditions [][]string) []gardencor
 		w := gardencorev1beta1.Worker{
 			Name:    rand.String(4),
 			Machine: gardencorev1beta1.Machine{},
-			Maximum: int32(mx),
+			Maximum: int32(mx), // #nosec G115 -- lies between 0 and 5.
 			Minimum: 1,
 		}
 		if i < len(workerNodeConditions) {

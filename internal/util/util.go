@@ -26,7 +26,7 @@ func SleepWithContext(ctx context.Context, sleepFor time.Duration) error {
 
 // ReadAndUnmarshall reads file and Unmarshall the contents in a generic type
 func ReadAndUnmarshall[T any](filename string) (*T, error) {
-	configBytes, err := os.ReadFile(filename)
+	configBytes, err := os.ReadFile(filename) // #nosec G304 -- Loaded from ConfigMap
 	if err != nil {
 		return nil, err
 	}
