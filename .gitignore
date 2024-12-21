@@ -28,3 +28,6 @@ dev
 hack/test
 .DS_Store
 .idea/
+
+# gosec
+gosec-report.sarif
