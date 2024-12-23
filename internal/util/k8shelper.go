@@ -215,7 +215,7 @@ func GetResourceReadyReplicas(ctx context.Context, cli client.Client, namespace 
 		return 0, err
 	}
 
-	return int32(readyReplicas), nil
+	return int32(readyReplicas), nil // #nosec G115 -- number of replicas will not exceed MaxInt32
 }
 
 // CreateClientSetFromRestConfig creates a kubernetes.Clientset from rest.Config.

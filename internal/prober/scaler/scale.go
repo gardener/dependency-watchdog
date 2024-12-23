@@ -171,11 +171,11 @@ func (r *resScaler) determineTargetReplicas(annotations map[string]string) (int3
 		return defaultScaleDownReplicas, nil
 	}
 	if replicasStr, ok := annotations[replicasAnnotationKey]; ok {
-		replicas, err := strconv.Atoi(replicasStr)
+		replicas, err := strconv.Atoi(replicasStr) // #nosec G109 -- replicas will not exceed MaxInt32
 		if err != nil {
 			return 0, fmt.Errorf("unexpected and invalid replicasStr set as value for annotation: %s for resource, Err: %w", replicasAnnotationKey, err)
 		}
-		return int32(replicas), nil
+		return int32(replicas), nil // #nosec G109 G115 -- number of replicas will not exceed MaxInt32
 	}
 	r.logger.Info("Replicas annotation not found, falling back to default scale-up replicas", "operation", r.resourceInfo.operation, "annotationKey", replicasAnnotationKey, "default-replicas", defaultScaleUpReplicas)
 	return defaultScaleUpReplicas, nil

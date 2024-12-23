@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: SAP SE or an SAP affiliate company and Gardener contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package test
 
 import (
@@ -12,7 +16,7 @@ import (
 
 // ReadFile reads the file present at the given filePath and returns a byte Buffer containing its contents.
 func ReadFile(filePath string) (*bytes.Buffer, error) {
-	f, err := os.Open(filePath)
+	f, err := os.Open(filePath) // #nosec G304 -- Test only
 	if err != nil {
 		return nil, err
 	}

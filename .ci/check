@@ -40,4 +40,6 @@ fi
 
 make check
 
+make sast-report
+
 echo "All checks are passing."
