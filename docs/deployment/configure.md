@@ -73,7 +73,7 @@ How to scale a `DependentResourceInfo` is captured in `ScaleInfo`. It has the fo
 
 Prober cannot assume any target replicas during a scale-up operation for the following reasons:
 
-1. Kubernetes resources could be set to provide highly availability and the number of replicas could wary from one shoot control plane to the other. In gardener the number of replicas of pods in shoot namespace are controlled by the [shoot control plane configuration](https://github.com/gardener/gardener/blob/master/docs/usage/shoot_high_availability.md).
+1. Kubernetes resources could be set to provide highly availability and the number of replicas could wary from one shoot control plane to the other. In gardener the number of replicas of pods in shoot namespace are controlled by the [shoot control plane configuration](https://github.com/gardener/gardener/blob/master/docs/usage/high-availability/shoot_high_availability.md).
 2. If Horizontal Pod Autoscaler has been configured for a kubernetes dependent resource then it could potentially change the `spec.replicas` for a deployment/statefulset.
 
 Given the above constraint lets look at how prober determines the target replicas during scale-down or scale-up operations.
