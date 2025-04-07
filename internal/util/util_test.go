@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	. "github.com/onsi/gomega"
@@ -87,7 +87,7 @@ func TestFillDefaultIfNil(t *testing.T) {
 	testInt = GetValOrDefault[int](testInt, 10)
 	g.Expect(*testInt).To(Equal(10))
 
-	testFloat := pointer.Float64(1.0)
+	testFloat := ptr.To[float64](1.0)
 	testFloat = GetValOrDefault(testFloat, 2.0)
 	g.Expect(*testFloat).To(Equal(1.0))
 }

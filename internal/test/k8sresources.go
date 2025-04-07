@@ -7,12 +7,13 @@ package test
 import (
 	"time"
 
+	"k8s.io/utils/ptr"
+
 	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 )
 
 // NodeSpec is a specification for a node.
@@ -127,7 +128,7 @@ func createNodeLease(name string, isExpired bool) *coordinationv1.Lease {
 		},
 		Spec: coordinationv1.LeaseSpec{
 			HolderIdentity:       &name,
-			LeaseDurationSeconds: pointer.Int32(40),
+			LeaseDurationSeconds: ptr.To[int32](40),
 		},
 	}
 	if isExpired {

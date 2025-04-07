@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/onsi/gomega"
-	autoscalingv1 "k8s.io/api/autoscaling/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
+	. "github.com/onsi/gomega"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 )
 
 func TestCreateScaleUpResourceInfos(t *testing.T) {
@@ -43,9 +43,9 @@ func TestCreateScaleDownResourceInfos(t *testing.T) {
 		timeout      = 20 * time.Second
 		initialDelay = 45 * time.Second
 	)
-	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(mcmObjectRef.Name, 1, 0, pointer.Duration(timeout), pointer.Duration(initialDelay), false))
-	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(caObjectRef.Name, 1, 0, pointer.Duration(timeout), pointer.Duration(initialDelay), false))
-	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(kcmObjectRef.Name, 0, 1, pointer.Duration(timeout), pointer.Duration(initialDelay), false))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(mcmObjectRef.Name, 1, 0, ptr.To(timeout), ptr.To(initialDelay), false))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(caObjectRef.Name, 1, 0, ptr.To(timeout), ptr.To(initialDelay), false))
+	depResInfos = append(depResInfos, createTestDeploymentDependentResourceInfo(kcmObjectRef.Name, 0, 1, ptr.To(timeout), ptr.To(initialDelay), false))
 
 	resInfos := createScalableResourceInfos(scaleDown, depResInfos)
 	g.Expect(resInfos).To(HaveLen(len(depResInfos)))

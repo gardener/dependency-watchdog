@@ -26,7 +26,7 @@ const controllerName = "endpoint"
 
 // Reconciler EndpointReconciler reconciles an Endpoints object
 type Reconciler struct {
-	client.Client
+	Client                  client.Client
 	SeedClient              kubernetes.Interface
 	WeederConfig            *wapi.Config
 	WeederMgr               weeder.Manager

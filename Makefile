@@ -62,7 +62,7 @@ format:
 	@./hack/format.sh ./controllers ./internal
 
 .PHONY: test
-test: $(SETUP_ENVTEST) $(GOTESTFMT)
+test: $(SETUP_ENVTEST)
 	@./hack/test.sh
 
 .PHONY: kind-tests

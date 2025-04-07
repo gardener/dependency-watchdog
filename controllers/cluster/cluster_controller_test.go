@@ -16,12 +16,12 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/utils/ptr"
+
 	"sigs.k8s.io/controller-runtime/pkg/config"
 
 	"go.uber.org/zap/zapcore"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	"k8s.io/utils/pointer"
 
 	proberpackage "github.com/gardener/dependency-watchdog/internal/prober"
 	testutil "github.com/gardener/dependency-watchdog/internal/test"
@@ -74,7 +74,7 @@ func setupProberEnv(ctx context.Context, g *WithT) (client.Client, *envtest.Envi
 		Scheme: scheme,
 		Logger: testLogger,
 		Controller: config.Controller{
-			SkipNameValidation: pointer.Bool(true),
+			SkipNameValidation: ptr.To(true),
 		},
 	})
 	g.Expect(err).ToNot(HaveOccurred())
@@ -149,7 +149,7 @@ func testReconciliationAfterAPIServerIsDown(ctx context.Context, t *testing.T, t
 	err = testEnv.ControlPlane.APIServer.Stop()
 	g.Expect(err).ToNot(HaveOccurred())
 	_, err = reconciler.Reconcile(ctx, reconcile.Request{
-		NamespacedName: types.NamespacedName{Name: cluster.ObjectMeta.Name, Namespace: ""}})
+		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: ""}})
 	g.Expect(err).To(HaveOccurred())
 	err = testEnv.ControlPlane.APIServer.Start()
 	g.Expect(err).ToNot(HaveOccurred())
@@ -243,12 +243,12 @@ func testShootHibernation(g *WithT, crClient client.Client, reconciler *Reconcil
 	expectedWorkerNodeConditions := util.GetEffectiveNodeConditionsForWorkers(shoot)
 	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod, expectedWorkerNodeConditions)
 	// update spec to indicate start of hibernation
-	updateShootHibernationSpec(g, crClient, cluster, shoot, pointer.Bool(true))
+	updateShootHibernationSpec(g, crClient, cluster, shoot, ptr.To(true))
 	proberShouldNotBePresent(g, reconciler, cluster)
 	// update the status to show hibernation is finished
 	updateShootHibernationStatus(g, crClient, cluster, shoot, true)
 	// update spec to indicate cluster is waking up
-	updateShootHibernationSpec(g, crClient, cluster, shoot, pointer.Bool(false))
+	updateShootHibernationSpec(g, crClient, cluster, shoot, ptr.To(false))
 	proberShouldNotBePresent(g, reconciler, cluster)
 	// update status to indicate cluster has successfully woken up
 	updateShootHibernationStatus(g, crClient, cluster, shoot, false)
@@ -390,14 +390,14 @@ func testShootHasNoWorkers(g *WithT, crClient client.Client, reconciler *Reconci
 
 func proberShouldBePresent(g *WithT, reconciler *Reconciler, cluster *gardenerv1alpha1.Cluster, expectedKCMNodeMonitorGraceDuration metav1.Duration, expectedWorkerNodeConditions map[string][]string) {
 	g.Eventually(func() bool {
-		prober, ok := reconciler.ProberMgr.GetProber(cluster.ObjectMeta.Name)
+		prober, ok := reconciler.ProberMgr.GetProber(cluster.Name)
 		return ok && reflect.DeepEqual(*prober.GetConfig().KCMNodeMonitorGraceDuration, expectedKCMNodeMonitorGraceDuration) && !prober.AreWorkerNodeConditionsStale(expectedWorkerNodeConditions) && !prober.IsClosed()
 	}, 10*time.Second, 1*time.Second).Should(BeTrue())
 }
 
 func proberShouldNotBePresent(g *WithT, reconciler *Reconciler, cluster *gardenerv1alpha1.Cluster) {
 	g.Eventually(func() int { return len(reconciler.ProberMgr.GetAllProbers()) }, 10*time.Second, 1*time.Second).Should(Equal(0))
-	prober, ok := reconciler.ProberMgr.GetProber(cluster.ObjectMeta.Name)
+	prober, ok := reconciler.ProberMgr.GetProber(cluster.Name)
 	g.Expect(ok).To(BeFalse())
 	g.Expect(prober).To(Equal(proberpackage.Prober{}))
 }

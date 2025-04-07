@@ -33,12 +33,9 @@ dependency-watchdog:
             dockerfile: 'Dockerfile'
     steps:
       check:
-        image: 'golang:1.23.3'
+        image: 'golang:1.24.1'
       test-unit:
-        image: 'golang:1.23.3'
-      build:
-        image: 'golang:1.23.3'
-        output_dir: 'binary'
+        image: 'golang:1.24.1'
   jobs:
     head-update:
       traits:

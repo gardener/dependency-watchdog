@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 // ClusterBuilder is a builder for the cluster resource.
@@ -102,7 +102,7 @@ func createShoot(seedName string, workerCount int, workerNodeConditions [][]stri
 		},
 		Spec: gardencorev1beta1.ShootSpec{
 			Hibernation: &gardencorev1beta1.Hibernation{
-				Enabled: pointer.Bool(false),
+				Enabled: ptr.To(false),
 				Schedules: []gardencorev1beta1.HibernationSchedule{
 					{End: &end, Start: &start, Location: &location},
 				},

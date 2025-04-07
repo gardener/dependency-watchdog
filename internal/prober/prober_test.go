@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/utils/ptr"
+
 	perrors "github.com/gardener/dependency-watchdog/internal/prober/errors"
 	k8sfakes "github.com/gardener/dependency-watchdog/internal/prober/fakes/k8s"
 	scalefakes "github.com/gardener/dependency-watchdog/internal/prober/fakes/scale"
@@ -25,6 +27,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	papi "github.com/gardener/dependency-watchdog/api/prober"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
 	coordinationv1 "k8s.io/api/coordination/v1"
@@ -32,9 +35,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/utils/pointer"
-
-	papi "github.com/gardener/dependency-watchdog/api/prober"
 )
 
 var (
@@ -97,7 +97,7 @@ func TestDiscoveryClientCreationFailed(t *testing.T) {
 			entry := entry
 			t.Parallel()
 			scc := shootfakes.NewFakeShootClientBuilder(nil, nil).WithDiscoveryClientCreationError(entry.discoveryClientCreationErr).Build()
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.1)
 
 			p := NewProber(context.Background(), nil, test.DefaultNamespace, config, nil, nil, scc, logr.Discard())
 			g.Expect(p.IsClosed()).To(BeFalse())
@@ -684,6 +684,6 @@ func createConfig(probeInterval metav1.Duration, initialDelay metav1.Duration, k
 		InitialDelay:                &initialDelay,
 		ProbeTimeout:                &testProbeTimeout,
 		KCMNodeMonitorGraceDuration: &kcmNodeMonitorGraceDuration,
-		NodeLeaseFailureFraction:    pointer.Float64(DefaultNodeLeaseFailureFraction),
+		NodeLeaseFailureFraction:    ptr.To[float64](DefaultNodeLeaseFailureFraction),
 	}
 }

@@ -84,7 +84,6 @@ func TestUnregisterExistingProberShouldCloseItAndRemoveItFromManager(t *testing.
 	g.Eventually(p.IsClosed).Should(BeTrue(), "mgr.Unregister should cancel the unregistered prober")
 
 	t.Log("De-registered existing prober and closed it")
-
 }
 
 func TestUnregisterNonExistingProberShouldNotFail(t *testing.T) {
@@ -94,5 +93,4 @@ func TestUnregisterNonExistingProberShouldNotFail(t *testing.T) {
 
 	g.Expect(mgr.Unregister("bazingo")).To(BeFalse(), "mgr.Unregister should return false for non existing prober")
 	t.Log("De-registering a non existing prober did not fail")
-
 }

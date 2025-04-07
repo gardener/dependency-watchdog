@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/utils/ptr"
+
 	"sigs.k8s.io/controller-runtime/pkg/config"
 
 	"k8s.io/apimachinery/pkg/util/rand"
@@ -20,14 +22,12 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 
 	internalutils "github.com/gardener/dependency-watchdog/internal/util"
-	v1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
-
 	weederpackage "github.com/gardener/dependency-watchdog/internal/weeder"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -83,7 +83,7 @@ func setupWeederEnv(ctx context.Context, t *testing.T, kubeApiServerFlags map[st
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: s,
 		Controller: config.Controller{
-			SkipNameValidation: pointer.Bool(true),
+			SkipNameValidation: ptr.To(true),
 		},
 	})
 
@@ -177,7 +177,7 @@ func testWeederDedicatedEnvTest(t *testing.T) {
 func testOnlyCLBFPodDeletion(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string) {
 	createEp(ctx, g, reconciler, namespace, true)
 	pC := newPod(crashingPod, namespace, "node-0", correctLabels)
-	pH := newPod(healthyPod, namespace, "node-0", correctLabels)
+	pH := newPod(healthyPod, namespace, "node-1", correctLabels)
 
 	err := reconciler.Client.Create(ctx, pH)
 	g.Expect(err).ToNot(HaveOccurred())
@@ -280,7 +280,6 @@ func testNoCLBFPodDeletionWhenEndpointNotReady(ctx context.Context, _ context.Ca
 	err = reconciler.Client.Get(ctx, client.ObjectKeyFromObject(pod), &currentPod)
 	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(currentPod.DeletionTimestamp).To(BeNil())
-
 }
 
 func testNoCLBFPodDeletionOnContextCancellation(ctx context.Context, cancelFn context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string) {
@@ -354,7 +353,7 @@ func createEp(ctx context.Context, g *WithT, reconciler *Reconciler, namespace s
 		ep.Subsets[0].NotReadyAddresses = []v1.EndpointAddress{
 			{
 				IP:       "10.1.0.0",
-				NodeName: pointer.String("node-1"),
+				NodeName: ptr.To("node-1"),
 			},
 		}
 	}
@@ -369,7 +368,7 @@ func newPod(name, namespace, host string, labels map[string]string) *v1.Pod {
 			Labels:    labels,
 		},
 		Spec: v1.PodSpec{
-			TerminationGracePeriodSeconds: pointer.Int64(0),
+			TerminationGracePeriodSeconds: ptr.To[int64](0),
 			Containers: []v1.Container{
 				{Name: "test-container", Image: "nginx:latest"},
 			},
@@ -419,14 +418,14 @@ func newEndpoint(name, namespace string) *v1.Endpoints {
 			Namespace:                  namespace,
 			Annotations:                make(map[string]string),
 			Labels:                     make(map[string]string),
-			DeletionGracePeriodSeconds: pointer.Int64(0),
+			DeletionGracePeriodSeconds: ptr.To[int64](0),
 		},
 		Subsets: []v1.EndpointSubset{
 			{
 				Addresses: []v1.EndpointAddress{
 					{
 						IP:       "10.1.0.52",
-						NodeName: pointer.String("node-1"),
+						NodeName: ptr.To("node-1"),
 					},
 				},
 				NotReadyAddresses: []v1.EndpointAddress{},
@@ -443,7 +442,7 @@ func turnEndpointToNotReady(ctx context.Context, g *WithT, client client.Client,
 	epClone.Subsets[0].NotReadyAddresses = []v1.EndpointAddress{
 		{
 			IP:       "10.1.0.0",
-			NodeName: pointer.String("node-1"),
+			NodeName: ptr.To("node-1"),
 		},
 	}
 	g.Expect(client.Update(ctx, epClone)).To(Succeed())

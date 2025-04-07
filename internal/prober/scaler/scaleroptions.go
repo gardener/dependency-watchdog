@@ -7,7 +7,7 @@ package scaler
 import (
 	"time"
 
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -53,12 +53,12 @@ func withScaleResourceBackOff(interval time.Duration) scalerOption {
 
 func fillDefaultsOptions(options *scalerOptions) {
 	if options.resourceCheckTimeout == nil {
-		options.resourceCheckTimeout = pointer.Duration(defaultResourceCheckTimeout)
+		options.resourceCheckTimeout = ptr.To(defaultResourceCheckTimeout)
 	}
 	if options.resourceCheckInterval == nil {
-		options.resourceCheckInterval = pointer.Duration(defaultResourceCheckInterval)
+		options.resourceCheckInterval = ptr.To(defaultResourceCheckInterval)
 	}
 	if options.scaleResourceBackOff == nil {
-		options.scaleResourceBackOff = pointer.Duration(defaultScaleResourceBackoff)
+		options.scaleResourceBackOff = ptr.To(defaultScaleResourceBackoff)
 	}
 }
