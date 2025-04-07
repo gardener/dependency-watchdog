@@ -36,6 +36,9 @@ dependency-watchdog:
         image: 'golang:1.24.1'
       test-unit:
         image: 'golang:1.24.1'
+      build:
+        image: 'golang:1.24.1'
+        output_dir: 'binary'
   jobs:
     head-update:
       traits:
