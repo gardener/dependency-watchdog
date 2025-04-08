@@ -110,7 +110,7 @@ func createSecret(ctx context.Context, g *WithT, path, namespace string, data ma
 	test.FileExistsOrFail(path)
 	secret, err := test.GetStructured[corev1.Secret](path)
 	g.Expect(err).ToNot(HaveOccurred())
-	secret.ObjectMeta.Namespace = namespace
+	secret.Namespace = namespace
 	secret.Data = data
 	g.Expect(secret).ToNot(BeNil())
 	// create the secret

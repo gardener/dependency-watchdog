@@ -10,10 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/utils/ptr"
+
 	papi "github.com/gardener/dependency-watchdog/api/prober"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 )
 
 const (
@@ -29,12 +30,13 @@ var (
 	caObjectRef  = autoscalingv1.CrossVersionObjectReference{Kind: "Deployment", Name: "cluster-autoscaler", APIVersion: "apps/v1"}
 )
 
+// nolint:unparam
 func createTestDeploymentDependentResourceInfo(name string, scaleUpLevel, scaleDownLevel int, timeout *time.Duration, initialDelay *time.Duration, optional bool) papi.DependentResourceInfo {
 	if timeout == nil {
-		timeout = pointer.Duration(defaultTimeout)
+		timeout = ptr.To(defaultTimeout)
 	}
 	if initialDelay == nil {
-		initialDelay = pointer.Duration(defaultInitialDelay)
+		initialDelay = ptr.To(defaultInitialDelay)
 	}
 	return papi.DependentResourceInfo{
 		Ref:      &autoscalingv1.CrossVersionObjectReference{Name: name, Kind: deploymentKind, APIVersion: deploymentAPIVersion},

@@ -13,13 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/utils/ptr"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	kind "sigs.k8s.io/kind/pkg/cluster"
@@ -74,10 +75,7 @@ func CreateKindCluster(config KindConfig) (KindCluster, error) {
 		return nil, err
 	}
 	clusterConfig := config
-	err = fillDefaultConfigValues(&clusterConfig)
-	if err != nil {
-		return nil, err
-	}
+	fillDefaultConfigValues(&clusterConfig)
 	// create the kind cluster
 	provider := kind.NewProvider(kind.ProviderWithLogger(newKindLogger()))
 	err = doDeleteCluster(provider, clusterConfig.Name, kubeConfigPath)
@@ -113,7 +111,6 @@ func CreateKindCluster(config KindConfig) (KindCluster, error) {
 		client:         controllerClient,
 		kubeConfigPath: kubeConfigPath,
 	}, nil
-
 }
 
 func doCreateCluster(clusterConfig KindConfig, provider *kind.Provider) ([]byte, error) {
@@ -226,7 +223,7 @@ func doDeleteCluster(provider *kind.Provider, clusterName string, kubeConfigPath
 	return nil
 }
 
-func fillDefaultConfigValues(config *KindConfig) error {
+func fillDefaultConfigValues(config *KindConfig) {
 	if strings.TrimSpace(config.Name) == "" {
 		config.Name = defaultKindClusterName
 	}
@@ -234,7 +231,6 @@ func fillDefaultConfigValues(config *KindConfig) error {
 		config.NodeImage = defaultKindNodeImage
 	}
 	if config.ControlPlanReadyTimeout == nil {
-		config.ControlPlanReadyTimeout = pointer.Duration(defaultControlPlaneReadyTimeout)
+		config.ControlPlanReadyTimeout = ptr.To(defaultControlPlaneReadyTimeout)
 	}
-	return nil
 }

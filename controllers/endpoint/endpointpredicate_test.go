@@ -9,12 +9,13 @@ package endpoint
 import (
 	"testing"
 
+	"k8s.io/utils/ptr"
+
 	v12 "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
@@ -24,7 +25,7 @@ func turnReady(ep *v1.Endpoints) {
 			Addresses: []v1.EndpointAddress{
 				{
 					IP:       "10.1.0.52",
-					NodeName: pointer.String("node-0"),
+					NodeName: ptr.To("node-0"),
 				},
 			},
 			NotReadyAddresses: []v1.EndpointAddress{},
