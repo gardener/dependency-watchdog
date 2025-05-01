@@ -25,6 +25,8 @@ const (
 	// replicasAnnotationKey is the key for an annotation whose value captures the current spec.replicas prior to scale down for that resource.
 	// This is used when DWD attempts to restore the state of the resource it scale down.
 	replicasAnnotationKey = "dependency-watchdog.gardener.cloud/replicas"
+	// activeAnnotation captures if the DWD is active on a resource so that shoot reconciliation can ignore this resource from scaling up.
+	activeAnnotationKey = "dependency-watchdog.gardener.cloud/active"
 	// defaultScaleUpReplicas is the default value of number of replicas for a scale-up operation by a probe when the external probe transitions from failed to success.
 	defaultScaleUpReplicas int32 = 1
 	// defaultScaleDownReplicas is the default value of number of replicas for a scale-down operation by a probe when the external probe transitions from success to failed.
@@ -135,7 +137,7 @@ func (r *resScaler) updateResourceAndScale(ctx context.Context, scaleSubRes *aut
 	// update the annotation capturing the current spec.replicas as the annotation value if the operation is scale down.
 	// This allows restoration of the resource to the same replica count when a subsequent scale up operation is triggered.
 	if r.resourceInfo.operation == scaleDown {
-		patchBytes := []byte(fmt.Sprintf("{\"metadata\":{\"annotations\":{\"%s\":\"%s\"}}}", replicasAnnotationKey, strconv.Itoa(int(scaleSubRes.Spec.Replicas))))
+		patchBytes := []byte(fmt.Sprintf("{\"metadata\":{\"annotations\":{\"%s\":\"%s\",\"%s\":\"%s\"}}}", replicasAnnotationKey, strconv.Itoa(int(scaleSubRes.Spec.Replicas)), activeAnnotationKey, ""))
 		err := util.PatchResourceAnnotations(ctx, r.client, r.namespace, r.resourceInfo.ref, patchBytes)
 		if err != nil {
 			r.logger.Error(err, "Failed to update annotation to capture the current replicas before scaling it down")
@@ -162,6 +164,14 @@ func (r *resScaler) updateResourceAndScale(ctx context.Context, scaleSubRes *aut
 	}
 	if _, err = r.scaler.Update(childCtx, *gr, scaleSubRes, metav1.UpdateOptions{}); err != nil {
 		return err
+	} else {
+		//remove active annotation to ensure that the resource is not ignore anymore during shoot reconciliation
+		patchBytes := []byte(fmt.Sprintf("{\"metadata\":{\"annotations\":{\"%s\":null}}}", activeAnnotationKey))
+		err := util.PatchResourceAnnotations(ctx, r.client, r.namespace, r.resourceInfo.ref, patchBytes)
+		if err != nil {
+			r.logger.Error(err, "Failed to update annotation replicas and active after scaling up")
+			return err
+		}
 	}
 	return nil
 }
