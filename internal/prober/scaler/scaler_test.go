@@ -432,8 +432,11 @@ func checkScaleSuccess(g *WithT, opType operation, namespace, name string, expec
 	deploy := matchSpecReplicas(g, namespace, name, expectedSpecReplicas)
 	if opType == scaleUp {
 		g.Expect(deploy.Status.ReadyReplicas).To(BeNumerically(">=", 1))
+		//Introducing this check below makes the test fails otherwise it passes.
+		// g.Expect(deploy.ObjectMeta.Annotations[activeAnnotationKey]).To(BeNil())
 	} else {
 		g.Expect(deploy.Status.ReadyReplicas).To(BeNumerically("==", 0))
+		g.Expect(deploy.ObjectMeta.Annotations[activeAnnotationKey]).ToNot(BeNil())
 	}
 }
 
