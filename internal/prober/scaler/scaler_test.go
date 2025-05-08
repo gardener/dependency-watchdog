@@ -431,11 +431,15 @@ func checkIfDeploymentReady(namespace, name string, replicas int32) bool {
 func checkScaleSuccess(g *WithT, opType operation, namespace, name string, initialReplicas, expectedSpecReplicas int32) {
 	deploy := matchSpecReplicas(g, namespace, name, expectedSpecReplicas)
 	if opType == scaleUp {
-		g.Expect(deploy.Status.ReadyReplicas).To(BeNumerically("==", expectedSpecReplicas))
+		g.Eventually(func() bool {
+			return checkIfDeploymentReady(namespace, name, expectedSpecReplicas)
+		}, 1*time.Minute, time.Second).Should(BeTrue())
 		g.Expect(deploy.ObjectMeta.Annotations).ToNot(HaveKey(scaledDownAnnotationKey))
 	} else {
-		g.Expect(deploy.Status.ReadyReplicas).To(BeNumerically("==", 0))
-		//the check for intial replicas is done as for initial replicas being 0 no scale down happens so no annotations are set.
+		g.Eventually(func() bool {
+			return checkIfDeploymentReady(namespace, name, expectedSpecReplicasAfterSuccessfulScaleDownTest)
+		}, 1*time.Minute, time.Second).Should(BeTrue())
+		//the check for initial replicas is done as when initial replicas is 0, no scale down happens, so no annotations are set.
 		if initialReplicas != 0 {
 			g.Expect(deploy.ObjectMeta.Annotations).To(HaveKey(scaledDownAnnotationKey))
 			g.Expect(deploy.ObjectMeta.Annotations).To(HaveKey(replicasAnnotationKey))
