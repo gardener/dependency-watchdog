@@ -24,7 +24,7 @@ GO_ADD_LICENSE_VERSION ?= latest
 # k8s version is required as import-boss is part of the kubernetes/kubernetes repository.
 K8S_VERSION ?= $(subst v0,v1,$(call version_gomod,k8s.io/api))
 GO_STRESS_VERSION ?= latest
-SETUP_ENVTEST_VERSION ?= latest
+CONTROLLER_RUNTIME_VERSION ?= $(call version_gomod,sigs.k8s.io/controller-runtime)
 GOSEC_VERSION ?= v2.21.4
 
 # add ./hack/tools/bin to the PATH
@@ -61,7 +61,8 @@ $(GO_STRESS):
 	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install golang.org/x/tools/cmd/stress@$(GO_STRESS_VERSION)
 
 $(SETUP_ENVTEST):
-	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@$(SETUP_ENVTEST_VERSION)
+	curl -Lo $(SETUP_ENVTEST) https://github.com/kubernetes-sigs/controller-runtime/releases/download/$(CONTROLLER_RUNTIME_VERSION)/setup-envtest-$(SYSTEM_NAME)-$(SYSTEM_ARCH)
+	chmod +x $(SETUP_ENVTEST)
 
 $(GOSEC):
 	GOSEC_VERSION=$(GOSEC_VERSION) bash $(TOOLS_DIR)/install-gosec.sh
