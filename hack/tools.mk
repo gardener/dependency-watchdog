@@ -1,6 +1,8 @@
 # This make file is supposed to be included in the top-level make file.
 
-TOOLS_DIR := hack/tools
+SYSTEM_NAME       := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+SYSTEM_ARCH       := $(shell uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+TOOLS_DIR         := hack/tools
 TOOLS_BIN_DIR     := $(TOOLS_DIR)/bin
 GOLANGCI_LINT     := $(TOOLS_BIN_DIR)/golangci-lint
 GO_VULN_CHECK     := $(TOOLS_BIN_DIR)/govulncheck
