@@ -25,7 +25,7 @@ const (
 	// replicasAnnotationKey is the key for an annotation whose value captures the current spec.replicas prior to scale down for that resource.
 	// This is used when DWD attempts to restore the state of the resource it scale down.
 	replicasAnnotationKey = "dependency-watchdog.gardener.cloud/replicas"
-	// activeAnnotation captures if the DWD is active on a resource so that shoot reconciliation can ignore this resource from scaling up.
+	// scaledDownAnnotationKey captures if the DWD is active on a resource so that shoot reconciliation can ignore this resource from scaling up.
 	scaledDownAnnotationKey = "dependency-watchdog.gardener.cloud/scaled-down"
 	// defaultScaleUpReplicas is the default value of number of replicas for a scale-up operation by a probe when the external probe transitions from failed to success.
 	defaultScaleUpReplicas int32 = 1
@@ -157,22 +157,17 @@ func (r *resScaler) updateResourceAndScale(ctx context.Context, scaleSubRes *aut
 	}
 
 	scaleSubRes.Spec.Replicas = targetReplicas
-	if r.resourceInfo.operation == scaleUp {
-		r.logger.Info("Scaling up kubernetes resource", "targetReplicas", targetReplicas)
-	} else {
-		r.logger.Info("Scaling down kubernetes resource", "targetReplicas", targetReplicas)
-	}
+	r.logger.Info("Scaling kubernetes resource", "operation", r.resourceInfo.operation, "targetReplicas", targetReplicas)
 	if _, err = r.scaler.Update(childCtx, *gr, scaleSubRes, metav1.UpdateOptions{}); err != nil {
 		return err
-	} else {
-		if r.resourceInfo.operation == scaleUp {
-			//remove scaledDown annotation to ensure that the resource is not ignore anymore during shoot reconciliation
-			patchBytes := []byte(fmt.Sprintf("{\"metadata\":{\"annotations\":{\"%s\":null}}}", scaledDownAnnotationKey))
-			err := util.PatchResourceAnnotations(ctx, r.client, r.namespace, r.resourceInfo.ref, patchBytes)
-			if err != nil {
-				r.logger.Error(err, "Failed to update annotation replicas and active after scaling up")
-				return err
-			}
+	}
+	if r.resourceInfo.operation == scaleUp {
+		//remove scaledDown annotation to ensure that the resource is not ignore anymore during shoot reconciliation
+		patchBytes := []byte(fmt.Sprintf("{\"metadata\":{\"annotations\":{\"%s\":null}}}", scaledDownAnnotationKey))
+		err := util.PatchResourceAnnotations(ctx, r.client, r.namespace, r.resourceInfo.ref, patchBytes)
+		if err != nil {
+			r.logger.Error(err, "Failed to update annotation replicas and active after scaling up")
+			return err
 		}
 	}
 	return nil
