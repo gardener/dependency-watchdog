@@ -9,6 +9,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	// MeltdownProtectionActive annotation captures if the DWD is active on a resource so that shoot reconciliation can ignore this resource from scaling up.
+	MeltdownProtectionActive = "dependency-watchdog.gardener.cloud/meltdown-protection-active"
+)
+
 // Config provides typed access to prober configuration
 type Config struct {
 	// KubeConfigSecretName is the name of the kubernetes secret which has the kubeconfig to connect to the shoot control plane API server via internal domain
