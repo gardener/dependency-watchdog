@@ -434,14 +434,14 @@ func checkScaleSuccess(g *WithT, opType operation, namespace, name string, initi
 		g.Eventually(func() bool {
 			return checkIfDeploymentReady(namespace, name, expectedSpecReplicas)
 		}, 1*time.Minute, time.Second).Should(BeTrue())
-		g.Expect(deploy.ObjectMeta.Annotations).ToNot(HaveKey(scaledDownAnnotationKey))
+		g.Expect(deploy.ObjectMeta.Annotations).ToNot(HaveKey(papi.MeltdownProtectionActive))
 	} else {
 		g.Eventually(func() bool {
 			return checkIfDeploymentReady(namespace, name, expectedSpecReplicasAfterSuccessfulScaleDownTest)
 		}, 1*time.Minute, time.Second).Should(BeTrue())
 		//the check for initial replicas is done as when initial replicas is 0, no scale down happens, so no annotations are set.
 		if initialReplicas != 0 {
-			g.Expect(deploy.ObjectMeta.Annotations).To(HaveKey(scaledDownAnnotationKey))
+			g.Expect(deploy.ObjectMeta.Annotations).To(HaveKey(papi.MeltdownProtectionActive))
 			g.Expect(deploy.ObjectMeta.Annotations).To(HaveKey(replicasAnnotationKey))
 		}
 	}

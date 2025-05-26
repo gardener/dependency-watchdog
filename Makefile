@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+REPO_ROOT           := $(shell dirname "$(realpath $(lastword $(MAKEFILE_LIST)))")
+HACK_DIR            := $(REPO_ROOT)/hack
 VERSION             := $(shell cat VERSION)
 REGISTRY            := europe-docker.pkg.dev/gardener-project/public/gardener
 IMAGE_REPOSITORY    := $(REGISTRY)/dependency-watchdog
@@ -9,8 +11,8 @@ IMAGE_TAG           := $(VERSION)
 BIN_DIR             := bin
 
 # Tools
-TOOLS_DIR := hack/tools
-include hack/tools.mk
+TOOLS_DIR := $(HACK_DIR)/tools
+include $(HACK_DIR)/tools.mk
 ENVTEST   := $(TOOLS_BIN_DIR)/setup-envtest
 
 .PHONY: tidy
@@ -38,6 +40,14 @@ build-local:
 docker-image:
 	@docker build -t $(IMAGE_REPOSITORY):$(IMAGE_TAG) -f Dockerfile --rm .
 
+# Builds the docker image for the specified platform.
+# Usage: make docker-build-<arch>
+# Example: make docker-build-amd64, make docker-build-arm64
+.PHONY: docker-build-%
+docker-build-%:
+	@GOARCH=$$(echo $* | cut -d- -f 1) hack/docker-build.sh
+
+
 .PHONY: docker-push
 docker-push:
 	@if ! docker images $(IMAGE_REPOSITORY) | awk '{ print $$2 }' | grep -q -F $(IMAGE_TAG); then echo "$(IMAGE_REPOSITORY) version $(IMAGE_TAG) is not yet built. Please run 'make docker-image'"; false; fi
@@ -50,24 +60,24 @@ clean:
 
 .PHONY: check
 check: $(GOIMPORTS) $(GOLANGCI_LINT) $(LOGCHECK) $(GO_IMPORT_BOSS)
-	@./hack/check.sh --golangci-lint-config=./.golangci.yaml ./controllers/... ./internal/...
-	@./hack/check-imports.sh ./api/... ./cmd/... ./controllers/... ./internal/...
+	@$(HACK_DIR)/check.sh --golangci-lint-config=./.golangci.yaml ./controllers/... ./internal/...
+	@$(HACK_DIR)/check-imports.sh ./api/... ./cmd/... ./controllers/... ./internal/...
 
 .PHONY: import-boss 
 import-boss: $(GO_IMPORT_BOSS)
-	@./hack/check-imports.sh ./cmd/...
+	@$(HACK_DIR)/check-imports.sh ./cmd/...
 
 .PHONY: format
 format:
-	@./hack/format.sh ./controllers ./internal
+	@$(HACK_DIR)/format.sh ./controllers ./internal
 
 .PHONY: test
 test: $(SETUP_ENVTEST)
-	@./hack/test.sh
+	@$(HACK_DIR)/test.sh
 
 .PHONY: kind-tests
 kind-tests:
-	@./hack/kind-test.sh
+	@$(HACK_DIR)/kind-test.sh
 
 .PHONY: install-envtest
 install-envtest: $(SETUP_ENVTEST)
@@ -78,7 +88,7 @@ verify: check format test
 
 .PHONY: add-license-headers
 add-license-headers: $(GO_ADD_LICENSE)
-	@./hack/addlicenseheaders.sh
+	@$(HACK_DIR)/addlicenseheaders.sh
 
 # Taken this trick from https://pawamoy.github.io/posts/pass-makefile-args-as-typed-in-command-line/
 args = $(foreach a,$($(subst -,_,$1)_args),$(if $(value $a),$a="$($a)"))
@@ -86,12 +96,12 @@ stress_args = test-package test-func tool-params
 
 .PHONY: stress
 stress: $(GO_STRESS)
-	@./hack/stress-test.sh $@ $(call args,$@)
+	@$(HACK_DIR)/stress-test.sh $@ $(call args,$@)
 
 .PHONY: sast
 sast: $(GOSEC)
-	@./hack/sast.sh
+	@$(HACK_DIR)/sast.sh
 
 .PHONY: sast-report
 sast-report:$(GOSEC)
-	@./hack/sast.sh --gosec-report true
+	@$(HACK_DIR)/sast.sh --gosec-report true
