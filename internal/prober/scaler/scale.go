@@ -77,7 +77,15 @@ func (r *resScaler) scale(ctx context.Context) error {
 	}
 
 	if ignoreScaling(resourceAnnot) {
-		r.logger.Info("Scaling ignored due to explicit instruction via annotation", "annotation", ignoreScalingAnnotationKey)
+		r.logger.Info("Scaling ignored for %s due to explicit instruction via annotation %s", r.resourceInfo.ref.Name, ignoreScalingAnnotationKey)
+		// check if the meltdown protection annotation is set to true, if so then remove it to ensure that the resource is now manually managed by operator.
+		if hasMeltdownProtection(resourceAnnot) {
+			r.logger.Info("Found leftover meltdown protection annotation, to be removed as scaling is ignored for resource and is not managed by DWD anymore")
+			if err := r.removeMeltdownAnnotations(ctx); err != nil {
+				r.logger.Error(err, "Failed to remove meltdown protection annotations after ignoring scaling was enabled")
+				return err
+			}
+		}
 		return nil
 	}
 
@@ -88,7 +96,6 @@ func (r *resScaler) scale(ctx context.Context) error {
 		}
 		return err
 	}
-
 	if r.resourceInfo.operation.shouldScaleReplicas(scaleSubRes.Spec.Replicas) {
 		if err := r.updateResourceAndScale(ctx, scaleSubRes, resourceAnnot); err != nil {
 			return err
@@ -96,6 +103,15 @@ func (r *resScaler) scale(ctx context.Context) error {
 	} else {
 		if r.resourceInfo.operation == scaleUp {
 			r.logger.Info("Skipping scale-up for resource as current spec replicas > 0")
+			// It is possible that the meltdown protection annotation was not removed during the last scale up operation.
+			// In that case, check if the annotation is present and remove the meltdown protection annotation.
+			if hasMeltdownProtection(resourceAnnot) {
+				r.logger.Info("Removing leftover meltdown protection annotation from last scadole up operation")
+				if err := r.removeMeltdownAnnotations(ctx); err != nil {
+					r.logger.Error(err, "Failed to remove meltdown protection annotations after ignoring scaling was enabled")
+					return err
+				}
+			}
 		} else {
 			r.logger.Info("Skipping scale-down for resource as current spec replicas == 0")
 		}
@@ -160,14 +176,22 @@ func (r *resScaler) updateResourceAndScale(ctx context.Context, scaleSubRes *aut
 		return err
 	}
 	if r.resourceInfo.operation == scaleUp {
-		//remove meltdown protection annotation to ensure that the resource is not ignore anymore during shoot reconciliation
-		patchBytes := []byte(fmt.Sprintf("{\"metadata\":{\"annotations\":{\"%s\":null}}}", papi.MeltdownProtectionActive))
-		err := util.PatchResourceAnnotations(ctx, r.client, r.namespace, r.resourceInfo.ref, patchBytes)
-		if err != nil {
-			r.logger.Error(err, "Failed to update annotation replicas and active after scaling up")
+		if err := r.removeMeltdownAnnotations(ctx); err != nil {
+			r.logger.Error(err, "Failed to remove meltdown protection annotations after scaling up")
 			return err
 		}
 	}
+	return nil
+}
+
+// remove meltdown protection annotation to ensure that the resource is not ignore anymore during shoot reconciliation
+func (r *resScaler) removeMeltdownAnnotations(ctx context.Context) error {
+	patchBytes := []byte(fmt.Sprintf("{\"metadata\":{\"annotations\":{\"%s\":null}}}", papi.MeltdownProtectionActive))
+	if err := util.PatchResourceAnnotations(ctx, r.client, r.namespace, r.resourceInfo.ref, patchBytes); err != nil {
+		r.logger.Error(err, "Failed to remove annotations after scaling operation")
+		return err
+	}
+	r.logger.Info("Removed annotations", "annotationKeys", []string{replicasAnnotationKey, papi.MeltdownProtectionActive})
 	return nil
 }
 
@@ -193,6 +217,13 @@ func ignoreScaling(annotations map[string]string) bool {
 			return false
 		}
 		return b
+	}
+	return false
+}
+
+func hasMeltdownProtection(annotations map[string]string) bool {
+	if _, ok := annotations[papi.MeltdownProtectionActive]; ok {
+		return true
 	}
 	return false
 }
