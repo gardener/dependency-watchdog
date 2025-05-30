@@ -94,15 +94,15 @@ func testScaleDownThenScaleUpWhenIgnoreScalingAnnotationIsNotPresent(t *testing.
 
 		err := ds.ScaleDown(context.Background())
 		g.Expect(err).ToNot(HaveOccurred())
-		checkScaleSuccess(g, scaleDown, namespace, caObjectRef.Name, expectedSpecReplicasAfterSuccessfulScaleDownTest)
-		checkScaleSuccess(g, scaleDown, namespace, mcmObjectRef.Name, expectedSpecReplicasAfterSuccessfulScaleDownTest)
-		checkScaleSuccess(g, scaleDown, namespace, kcmObjectRef.Name, expectedSpecReplicasAfterSuccessfulScaleDownTest)
+		checkScaleSuccess(g, scaleDown, namespace, caObjectRef.Name, entry.caReplicas, expectedSpecReplicasAfterSuccessfulScaleDownTest)
+		checkScaleSuccess(g, scaleDown, namespace, mcmObjectRef.Name, entry.mcmReplicas, expectedSpecReplicasAfterSuccessfulScaleDownTest)
+		checkScaleSuccess(g, scaleDown, namespace, kcmObjectRef.Name, entry.kcmReplicas, expectedSpecReplicasAfterSuccessfulScaleDownTest)
 
 		err = ds.ScaleUp(context.Background())
 		g.Expect(err).ToNot(HaveOccurred())
-		checkScaleSuccess(g, scaleUp, namespace, mcmObjectRef.Name, entry.expectedScaledUpMCMReplicas)
-		checkScaleSuccess(g, scaleUp, namespace, caObjectRef.Name, entry.expectedScaledUpCAReplicas)
-		checkScaleSuccess(g, scaleUp, namespace, kcmObjectRef.Name, entry.expectedScaledUpKCMReplicas)
+		checkScaleSuccess(g, scaleUp, namespace, mcmObjectRef.Name, entry.mcmReplicas, entry.expectedScaledUpMCMReplicas)
+		checkScaleSuccess(g, scaleUp, namespace, caObjectRef.Name, entry.caReplicas, entry.expectedScaledUpCAReplicas)
+		checkScaleSuccess(g, scaleUp, namespace, kcmObjectRef.Name, entry.kcmReplicas, entry.expectedScaledUpKCMReplicas)
 
 		err = kindTestEnv.DeleteAllDeployments(namespace)
 		g.Expect(err).ToNot(HaveOccurred())
@@ -140,22 +140,22 @@ func testScaleDownThenScaleUpWhenIgnoreScalingAnnotationIsPresent(t *testing.T) 
 
 		err := ds.ScaleDown(context.Background())
 		g.Expect(err).ToNot(HaveOccurred())
-		checkScaleSuccess(g, scaleDown, namespace, caObjectRef.Name, expectedSpecReplicasAfterSuccessfulScaleDownTest)
-		checkScaleSuccess(g, scaleDown, namespace, mcmObjectRef.Name, expectedSpecReplicasAfterSuccessfulScaleDownTest)
+		checkScaleSuccess(g, scaleDown, namespace, caObjectRef.Name, entry.caReplicas, expectedSpecReplicasAfterSuccessfulScaleDownTest)
+		checkScaleSuccess(g, scaleDown, namespace, mcmObjectRef.Name, entry.mcmReplicas, expectedSpecReplicasAfterSuccessfulScaleDownTest)
 		if reflect.DeepEqual(entry.annotationsOnKCM, validIgnoreScalingAnnotationMap) {
 			matchSpecReplicas(g, namespace, kcmObjectRef.Name, entry.kcmReplicas)
 		} else {
-			checkScaleSuccess(g, scaleDown, namespace, kcmObjectRef.Name, expectedSpecReplicasAfterSuccessfulScaleDownTest)
+			checkScaleSuccess(g, scaleDown, namespace, kcmObjectRef.Name, entry.kcmReplicas, expectedSpecReplicasAfterSuccessfulScaleDownTest)
 		}
 
 		err = ds.ScaleUp(context.Background())
 		g.Expect(err).ToNot(HaveOccurred())
-		checkScaleSuccess(g, scaleUp, namespace, mcmObjectRef.Name, entry.expectedScaledUpMCMReplicas)
-		checkScaleSuccess(g, scaleUp, namespace, caObjectRef.Name, entry.expectedScaledUpCAReplicas)
+		checkScaleSuccess(g, scaleUp, namespace, mcmObjectRef.Name, entry.mcmReplicas, entry.expectedScaledUpMCMReplicas)
+		checkScaleSuccess(g, scaleUp, namespace, caObjectRef.Name, entry.caReplicas, entry.expectedScaledUpCAReplicas)
 		if reflect.DeepEqual(entry.annotationsOnKCM, validIgnoreScalingAnnotationMap) {
 			matchSpecReplicas(g, namespace, kcmObjectRef.Name, entry.kcmReplicas)
 		} else {
-			checkScaleSuccess(g, scaleUp, namespace, kcmObjectRef.Name, entry.expectedScaledUpKCMReplicas)
+			checkScaleSuccess(g, scaleUp, namespace, kcmObjectRef.Name, entry.kcmReplicas, entry.expectedScaledUpKCMReplicas)
 		}
 
 		err = kindTestEnv.DeleteAllDeployments(namespace)
@@ -189,7 +189,7 @@ func testScalingWhenMandatoryResourceNotFound(t *testing.T) {
 		g.Expect(err).ToNot(BeNil())
 		g.Expect(err.Error()).To(ContainSubstring("\"" + kcmObjectRef.Name + "\" not found"))
 		matchSpecReplicas(g, namespace, entry.unscaledResourceName, entry.expectedUnscaledResourceSpecReplicas)
-		checkScaleSuccess(g, entry.op, namespace, entry.scaledResourceName, entry.expectedScaledResourceSpecReplicas)
+		checkScaleSuccess(g, entry.op, namespace, entry.scaledResourceName, entry.expectedUnscaledResourceSpecReplicas, entry.expectedScaledResourceSpecReplicas)
 
 		err = kindTestEnv.DeleteAllDeployments(namespace)
 		g.Expect(err).ToNot(HaveOccurred())
@@ -218,8 +218,8 @@ func testScalingWhenOptionalResourceNotFound(t *testing.T) {
 
 		err := entry.scalingFn(context.Background())
 		g.Expect(err).ToNot(HaveOccurred())
-		checkScaleSuccess(g, entry.op, namespace, mcmObjectRef.Name, entry.expectedScaledMCMReplicas)
-		checkScaleSuccess(g, entry.op, namespace, kcmObjectRef.Name, entry.expectedScaledCAReplicas)
+		checkScaleSuccess(g, entry.op, namespace, mcmObjectRef.Name, entry.mcmReplicas, entry.expectedScaledMCMReplicas)
+		checkScaleSuccess(g, entry.op, namespace, kcmObjectRef.Name, entry.kcmReplicas, entry.expectedScaledCAReplicas)
 
 		err = kindTestEnv.DeleteAllDeployments(namespace)
 		g.Expect(err).ToNot(HaveOccurred())
@@ -295,7 +295,7 @@ func testScalingWhenKindOfResourceIsInvalid(t *testing.T) {
 		err := entry.scalingFn(context.Background())
 		g.Expect(err).ToNot(BeNil())
 		g.Expect(err.Error()).To(ContainSubstring(entry.errorString))
-		checkScaleSuccess(g, entry.op, namespace, entry.scaledResourceName, entry.expectedScaledResourceSpecReplicas)
+		checkScaleSuccess(g, entry.op, namespace, entry.scaledResourceName, entry.expectedScaledResourceSpecReplicas, entry.expectedScaledResourceSpecReplicas)
 		for i, unscaledResName := range entry.unscaledResourceNames {
 			matchSpecReplicas(g, namespace, unscaledResName, entry.expectedUnscaledResourceSpecReplicas[i])
 		}
@@ -355,8 +355,8 @@ func testResourceShouldNotScaleUpIfCurrentReplicaCountIsPositive(t *testing.T) {
 
 	err := ds.ScaleUp(context.Background())
 	g.Expect(err).ToNot(HaveOccurred())
-	checkScaleSuccess(g, scaleUp, namespace, caObjectRef.Name, 1)
-	checkScaleSuccess(g, scaleUp, namespace, kcmObjectRef.Name, 1)
+	checkScaleSuccess(g, scaleUp, namespace, caObjectRef.Name, 0, 1)
+	checkScaleSuccess(g, scaleUp, namespace, kcmObjectRef.Name, 1, 1)
 	matchSpecReplicas(g, namespace, mcmObjectRef.Name, 1)
 
 	err = kindTestEnv.DeleteAllDeployments(namespace)
@@ -374,7 +374,7 @@ func testScaleUpShouldReturnErrorWhenReplicasAnnotationsHasInvalidValue(t *testi
 
 	err := ds.ScaleUp(context.Background())
 	g.Expect(err).ToNot(BeNil())
-	checkScaleSuccess(g, scaleUp, namespace, caObjectRef.Name, 1)
+	checkScaleSuccess(g, scaleUp, namespace, caObjectRef.Name, 0, 1)
 	matchSpecReplicas(g, namespace, kcmObjectRef.Name, 0)
 	matchSpecReplicas(g, namespace, mcmObjectRef.Name, 0)
 
@@ -428,12 +428,22 @@ func checkIfDeploymentReady(namespace, name string, replicas int32) bool {
 	return true
 }
 
-func checkScaleSuccess(g *WithT, opType operation, namespace, name string, expectedSpecReplicas int32) {
+func checkScaleSuccess(g *WithT, opType operation, namespace, name string, initialReplicas, expectedSpecReplicas int32) {
 	deploy := matchSpecReplicas(g, namespace, name, expectedSpecReplicas)
 	if opType == scaleUp {
-		g.Expect(deploy.Status.ReadyReplicas).To(BeNumerically(">=", 1))
+		g.Eventually(func() bool {
+			return checkIfDeploymentReady(namespace, name, expectedSpecReplicas)
+		}, 1*time.Minute, time.Second).Should(BeTrue())
+		g.Expect(deploy.ObjectMeta.Annotations).ToNot(HaveKey(papi.MeltdownProtectionActive))
 	} else {
-		g.Expect(deploy.Status.ReadyReplicas).To(BeNumerically("==", 0))
+		g.Eventually(func() bool {
+			return checkIfDeploymentReady(namespace, name, expectedSpecReplicasAfterSuccessfulScaleDownTest)
+		}, 1*time.Minute, time.Second).Should(BeTrue())
+		//the check for initial replicas is done as when initial replicas is 0, no scale down happens, so no annotations are set.
+		if initialReplicas != 0 {
+			g.Expect(deploy.ObjectMeta.Annotations).To(HaveKey(papi.MeltdownProtectionActive))
+			g.Expect(deploy.ObjectMeta.Annotations).To(HaveKey(replicasAnnotationKey))
+		}
 	}
 }
 
