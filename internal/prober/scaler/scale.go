@@ -77,11 +77,11 @@ func (r *resScaler) scale(ctx context.Context) error {
 	}
 
 	if ignoreScaling(resourceAnnot) {
-		r.logger.Info("Scaling ignored for %s due to explicit instruction via annotation %s", r.resourceInfo.ref.Name, ignoreScalingAnnotationKey)
+		r.logger.Info("Scaling ignored due to explicit instruction via an annotation", "resource", r.resourceInfo.ref.Name, "annotation", ignoreScalingAnnotationKey)
 		// check if the meltdown protection annotation is set to true, if so then remove it to ensure that the resource is now manually managed by operator.
-		if hasMeltdownProtection(resourceAnnot) {
+		if hasMeltdownProtectionEnabled(resourceAnnot) {
 			r.logger.Info("Found leftover meltdown protection annotation, to be removed as scaling is ignored for resource and is not managed by DWD anymore")
-			if err := r.removeMeltdownAnnotations(ctx); err != nil {
+			if err = r.removeMeltdownAnnotations(ctx); err != nil {
 				r.logger.Error(err, "Failed to remove meltdown protection annotations after ignoring scaling was enabled")
 				return err
 			}
@@ -105,9 +105,9 @@ func (r *resScaler) scale(ctx context.Context) error {
 			r.logger.Info("Skipping scale-up for resource as current spec replicas > 0")
 			// It is possible that the meltdown protection annotation was not removed during the last scale up operation.
 			// In that case, check if the annotation is present and remove the meltdown protection annotation.
-			if hasMeltdownProtection(resourceAnnot) {
-				r.logger.Info("Removing leftover meltdown protection annotation from last scadole up operation")
-				if err := r.removeMeltdownAnnotations(ctx); err != nil {
+			if hasMeltdownProtectionEnabled(resourceAnnot) {
+				r.logger.Info("Removing leftover meltdown protection annotation from last scale up operation")
+				if err = r.removeMeltdownAnnotations(ctx); err != nil {
 					r.logger.Error(err, "Failed to remove meltdown protection annotations after ignoring scaling was enabled")
 					return err
 				}
@@ -221,7 +221,7 @@ func ignoreScaling(annotations map[string]string) bool {
 	return false
 }
 
-func hasMeltdownProtection(annotations map[string]string) bool {
+func hasMeltdownProtectionEnabled(annotations map[string]string) bool {
 	if _, ok := annotations[papi.MeltdownProtectionActive]; ok {
 		return true
 	}
