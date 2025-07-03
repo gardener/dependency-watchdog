@@ -127,14 +127,14 @@ func (p *Prober) recordError(err error, code errors.ErrorCode, message string) {
 
 func (p *Prober) checkAndTriggerScale(ctx context.Context, candidateNodeLeases []coordinationv1.Lease) {
 	// revive:disable:early-return
-	shouldScaleUp, expiredFraction := p.shouldPerformScaleUp(candidateNodeLeases)
+	shouldScaleUp, expiredLeasesFraction := p.shouldPerformScaleUp(candidateNodeLeases)
 	if shouldScaleUp {
 		if err := p.scaler.ScaleUp(ctx); err != nil {
 			p.recordError(err, errors.ErrScaleUp, "Failed to scale up resources")
 			p.l.Error(err, "Failed to scale up resources")
 		}
 	} else {
-		p.l.Info("Lease probe failed, performing scale down operation if required", "expiredFraction", *expiredFraction, "threshold", *p.config.NodeLeaseFailureFraction)
+		p.l.Info("Lease probe failed, performing scale down operation if required", "expiredLeasesFraction", *expiredLeasesFraction, "expirationThreshold", *p.config.NodeLeaseFailureFraction)
 		if err := p.scaler.ScaleDown(ctx); err != nil {
 			p.recordError(err, errors.ErrScaleDown, "Failed to scale down resources")
 			p.l.Error(err, "Failed to scale down resources")
@@ -157,12 +157,12 @@ func (p *Prober) shouldPerformScaleUp(candidateNodeLeases []coordinationv1.Lease
 			expiredNodeLeaseCount++
 		}
 	}
-	expiredFraction := expiredNodeLeaseCount / float64(len(candidateNodeLeases))
-	shouldScaleUp := expiredFraction < *p.config.NodeLeaseFailureFraction
+	expiredLeasesFraction := expiredNodeLeaseCount / float64(len(candidateNodeLeases))
+	shouldScaleUp := expiredLeasesFraction < *p.config.NodeLeaseFailureFraction
 	if shouldScaleUp {
-		p.l.Info("Lease probe succeeded, performing scale up operation if required", "expiredFraction", expiredFraction, "threshold", *p.config.NodeLeaseFailureFraction)
+		p.l.Info("Lease probe succeeded, performing scale up operation if required", "expiredLeasesFraction", expiredLeasesFraction, "expirationThreshold", *p.config.NodeLeaseFailureFraction)
 	}
-	return shouldScaleUp, &expiredFraction
+	return shouldScaleUp, &expiredLeasesFraction
 }
 
 func (p *Prober) setupProbeClient(ctx context.Context) (client.Client, error) {
