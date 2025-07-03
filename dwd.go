@@ -41,7 +41,7 @@ func main() {
 	checkArgs(args)
 	ctx := ctrl.SetupSignalHandler()
 	opts := zap.Options{
-		Development: true,
+		Development: false,
 		Level:       zapcore.DebugLevel,
 		TimeEncoder: zapcore.RFC3339TimeEncoder,
 	}
