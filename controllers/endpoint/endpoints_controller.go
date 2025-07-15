@@ -11,7 +11,7 @@ import (
 	wapi "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/gardener/dependency-watchdog/internal/weeder"
 	"github.com/go-logr/logr"
-	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -40,7 +40,7 @@ type Reconciler struct {
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 	//Get the endpoint object
-	var ep v1.Endpoints
+	var ep discoveryv1.EndpointSlice
 	err := r.Client.Get(ctx, req.NamespacedName, &ep)
 	if err != nil {
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, err
@@ -51,7 +51,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 }
 
 // startWeeder starts a new weeder for the endpoint
-func (r *Reconciler) startWeeder(ctx context.Context, logger logr.Logger, namespace string, ep *v1.Endpoints) {
+func (r *Reconciler) startWeeder(ctx context.Context, logger logr.Logger, namespace string, ep *discoveryv1.EndpointSlice) {
 	w := weeder.NewWeeder(ctx, namespace, r.WeederConfig, r.Client, r.SeedClient, ep, logger)
 	// Register the weeder
 	r.WeederMgr.Register(*w)
@@ -71,7 +71,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 	return c.Watch(
-		source.Kind[client.Object](mgr.GetCache(), &v1.Endpoints{},
+		source.Kind[client.Object](mgr.GetCache(), &discoveryv1.EndpointSlice{},
 			&handler.EnqueueRequestForObject{},
 			predicate.And[client.Object](
 				predicate.ResourceVersionChangedPredicate{},

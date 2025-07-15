@@ -14,39 +14,34 @@ import (
 	v12 "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
-	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
-func turnReady(ep *v1.Endpoints) {
-	ep.Subsets = []v1.EndpointSubset{
+func turnReady(ep *discoveryv1.EndpointSlice) {
+	ep.Endpoints = []discoveryv1.Endpoint{
 		{
-			Addresses: []v1.EndpointAddress{
-				{
-					IP:       "10.1.0.52",
-					NodeName: ptr.To("node-0"),
-				},
-			},
-			NotReadyAddresses: []v1.EndpointAddress{},
-			Ports:             []v1.EndpointPort{},
+			Addresses: []string{"10.1.0.52"},
+			NodeName:  ptr.To("node-0"),
 		},
 	}
+	ep.Ports = []discoveryv1.EndpointPort{}
 }
 
 func TestReadyEndpoints(t *testing.T) {
 	g := NewWithT(t)
 	predicate := ReadyEndpoints(logr.Discard())
 
-	readyEp := &v1.Endpoints{}
+	readyEp := &discoveryv1.EndpointSlice{}
 	turnReady(readyEp)
 
-	notReadyEp := &v1.Endpoints{}
+	notReadyEp := &discoveryv1.EndpointSlice{}
 
 	testcases := []struct {
 		name                             string
-		ep                               *v1.Endpoints
-		oldEp                            *v1.Endpoints
+		ep                               *discoveryv1.EndpointSlice
+		oldEp                            *discoveryv1.EndpointSlice
 		expectedCreateEventFilterOutput  bool
 		expectedUpdateEventFilterOutput  bool
 		expectedDeleteEventFilterOutput  bool
@@ -137,13 +132,13 @@ func TestMatchingEndpointsPredicate(t *testing.T) {
 
 	predicate := MatchingEndpoints(epMap)
 
-	epRelevant := &v1.Endpoints{
+	epRelevant := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "ep-relevant",
 		},
 	}
 
-	epIrrelevant := &v1.Endpoints{
+	epIrrelevant := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "ep-irrelevant",
 		},
@@ -151,8 +146,8 @@ func TestMatchingEndpointsPredicate(t *testing.T) {
 
 	testcases := []struct {
 		name                             string
-		ep                               *v1.Endpoints
-		oldEp                            *v1.Endpoints
+		ep                               *discoveryv1.EndpointSlice
+		oldEp                            *discoveryv1.EndpointSlice
 		expectedCreateEventFilterOutput  bool
 		expectedUpdateEventFilterOutput  bool
 		expectedDeleteEventFilterOutput  bool

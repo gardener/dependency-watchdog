@@ -7,7 +7,7 @@ package endpoint
 import (
 	wapi "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/go-logr/logr"
-	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -18,11 +18,11 @@ import (
 func ReadyEndpoints(logger logr.Logger) predicate.Predicate {
 	log := logger.WithValues("predicate", "ReadyEndpointsPredicate")
 	isEndpointReady := func(obj runtime.Object) bool {
-		ep, ok := obj.(*v1.Endpoints)
+		ep, ok := obj.(*discoveryv1.EndpointSlice)
 		if !ok || ep == nil {
 			return false
 		}
-		for _, subset := range ep.Subsets {
+		for _, subset := range ep.Endpoints {
 			if len(subset.Addresses) > 0 {
 				return true
 			}
@@ -60,7 +60,7 @@ func ReadyEndpoints(logger logr.Logger) predicate.Predicate {
 // MatchingEndpoints is a predicate to allow events for only configured endpoints
 func MatchingEndpoints(epMap map[string]wapi.DependantSelectors) predicate.Predicate {
 	isMatchingEndpoints := func(obj runtime.Object, epMap map[string]wapi.DependantSelectors) bool {
-		ep, ok := obj.(*v1.Endpoints)
+		ep, ok := obj.(*discoveryv1.EndpointSlice)
 		if !ok || ep == nil {
 			return false
 		}
