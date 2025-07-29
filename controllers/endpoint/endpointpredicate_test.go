@@ -19,24 +19,24 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
-func turnReady(ep *discoveryv1.EndpointSlice) {
-	ep.Endpoints = []discoveryv1.Endpoint{
+func turnReady(epSlice *discoveryv1.EndpointSlice) {
+	epSlice.Endpoints = []discoveryv1.Endpoint{
 		{
 			Addresses: []string{"10.1.0.52"},
 			NodeName:  ptr.To("node-0"),
 		},
 	}
-	ep.Ports = []discoveryv1.EndpointPort{}
+	epSlice.Ports = []discoveryv1.EndpointPort{}
 }
 
 func TestReadyEndpoints(t *testing.T) {
 	g := NewWithT(t)
 	predicate := ReadyEndpoints(logr.Discard())
 
-	readyEp := &discoveryv1.EndpointSlice{}
-	turnReady(readyEp)
+	readyEpSlice := &discoveryv1.EndpointSlice{}
+	turnReady(readyEpSlice)
 
-	notReadyEp := &discoveryv1.EndpointSlice{}
+	notReadyEpSlice := &discoveryv1.EndpointSlice{}
 
 	testcases := []struct {
 		name                             string
@@ -49,7 +49,7 @@ func TestReadyEndpoints(t *testing.T) {
 	}{
 		{
 			name:                             "no ep -> Ready ep",
-			ep:                               readyEp,
+			ep:                               readyEpSlice,
 			expectedCreateEventFilterOutput:  true,
 			expectedUpdateEventFilterOutput:  true,
 			expectedDeleteEventFilterOutput:  false,
@@ -57,7 +57,7 @@ func TestReadyEndpoints(t *testing.T) {
 		},
 		{
 			name:                             "no ep -> NotReady ep",
-			ep:                               notReadyEp,
+			ep:                               notReadyEpSlice,
 			expectedCreateEventFilterOutput:  false,
 			expectedUpdateEventFilterOutput:  false,
 			expectedDeleteEventFilterOutput:  false,
@@ -65,8 +65,8 @@ func TestReadyEndpoints(t *testing.T) {
 		},
 		{
 			name:                             "NotReady ep -> Ready ep",
-			ep:                               readyEp,
-			oldEp:                            notReadyEp,
+			ep:                               readyEpSlice,
+			oldEp:                            notReadyEpSlice,
 			expectedCreateEventFilterOutput:  true,
 			expectedUpdateEventFilterOutput:  true,
 			expectedDeleteEventFilterOutput:  false,
@@ -74,8 +74,8 @@ func TestReadyEndpoints(t *testing.T) {
 		},
 		{
 			name:                             "Ready ep -> Ready ep",
-			ep:                               readyEp,
-			oldEp:                            readyEp,
+			ep:                               readyEpSlice,
+			oldEp:                            readyEpSlice,
 			expectedCreateEventFilterOutput:  true,
 			expectedUpdateEventFilterOutput:  false,
 			expectedDeleteEventFilterOutput:  false,
@@ -83,7 +83,7 @@ func TestReadyEndpoints(t *testing.T) {
 		},
 		{
 			name:                             "Ready ep -> no ep",
-			oldEp:                            readyEp,
+			oldEp:                            readyEpSlice,
 			expectedCreateEventFilterOutput:  false,
 			expectedUpdateEventFilterOutput:  false,
 			expectedDeleteEventFilterOutput:  false,
@@ -91,7 +91,7 @@ func TestReadyEndpoints(t *testing.T) {
 		},
 		{
 			name:                             "NotReady ep -> no ep",
-			oldEp:                            notReadyEp,
+			oldEp:                            notReadyEpSlice,
 			expectedCreateEventFilterOutput:  false,
 			expectedUpdateEventFilterOutput:  false,
 			expectedDeleteEventFilterOutput:  false,
@@ -134,13 +134,15 @@ func TestMatchingEndpointsPredicate(t *testing.T) {
 
 	epRelevant := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "ep-relevant",
+			Name:   "ep-relevant",
+			Labels: map[string]string{v12.ServiceNameLabel: "ep-relevant"},
 		},
 	}
 
 	epIrrelevant := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "ep-irrelevant",
+			Name:   "ep-irrelevant",
+			Labels: map[string]string{v12.ServiceNameLabel: "ep-irrelevant"},
 		},
 	}
 

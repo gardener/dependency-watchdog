@@ -18,6 +18,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/rand"
 
+	wapi "github.com/gardener/dependency-watchdog/api/weeder"
 	testutil "github.com/gardener/dependency-watchdog/internal/test"
 	"k8s.io/client-go/kubernetes/scheme"
 
@@ -263,9 +264,9 @@ func testPodTurningCLBFAfterWatchDuration(ctx context.Context, _ context.CancelF
 
 func testNoCLBFPodDeletionWhenEndpointNotReady(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string) {
 	createEp(ctx, g, reconciler, namespace, false)
-	ep := &discoveryv1.EndpointSlice{}
-	g.Expect(reconciler.Client.Get(ctx, types.NamespacedName{Name: epName, Namespace: namespace}, ep)).To(Succeed())
-	turnEndpointToNotReady(ctx, g, reconciler.Client, ep)
+	epSlice := &discoveryv1.EndpointSlice{}
+	g.Expect(reconciler.Client.Get(ctx, types.NamespacedName{Name: epName, Namespace: namespace}, epSlice)).To(Succeed())
+	turnEndpointToNotReady(ctx, g, reconciler.Client, epSlice)
 
 	el := discoveryv1.EndpointSliceList{}
 	g.Expect(reconciler.Client.List(ctx, &el)).To(Succeed())
@@ -335,14 +336,14 @@ func deleteAllPods(ctx context.Context, g *WithT, crClient client.Client) {
 }
 
 func deleteAllEp(ctx context.Context, g *WithT, cli client.Client) {
-	el := &v1.EndpointsList{}
+	el := &discoveryv1.EndpointSliceList{}
 	select {
 	case <-ctx.Done():
 		return
 	default:
 		g.Expect(cli.List(ctx, el)).To(Succeed())
-		for _, ep := range el.Items {
-			g.Expect(client.IgnoreNotFound(cli.Delete(ctx, &ep))).To(Succeed())
+		for _, epSlice := range el.Items {
+			g.Expect(client.IgnoreNotFound(cli.Delete(ctx, &epSlice))).To(Succeed())
 		}
 	}
 }
@@ -409,13 +410,12 @@ func turnPodToHealthy(ctx context.Context, g *WithT, crClient client.Client, p *
 
 func newEndpoint(name, namespace string) *discoveryv1.EndpointSlice {
 	es := discoveryv1.EndpointSlice{
-		TypeMeta: metav1.TypeMeta{APIVersion: "discovery.k8s.io/v1", Kind: "EndpointSlice"},
 		ObjectMeta: metav1.ObjectMeta{
 			UID:                        uuid.NewUUID(),
 			Name:                       name,
 			Namespace:                  namespace,
 			Annotations:                make(map[string]string),
-			Labels:                     make(map[string]string),
+			Labels:                     map[string]string{wapi.ServiceNameLabel: name},
 			DeletionGracePeriodSeconds: ptr.To[int64](0),
 		},
 		Endpoints: []discoveryv1.Endpoint{
