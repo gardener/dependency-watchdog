@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/gardener/gardener v1.118.2
 	github.com/gardener/machine-controller-manager v0.58.0
-	github.com/go-logr/logr v1.4.2
+	github.com/go-logr/logr v1.4.3
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/onsi/gomega v1.37.0
 	github.com/spf13/pflag v1.0.6
