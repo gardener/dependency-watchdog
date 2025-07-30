@@ -18,6 +18,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/rand"
 
+	wapi "github.com/gardener/dependency-watchdog/api/weeder"
 	testutil "github.com/gardener/dependency-watchdog/internal/test"
 	"k8s.io/client-go/kubernetes/scheme"
 
@@ -25,6 +26,7 @@ import (
 	weederpackage "github.com/gardener/dependency-watchdog/internal/weeder"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -262,11 +264,11 @@ func testPodTurningCLBFAfterWatchDuration(ctx context.Context, _ context.CancelF
 
 func testNoCLBFPodDeletionWhenEndpointNotReady(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string) {
 	createEp(ctx, g, reconciler, namespace, false)
-	ep := &v1.Endpoints{}
-	g.Expect(reconciler.Client.Get(ctx, types.NamespacedName{Name: epName, Namespace: namespace}, ep)).To(Succeed())
-	turnEndpointToNotReady(ctx, g, reconciler.Client, ep)
+	epSlice := &discoveryv1.EndpointSlice{}
+	g.Expect(reconciler.Client.Get(ctx, types.NamespacedName{Name: epName, Namespace: namespace}, epSlice)).To(Succeed())
+	turnEndpointToNotReady(ctx, g, reconciler.Client, epSlice)
 
-	el := v1.EndpointsList{}
+	el := discoveryv1.EndpointSliceList{}
 	g.Expect(reconciler.Client.List(ctx, &el)).To(Succeed())
 
 	pod := newPod(crashingPod, namespace, "node-0", correctLabels)
@@ -334,14 +336,14 @@ func deleteAllPods(ctx context.Context, g *WithT, crClient client.Client) {
 }
 
 func deleteAllEp(ctx context.Context, g *WithT, cli client.Client) {
-	el := &v1.EndpointsList{}
+	el := &discoveryv1.EndpointSliceList{}
 	select {
 	case <-ctx.Done():
 		return
 	default:
 		g.Expect(cli.List(ctx, el)).To(Succeed())
-		for _, ep := range el.Items {
-			g.Expect(client.IgnoreNotFound(cli.Delete(ctx, &ep))).To(Succeed())
+		for _, epSlice := range el.Items {
+			g.Expect(client.IgnoreNotFound(cli.Delete(ctx, &epSlice))).To(Succeed())
 		}
 	}
 }
@@ -349,13 +351,10 @@ func deleteAllEp(ctx context.Context, g *WithT, cli client.Client) {
 func createEp(ctx context.Context, g *WithT, reconciler *Reconciler, namespace string, ready bool) {
 	ep := newEndpoint(epName, namespace)
 	if !ready {
-		ep.Subsets[0].Addresses = nil
-		ep.Subsets[0].NotReadyAddresses = []v1.EndpointAddress{
-			{
-				IP:       "10.1.0.0",
-				NodeName: ptr.To("node-1"),
-			},
-		}
+		ep.Endpoints[0].Addresses = nil
+		ep.Endpoints[0].Addresses = []string{"10.1.0.0"}
+		ep.Endpoints[0].Conditions.Ready = ptr.To(false)
+		ep.Endpoints[0].NodeName = ptr.To("node-1")
 	}
 	g.Expect(reconciler.Client.Create(ctx, ep)).To(Succeed())
 }
@@ -409,41 +408,37 @@ func turnPodToHealthy(ctx context.Context, g *WithT, crClient client.Client, p *
 	g.Expect(crClient.Status().Patch(ctx, pClone, client.MergeFrom(p))).To(Succeed())
 }
 
-func newEndpoint(name, namespace string) *v1.Endpoints {
-	e := v1.Endpoints{
-		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Endpoints"},
+func newEndpoint(name, namespace string) *discoveryv1.EndpointSlice {
+	es := discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			UID:                        uuid.NewUUID(),
 			Name:                       name,
 			Namespace:                  namespace,
 			Annotations:                make(map[string]string),
-			Labels:                     make(map[string]string),
+			Labels:                     map[string]string{wapi.ServiceNameLabel: name},
 			DeletionGracePeriodSeconds: ptr.To[int64](0),
 		},
-		Subsets: []v1.EndpointSubset{
+		Endpoints: []discoveryv1.Endpoint{
 			{
-				Addresses: []v1.EndpointAddress{
-					{
-						IP:       "10.1.0.52",
-						NodeName: ptr.To("node-1"),
-					},
+				Addresses: []string{"10.1.0.52"},
+				NodeName:  ptr.To("node-1"),
+				Conditions: discoveryv1.EndpointConditions{
+					Ready: ptr.To(true),
 				},
-				NotReadyAddresses: []v1.EndpointAddress{},
-				Ports:             []v1.EndpointPort{},
 			},
 		},
+		AddressType: discoveryv1.AddressTypeIPv4,
+		Ports:       []discoveryv1.EndpointPort{},
 	}
-	return &e
+	return &es
 }
 
-func turnEndpointToNotReady(ctx context.Context, g *WithT, client client.Client, ep *v1.Endpoints) {
+func turnEndpointToNotReady(ctx context.Context, g *WithT, client client.Client, ep *discoveryv1.EndpointSlice) {
 	epClone := ep.DeepCopy()
-	epClone.Subsets[0].Addresses = nil
-	epClone.Subsets[0].NotReadyAddresses = []v1.EndpointAddress{
-		{
-			IP:       "10.1.0.0",
-			NodeName: ptr.To("node-1"),
-		},
-	}
+	epClone.Endpoints[0].Addresses = nil
+	epClone.Endpoints[0].Conditions.Ready = ptr.To(false)
+	epClone.Endpoints[0].Addresses = []string{"10.1.0.0"}
+	epClone.Endpoints[0].NodeName = ptr.To("node-1")
+	epClone.AddressType = discoveryv1.AddressTypeIPv4
 	g.Expect(client.Update(ctx, epClone)).To(Succeed())
 }

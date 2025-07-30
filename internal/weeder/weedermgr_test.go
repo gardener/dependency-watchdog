@@ -14,7 +14,7 @@ import (
 	v12 "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
-	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -30,7 +30,7 @@ var (
 		WatchDuration:                 &metav1.Duration{Duration: testWatchDuration},
 		ServicesAndDependantSelectors: testServicesAndDependantSelectors,
 	}
-	testEp = &v1.Endpoints{
+	testEp = &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{Name: epName},
 	}
 )

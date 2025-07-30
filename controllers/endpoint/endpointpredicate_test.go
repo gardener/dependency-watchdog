@@ -14,39 +14,34 @@ import (
 	v12 "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
-	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
-func turnReady(ep *v1.Endpoints) {
-	ep.Subsets = []v1.EndpointSubset{
+func turnReady(epSlice *discoveryv1.EndpointSlice) {
+	epSlice.Endpoints = []discoveryv1.Endpoint{
 		{
-			Addresses: []v1.EndpointAddress{
-				{
-					IP:       "10.1.0.52",
-					NodeName: ptr.To("node-0"),
-				},
-			},
-			NotReadyAddresses: []v1.EndpointAddress{},
-			Ports:             []v1.EndpointPort{},
+			Addresses: []string{"10.1.0.52"},
+			NodeName:  ptr.To("node-0"),
 		},
 	}
+	epSlice.Ports = []discoveryv1.EndpointPort{}
 }
 
 func TestReadyEndpoints(t *testing.T) {
 	g := NewWithT(t)
 	predicate := ReadyEndpoints(logr.Discard())
 
-	readyEp := &v1.Endpoints{}
-	turnReady(readyEp)
+	readyEpSlice := &discoveryv1.EndpointSlice{}
+	turnReady(readyEpSlice)
 
-	notReadyEp := &v1.Endpoints{}
+	notReadyEpSlice := &discoveryv1.EndpointSlice{}
 
 	testcases := []struct {
 		name                             string
-		ep                               *v1.Endpoints
-		oldEp                            *v1.Endpoints
+		ep                               *discoveryv1.EndpointSlice
+		oldEp                            *discoveryv1.EndpointSlice
 		expectedCreateEventFilterOutput  bool
 		expectedUpdateEventFilterOutput  bool
 		expectedDeleteEventFilterOutput  bool
@@ -54,7 +49,7 @@ func TestReadyEndpoints(t *testing.T) {
 	}{
 		{
 			name:                             "no ep -> Ready ep",
-			ep:                               readyEp,
+			ep:                               readyEpSlice,
 			expectedCreateEventFilterOutput:  true,
 			expectedUpdateEventFilterOutput:  true,
 			expectedDeleteEventFilterOutput:  false,
@@ -62,7 +57,7 @@ func TestReadyEndpoints(t *testing.T) {
 		},
 		{
 			name:                             "no ep -> NotReady ep",
-			ep:                               notReadyEp,
+			ep:                               notReadyEpSlice,
 			expectedCreateEventFilterOutput:  false,
 			expectedUpdateEventFilterOutput:  false,
 			expectedDeleteEventFilterOutput:  false,
@@ -70,8 +65,8 @@ func TestReadyEndpoints(t *testing.T) {
 		},
 		{
 			name:                             "NotReady ep -> Ready ep",
-			ep:                               readyEp,
-			oldEp:                            notReadyEp,
+			ep:                               readyEpSlice,
+			oldEp:                            notReadyEpSlice,
 			expectedCreateEventFilterOutput:  true,
 			expectedUpdateEventFilterOutput:  true,
 			expectedDeleteEventFilterOutput:  false,
@@ -79,8 +74,8 @@ func TestReadyEndpoints(t *testing.T) {
 		},
 		{
 			name:                             "Ready ep -> Ready ep",
-			ep:                               readyEp,
-			oldEp:                            readyEp,
+			ep:                               readyEpSlice,
+			oldEp:                            readyEpSlice,
 			expectedCreateEventFilterOutput:  true,
 			expectedUpdateEventFilterOutput:  false,
 			expectedDeleteEventFilterOutput:  false,
@@ -88,7 +83,7 @@ func TestReadyEndpoints(t *testing.T) {
 		},
 		{
 			name:                             "Ready ep -> no ep",
-			oldEp:                            readyEp,
+			oldEp:                            readyEpSlice,
 			expectedCreateEventFilterOutput:  false,
 			expectedUpdateEventFilterOutput:  false,
 			expectedDeleteEventFilterOutput:  false,
@@ -96,7 +91,7 @@ func TestReadyEndpoints(t *testing.T) {
 		},
 		{
 			name:                             "NotReady ep -> no ep",
-			oldEp:                            notReadyEp,
+			oldEp:                            notReadyEpSlice,
 			expectedCreateEventFilterOutput:  false,
 			expectedUpdateEventFilterOutput:  false,
 			expectedDeleteEventFilterOutput:  false,
@@ -137,22 +132,24 @@ func TestMatchingEndpointsPredicate(t *testing.T) {
 
 	predicate := MatchingEndpoints(epMap)
 
-	epRelevant := &v1.Endpoints{
+	epRelevant := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "ep-relevant",
+			Name:   "ep-relevant",
+			Labels: map[string]string{v12.ServiceNameLabel: "ep-relevant"},
 		},
 	}
 
-	epIrrelevant := &v1.Endpoints{
+	epIrrelevant := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "ep-irrelevant",
+			Name:   "ep-irrelevant",
+			Labels: map[string]string{v12.ServiceNameLabel: "ep-irrelevant"},
 		},
 	}
 
 	testcases := []struct {
 		name                             string
-		ep                               *v1.Endpoints
-		oldEp                            *v1.Endpoints
+		ep                               *discoveryv1.EndpointSlice
+		oldEp                            *discoveryv1.EndpointSlice
 		expectedCreateEventFilterOutput  bool
 		expectedUpdateEventFilterOutput  bool
 		expectedDeleteEventFilterOutput  bool

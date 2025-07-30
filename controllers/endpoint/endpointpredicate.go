@@ -7,7 +7,7 @@ package endpoint
 import (
 	wapi "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/go-logr/logr"
-	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -18,16 +18,16 @@ import (
 func ReadyEndpoints(logger logr.Logger) predicate.Predicate {
 	log := logger.WithValues("predicate", "ReadyEndpointsPredicate")
 	isEndpointReady := func(obj runtime.Object) bool {
-		ep, ok := obj.(*v1.Endpoints)
-		if !ok || ep == nil {
+		epSlice, ok := obj.(*discoveryv1.EndpointSlice)
+		if !ok || epSlice == nil {
 			return false
 		}
-		for _, subset := range ep.Subsets {
-			if len(subset.Addresses) > 0 {
+		for _, endpoints := range epSlice.Endpoints {
+			if len(endpoints.Addresses) > 0 {
 				return true
 			}
 		}
-		log.Info("Endpoint does not have any IP address. Skipping processing this endpoint", "namespace", ep.Namespace, "endpoint", ep.Name)
+		log.Info("Endpoint does not have any IP address. Skipping processing this endpoint", "namespace", epSlice.Namespace, "endpoint", epSlice.Name)
 		return false
 	}
 
@@ -60,11 +60,11 @@ func ReadyEndpoints(logger logr.Logger) predicate.Predicate {
 // MatchingEndpoints is a predicate to allow events for only configured endpoints
 func MatchingEndpoints(epMap map[string]wapi.DependantSelectors) predicate.Predicate {
 	isMatchingEndpoints := func(obj runtime.Object, epMap map[string]wapi.DependantSelectors) bool {
-		ep, ok := obj.(*v1.Endpoints)
-		if !ok || ep == nil {
+		epSlice, ok := obj.(*discoveryv1.EndpointSlice)
+		if !ok || epSlice == nil {
 			return false
 		}
-		_, exists := epMap[ep.Name]
+		_, exists := epMap[epSlice.Labels[wapi.ServiceNameLabel]]
 		return exists
 	}
 
