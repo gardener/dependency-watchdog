@@ -22,13 +22,14 @@ func ReadyEndpoints(logger logr.Logger) predicate.Predicate {
 		if !ok || epSlice == nil {
 			return false
 		}
-		for _, endpoints := range epSlice.Endpoints {
-			if len(endpoints.Addresses) > 0 {
-				return true
+		for _, endpoint := range epSlice.Endpoints {
+			// check if there is at least one endpoint with condition ready as false and return false
+			if endpoint.Conditions.Ready != nil && !*endpoint.Conditions.Ready {
+				log.Info("Not all endpoints in the endpoint slice are ready", "namespace", epSlice.Namespace, "endpoint", epSlice.Name)
+				return false
 			}
 		}
-		log.Info("Endpoint does not have any IP address. Skipping processing this endpoint", "namespace", epSlice.Namespace, "endpoint", epSlice.Name)
-		return false
+		return true
 	}
 
 	return predicate.Funcs{

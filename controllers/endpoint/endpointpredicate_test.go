@@ -24,6 +24,21 @@ func turnReady(epSlice *discoveryv1.EndpointSlice) {
 		{
 			Addresses: []string{"10.1.0.52"},
 			NodeName:  ptr.To("node-0"),
+			Conditions: discoveryv1.EndpointConditions{
+				Ready: ptr.To(true),
+			},
+		},
+	}
+	epSlice.Ports = []discoveryv1.EndpointPort{}
+}
+func turnNotReady(epSlice *discoveryv1.EndpointSlice) {
+	epSlice.Endpoints = []discoveryv1.Endpoint{
+		{
+			Addresses: []string{"10.1.0.52"},
+			NodeName:  ptr.To("node-0"),
+			Conditions: discoveryv1.EndpointConditions{
+				Ready: ptr.To(false),
+			},
 		},
 	}
 	epSlice.Ports = []discoveryv1.EndpointPort{}
@@ -37,6 +52,7 @@ func TestReadyEndpoints(t *testing.T) {
 	turnReady(readyEpSlice)
 
 	notReadyEpSlice := &discoveryv1.EndpointSlice{}
+	turnNotReady(notReadyEpSlice)
 
 	testcases := []struct {
 		name                             string

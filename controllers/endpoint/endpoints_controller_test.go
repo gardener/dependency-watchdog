@@ -266,8 +266,6 @@ func testNoCLBFPodDeletionWhenEndpointNotReady(ctx context.Context, _ context.Ca
 	createEp(ctx, g, reconciler, namespace, false)
 	epSlice := &discoveryv1.EndpointSlice{}
 	g.Expect(reconciler.Client.Get(ctx, types.NamespacedName{Name: epName, Namespace: namespace}, epSlice)).To(Succeed())
-	turnEndpointToNotReady(ctx, g, reconciler.Client, epSlice)
-
 	el := discoveryv1.EndpointSliceList{}
 	g.Expect(reconciler.Client.List(ctx, &el)).To(Succeed())
 
@@ -275,8 +273,10 @@ func testNoCLBFPodDeletionWhenEndpointNotReady(ctx context.Context, _ context.Ca
 	err := reconciler.Client.Create(ctx, pod)
 	g.Expect(err).ToNot(HaveOccurred())
 	turnPodToCrashLoop(ctx, g, reconciler.Client, pod)
-
 	time.Sleep(5 * time.Second)
+
+	el = discoveryv1.EndpointSliceList{}
+	g.Expect(reconciler.Client.List(ctx, &el)).To(Succeed())
 
 	currentPod := v1.Pod{}
 	err = reconciler.Client.Get(ctx, client.ObjectKeyFromObject(pod), &currentPod)
@@ -431,14 +431,4 @@ func newEndpoint(name, namespace string) *discoveryv1.EndpointSlice {
 		Ports:       []discoveryv1.EndpointPort{},
 	}
 	return &es
-}
-
-func turnEndpointToNotReady(ctx context.Context, g *WithT, client client.Client, ep *discoveryv1.EndpointSlice) {
-	epClone := ep.DeepCopy()
-	epClone.Endpoints[0].Addresses = nil
-	epClone.Endpoints[0].Conditions.Ready = ptr.To(false)
-	epClone.Endpoints[0].Addresses = []string{"10.1.0.0"}
-	epClone.Endpoints[0].NodeName = ptr.To("node-1")
-	epClone.AddressType = discoveryv1.AddressTypeIPv4
-	g.Expect(client.Update(ctx, epClone)).To(Succeed())
 }
