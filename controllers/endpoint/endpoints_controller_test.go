@@ -141,7 +141,7 @@ func testWeederSharedEnvTest(t *testing.T) {
 			test.run(childCtx, chileCancelFn, g, reconciler, testNs)
 		})
 		deleteAllPods(childCtx, g, reconciler.Client)
-		deleteAllEp(childCtx, g, reconciler.Client)
+		deleteAllEpSlices(childCtx, g, reconciler.Client)
 	}
 }
 
@@ -177,7 +177,7 @@ func testWeederDedicatedEnvTest(t *testing.T) {
 // case 6: cancelling the context should mean no deletion of CLBF pod happens
 // case 7: watch cancelled by API server, should lead to create of new watch (#dedicated env test)
 func testOnlyCLBFPodDeletion(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string) {
-	createEp(ctx, g, reconciler, namespace, true)
+	createEpSlice(ctx, g, reconciler, namespace, true)
 	pC := newPod(crashingPod, namespace, "node-0", correctLabels)
 	pH := newPod(healthyPod, namespace, "node-1", correctLabels)
 
@@ -207,7 +207,7 @@ func testOnlyCLBFPodDeletion(ctx context.Context, _ context.CancelFunc, g *WithT
 }
 
 func testPodTurningCLBFDeletion(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string) {
-	createEp(ctx, g, reconciler, namespace, true)
+	createEpSlice(ctx, g, reconciler, namespace, true)
 	pod := newPod(testPodName, namespace, "node-0", correctLabels)
 
 	err := reconciler.Client.Create(ctx, pod)
@@ -228,7 +228,7 @@ func testPodTurningCLBFDeletion(ctx context.Context, _ context.CancelFunc, g *Wi
 }
 
 func testCLBFPodWithWrongLabelsDeletion(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string) {
-	createEp(ctx, g, reconciler, namespace, true)
+	createEpSlice(ctx, g, reconciler, namespace, true)
 	pod := newPod(crashingPod, namespace, "node-0", inCorrectLabels)
 	err := reconciler.Client.Create(ctx, pod)
 	g.Expect(err).ToNot(HaveOccurred())
@@ -243,7 +243,7 @@ func testCLBFPodWithWrongLabelsDeletion(ctx context.Context, _ context.CancelFun
 }
 
 func testPodTurningCLBFAfterWatchDuration(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string) {
-	createEp(ctx, g, reconciler, namespace, true)
+	createEpSlice(ctx, g, reconciler, namespace, true)
 	pod := newPod(testPodName, namespace, "node-0", correctLabels)
 
 	err := reconciler.Client.Create(ctx, pod)
@@ -263,7 +263,7 @@ func testPodTurningCLBFAfterWatchDuration(ctx context.Context, _ context.CancelF
 }
 
 func testNoCLBFPodDeletionWhenEndpointNotReady(ctx context.Context, _ context.CancelFunc, g *WithT, reconciler *Reconciler, namespace string) {
-	createEp(ctx, g, reconciler, namespace, false)
+	createEpSlice(ctx, g, reconciler, namespace, false)
 	epSlice := &discoveryv1.EndpointSlice{}
 	g.Expect(reconciler.Client.Get(ctx, types.NamespacedName{Name: epName, Namespace: namespace}, epSlice)).To(Succeed())
 	el := discoveryv1.EndpointSliceList{}
@@ -290,7 +290,7 @@ func testNoCLBFPodDeletionOnContextCancellation(ctx context.Context, cancelFn co
 	g.Expect(err).ToNot(HaveOccurred())
 	turnPodToCrashLoop(ctx, g, reconciler.Client, pod)
 
-	createEp(ctx, g, reconciler, namespace, true)
+	createEpSlice(ctx, g, reconciler, namespace, true)
 	// cancel context (like SIGKILL signal to the process)
 	cancelFn()
 
@@ -307,7 +307,7 @@ func testPodWatchEndsAbruptlyBeforeSpecifiedWatchDuration(ctx context.Context, _
 	turnPodToHealthy(ctx, g, reconciler.Client, pod)
 
 	// new endpoint creation should trigger watch creation
-	createEp(ctx, g, reconciler, namespace, true)
+	createEpSlice(ctx, g, reconciler, namespace, true)
 
 	// waiting more than "min-request-timeout"(5sec) so that watch gets cancelled by APIServer
 	time.Sleep(10 * time.Second)
@@ -335,28 +335,28 @@ func deleteAllPods(ctx context.Context, g *WithT, crClient client.Client) {
 	}
 }
 
-func deleteAllEp(ctx context.Context, g *WithT, cli client.Client) {
-	el := &discoveryv1.EndpointSliceList{}
+func deleteAllEpSlices(ctx context.Context, g *WithT, cli client.Client) {
+	epSlices := &discoveryv1.EndpointSliceList{}
 	select {
 	case <-ctx.Done():
 		return
 	default:
-		g.Expect(cli.List(ctx, el)).To(Succeed())
-		for _, epSlice := range el.Items {
+		g.Expect(cli.List(ctx, epSlices)).To(Succeed())
+		for _, epSlice := range epSlices.Items {
 			g.Expect(client.IgnoreNotFound(cli.Delete(ctx, &epSlice))).To(Succeed())
 		}
 	}
 }
 
-func createEp(ctx context.Context, g *WithT, reconciler *Reconciler, namespace string, ready bool) {
-	ep := newEndpoint(epName, namespace)
+func createEpSlice(ctx context.Context, g *WithT, reconciler *Reconciler, namespace string, ready bool) {
+	epSlice := newEndpointSlice(epName, namespace)
 	if !ready {
-		ep.Endpoints[0].Addresses = nil
-		ep.Endpoints[0].Addresses = []string{"10.1.0.0"}
-		ep.Endpoints[0].Conditions.Ready = ptr.To(false)
-		ep.Endpoints[0].NodeName = ptr.To("node-1")
+		epSlice.Endpoints[0].Addresses = nil
+		epSlice.Endpoints[0].Addresses = []string{"10.1.0.0"}
+		epSlice.Endpoints[0].Conditions.Ready = ptr.To(false)
+		epSlice.Endpoints[0].NodeName = ptr.To("node-1")
 	}
-	g.Expect(reconciler.Client.Create(ctx, ep)).To(Succeed())
+	g.Expect(reconciler.Client.Create(ctx, epSlice)).To(Succeed())
 }
 
 func newPod(name, namespace, host string, labels map[string]string) *v1.Pod {
@@ -408,7 +408,7 @@ func turnPodToHealthy(ctx context.Context, g *WithT, crClient client.Client, p *
 	g.Expect(crClient.Status().Patch(ctx, pClone, client.MergeFrom(p))).To(Succeed())
 }
 
-func newEndpoint(name, namespace string) *discoveryv1.EndpointSlice {
+func newEndpointSlice(name, namespace string) *discoveryv1.EndpointSlice {
 	es := discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			UID:                        uuid.NewUUID(),

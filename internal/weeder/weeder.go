@@ -21,7 +21,7 @@ const crashLoopBackOff = "CrashLoopBackOff"
 // are in CrashLoopBackOff.
 type Weeder struct {
 	namespace          string
-	endpoints          *discoveryv1.EndpointSlice
+	endpointSlice      *discoveryv1.EndpointSlice
 	ctrlClient         client.Client
 	watchClient        kubernetes.Interface
 	dependantSelectors wapi.DependantSelectors
@@ -37,7 +37,7 @@ func NewWeeder(parentCtx context.Context, namespace string, config *wapi.Config,
 	dependantSelectors := config.ServicesAndDependantSelectors[ep.Labels[wapi.ServiceNameLabel]]
 	return &Weeder{
 		namespace:          namespace,
-		endpoints:          ep,
+		endpointSlice:      ep,
 		ctrlClient:         ctrlClient,
 		watchClient:        seedClient,
 		dependantSelectors: dependantSelectors,

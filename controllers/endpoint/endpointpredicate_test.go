@@ -19,31 +19,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
-func turnReady(epSlice *discoveryv1.EndpointSlice) {
-	epSlice.Endpoints = []discoveryv1.Endpoint{
-		{
-			Addresses: []string{"10.1.0.52"},
-			NodeName:  ptr.To("node-0"),
-			Conditions: discoveryv1.EndpointConditions{
-				Ready: ptr.To(true),
-			},
-		},
-	}
-	epSlice.Ports = []discoveryv1.EndpointPort{}
-}
-func turnNotReady(epSlice *discoveryv1.EndpointSlice) {
-	epSlice.Endpoints = []discoveryv1.Endpoint{
-		{
-			Addresses: []string{"10.1.0.52"},
-			NodeName:  ptr.To("node-0"),
-			Conditions: discoveryv1.EndpointConditions{
-				Ready: ptr.To(false),
-			},
-		},
-	}
-	epSlice.Ports = []discoveryv1.EndpointPort{}
-}
-
 func TestReadyEndpoints(t *testing.T) {
 	g := NewWithT(t)
 	predicate := ReadyEndpoints(logr.Discard())
@@ -263,4 +238,30 @@ func TestMatchingEndpointsPredicate(t *testing.T) {
 			g.Expect(predicate.Generic(genericEv)).To(Equal(tc.expectedGenericEventFilterOutput))
 		})
 	}
+}
+
+func turnReady(epSlice *discoveryv1.EndpointSlice) {
+	epSlice.Endpoints = []discoveryv1.Endpoint{
+		{
+			Addresses: []string{"10.1.0.52"},
+			NodeName:  ptr.To("node-0"),
+			Conditions: discoveryv1.EndpointConditions{
+				Ready: ptr.To(true),
+			},
+		},
+	}
+	epSlice.Ports = []discoveryv1.EndpointPort{}
+}
+
+func turnNotReady(epSlice *discoveryv1.EndpointSlice) {
+	epSlice.Endpoints = []discoveryv1.Endpoint{
+		{
+			Addresses: []string{"10.1.0.52"},
+			NodeName:  ptr.To("node-0"),
+			Conditions: discoveryv1.EndpointConditions{
+				Ready: ptr.To(false),
+			},
+		},
+	}
+	epSlice.Ports = []discoveryv1.EndpointPort{}
 }
