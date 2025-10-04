@@ -13,6 +13,8 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	ctlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 // ControllerTestEnv is a convenience interface to be used by tests to access controller-runtime testEnv.
@@ -52,6 +54,11 @@ func CreateControllerTestEnv(scheme *runtime.Scheme, crdDirectoryPaths []string,
 			kubeApiServerArgs.Set(k, v)
 		}
 	}
+	// Initialize a new Zap logger with default options
+	opts := zap.Options{
+		Development: true, // Enable human-friendly output for development
+	}
+	ctlruntimelog.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	cfg, err := testEnv.Start()
 	if err != nil {

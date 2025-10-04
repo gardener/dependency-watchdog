@@ -6,12 +6,13 @@ package endpoint
 
 import (
 	"context"
-	"time"
+	"maps"
+	"slices"
 
 	wapi "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/gardener/dependency-watchdog/internal/weeder"
 	"github.com/go-logr/logr"
-	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,20 +40,19 @@ type Reconciler struct {
 // Reconcile listens to create/update events for `Endpoints` resources and manages weeder which shoot the dependent pods of the configured services, if necessary
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
-	//Get the endpoint object
-	var ep v1.Endpoints
-	err := r.Client.Get(ctx, req.NamespacedName, &ep)
-	if err != nil {
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, err
+	//Get the endpoint slice object
+	var epSlice discoveryv1.EndpointSlice
+	if err := r.Client.Get(ctx, req.NamespacedName, &epSlice); err != nil {
+		return ctrl.Result{}, err
 	}
-	log.Info("Starting a new weeder for endpoint, replacing old weeder, if any exists", "namespace", req.Namespace, "endpoint", ep.Name)
-	r.startWeeder(ctx, log, req.Namespace, &ep)
+	log.Info("Starting a new weeder for endpoint, replacing old weeder, if any exists", "namespace", req.Namespace, "endpoint", epSlice.Name)
+	r.startWeeder(ctx, log, req.Namespace, &epSlice)
 	return ctrl.Result{}, nil
 }
 
 // startWeeder starts a new weeder for the endpoint
-func (r *Reconciler) startWeeder(ctx context.Context, logger logr.Logger, namespace string, ep *v1.Endpoints) {
-	w := weeder.NewWeeder(ctx, namespace, r.WeederConfig, r.Client, r.SeedClient, ep, logger)
+func (r *Reconciler) startWeeder(ctx context.Context, logger logr.Logger, namespace string, epSlice *discoveryv1.EndpointSlice) {
+	w := weeder.NewWeeder(ctx, namespace, r.WeederConfig, r.Client, r.SeedClient, epSlice, logger)
 	// Register the weeder
 	r.WeederMgr.Register(*w)
 	go w.Run()
@@ -71,11 +71,11 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 	return c.Watch(
-		source.Kind[client.Object](mgr.GetCache(), &v1.Endpoints{},
+		source.Kind[client.Object](mgr.GetCache(), &discoveryv1.EndpointSlice{},
 			&handler.EnqueueRequestForObject{},
 			predicate.And[client.Object](
 				predicate.ResourceVersionChangedPredicate{},
-				MatchingEndpoints(r.WeederConfig.ServicesAndDependantSelectors),
+				MatchingEndpoints(slices.Collect(maps.Keys(r.WeederConfig.ServicesAndDependantSelectors))),
 				ReadyEndpoints(c.GetLogger()),
 			),
 		),

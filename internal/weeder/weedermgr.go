@@ -105,5 +105,5 @@ func (wm *weederManager) GetWeederRegistration(key string) (Registration, bool) 
 
 // createKey creates a key to uniquely identify a weeder
 func createKey(w Weeder) string {
-	return w.namespace + "/" + w.endpoints.Name
+	return w.namespace + "/" + w.endpointSlice.Name
 }

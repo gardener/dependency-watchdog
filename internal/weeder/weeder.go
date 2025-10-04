@@ -10,6 +10,7 @@ import (
 	wapi "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -20,7 +21,7 @@ const crashLoopBackOff = "CrashLoopBackOff"
 // are in CrashLoopBackOff.
 type Weeder struct {
 	namespace          string
-	endpoints          *v1.Endpoints
+	endpointSlice      *discoveryv1.EndpointSlice
 	ctrlClient         client.Client
 	watchClient        kubernetes.Interface
 	dependantSelectors wapi.DependantSelectors
@@ -30,13 +31,13 @@ type Weeder struct {
 }
 
 // NewWeeder creates a new Weeder for a service/endpoint.
-func NewWeeder(parentCtx context.Context, namespace string, config *wapi.Config, ctrlClient client.Client, seedClient kubernetes.Interface, ep *v1.Endpoints, logger logr.Logger) *Weeder {
+func NewWeeder(parentCtx context.Context, namespace string, config *wapi.Config, ctrlClient client.Client, seedClient kubernetes.Interface, ep *discoveryv1.EndpointSlice, logger logr.Logger) *Weeder {
 	wLogger := logger.WithValues("weederRunning", true, "watchDuration", (*config.WatchDuration).String())
 	ctx, cancelFn := context.WithTimeout(parentCtx, config.WatchDuration.Duration)
-	dependantSelectors := config.ServicesAndDependantSelectors[ep.Name]
+	dependantSelectors := config.ServicesAndDependantSelectors[ep.Labels[discoveryv1.LabelServiceName]]
 	return &Weeder{
 		namespace:          namespace,
-		endpoints:          ep,
+		endpointSlice:      ep,
 		ctrlClient:         ctrlClient,
 		watchClient:        seedClient,
 		dependantSelectors: dependantSelectors,

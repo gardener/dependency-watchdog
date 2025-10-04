@@ -5,9 +5,10 @@
 package endpoint
 
 import (
-	wapi "github.com/gardener/dependency-watchdog/api/weeder"
+	"slices"
+
 	"github.com/go-logr/logr"
-	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -18,17 +19,18 @@ import (
 func ReadyEndpoints(logger logr.Logger) predicate.Predicate {
 	log := logger.WithValues("predicate", "ReadyEndpointsPredicate")
 	isEndpointReady := func(obj runtime.Object) bool {
-		ep, ok := obj.(*v1.Endpoints)
-		if !ok || ep == nil {
+		epSlice, ok := obj.(*discoveryv1.EndpointSlice)
+		if !ok || epSlice == nil {
 			return false
 		}
-		for _, subset := range ep.Subsets {
-			if len(subset.Addresses) > 0 {
-				return true
+		for _, endpoint := range epSlice.Endpoints {
+			// check if there is at least one endpoint with condition ready as false and return false
+			if endpoint.Conditions.Ready == nil || (endpoint.Conditions.Ready != nil && !*endpoint.Conditions.Ready) {
+				log.Info("Not all endpoints in the endpoint slice are ready", "namespace", epSlice.Namespace, "endpoint", epSlice.Name)
+				return false
 			}
 		}
-		log.Info("Endpoint does not have any IP address. Skipping processing this endpoint", "namespace", ep.Namespace, "endpoint", ep.Name)
-		return false
+		return true
 	}
 
 	return predicate.Funcs{
@@ -58,23 +60,26 @@ func ReadyEndpoints(logger logr.Logger) predicate.Predicate {
 }
 
 // MatchingEndpoints is a predicate to allow events for only configured endpoints
-func MatchingEndpoints(epMap map[string]wapi.DependantSelectors) predicate.Predicate {
-	isMatchingEndpoints := func(obj runtime.Object, epMap map[string]wapi.DependantSelectors) bool {
-		ep, ok := obj.(*v1.Endpoints)
-		if !ok || ep == nil {
+func MatchingEndpoints(svcNames []string) predicate.Predicate {
+	isMatchingEndpoints := func(obj runtime.Object) bool {
+		epSlice, ok := obj.(*discoveryv1.EndpointSlice)
+		if !ok || epSlice == nil {
 			return false
 		}
-		_, exists := epMap[ep.Name]
-		return exists
+		epSvcName, ok := epSlice.Labels[discoveryv1.LabelServiceName] // make sure the label exists
+		if !ok {
+			return false
+		}
+		return slices.Contains(svcNames, epSvcName)
 	}
 
 	return predicate.Funcs{
 		CreateFunc: func(event event.CreateEvent) bool {
-			return isMatchingEndpoints(event.Object, epMap)
+			return isMatchingEndpoints(event.Object)
 		},
 
 		UpdateFunc: func(event event.UpdateEvent) bool {
-			return isMatchingEndpoints(event.ObjectNew, epMap)
+			return isMatchingEndpoints(event.ObjectNew)
 		},
 
 		DeleteFunc: func(_ event.DeleteEvent) bool {
@@ -82,7 +87,7 @@ func MatchingEndpoints(epMap map[string]wapi.DependantSelectors) predicate.Predi
 		},
 
 		GenericFunc: func(event event.GenericEvent) bool {
-			return isMatchingEndpoints(event.Object, epMap)
+			return isMatchingEndpoints(event.Object)
 		},
 	}
 }
