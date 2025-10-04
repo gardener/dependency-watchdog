@@ -6,6 +6,8 @@ package endpoint
 
 import (
 	"context"
+	"maps"
+	"slices"
 
 	wapi "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/gardener/dependency-watchdog/internal/weeder"
@@ -73,7 +75,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&handler.EnqueueRequestForObject{},
 			predicate.And[client.Object](
 				predicate.ResourceVersionChangedPredicate{},
-				MatchingEndpoints(r.WeederConfig.ServicesAndDependantSelectors),
+				MatchingEndpoints(slices.Collect(maps.Keys(r.WeederConfig.ServicesAndDependantSelectors))),
 				ReadyEndpoints(c.GetLogger()),
 			),
 		),

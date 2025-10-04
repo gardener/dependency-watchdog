@@ -18,7 +18,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/rand"
 
-	wapi "github.com/gardener/dependency-watchdog/api/weeder"
 	testutil "github.com/gardener/dependency-watchdog/internal/test"
 	"k8s.io/client-go/kubernetes/scheme"
 
@@ -415,7 +414,7 @@ func newEndpointSlice(name, namespace string) *discoveryv1.EndpointSlice {
 			Name:                       name,
 			Namespace:                  namespace,
 			Annotations:                make(map[string]string),
-			Labels:                     map[string]string{wapi.ServiceNameLabel: name},
+			Labels:                     map[string]string{discoveryv1.LabelServiceName: name},
 			DeletionGracePeriodSeconds: ptr.To[int64](0),
 		},
 		Endpoints: []discoveryv1.Endpoint{

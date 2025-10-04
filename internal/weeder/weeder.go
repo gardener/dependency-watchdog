@@ -34,7 +34,7 @@ type Weeder struct {
 func NewWeeder(parentCtx context.Context, namespace string, config *wapi.Config, ctrlClient client.Client, seedClient kubernetes.Interface, ep *discoveryv1.EndpointSlice, logger logr.Logger) *Weeder {
 	wLogger := logger.WithValues("weederRunning", true, "watchDuration", (*config.WatchDuration).String())
 	ctx, cancelFn := context.WithTimeout(parentCtx, config.WatchDuration.Duration)
-	dependantSelectors := config.ServicesAndDependantSelectors[ep.Labels[wapi.ServiceNameLabel]]
+	dependantSelectors := config.ServicesAndDependantSelectors[ep.Labels[discoveryv1.LabelServiceName]]
 	return &Weeder{
 		namespace:          namespace,
 		endpointSlice:      ep,

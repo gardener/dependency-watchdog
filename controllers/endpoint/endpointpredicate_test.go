@@ -11,7 +11,6 @@ import (
 
 	"k8s.io/utils/ptr"
 
-	v12 "github.com/gardener/dependency-watchdog/api/weeder"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -117,23 +116,21 @@ func TestReadyEndpoints(t *testing.T) {
 func TestMatchingEndpointsPredicate(t *testing.T) {
 	g := NewWithT(t)
 
-	epMap := map[string]v12.DependantSelectors{
-		"ep-relevant": {},
-	}
+	svcNames := []string{"ep-relevant"}
 
-	predicate := MatchingEndpoints(epMap)
+	predicate := MatchingEndpoints(svcNames)
 
 	epRelevant := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "ep-relevant",
-			Labels: map[string]string{v12.ServiceNameLabel: "ep-relevant"},
+			Labels: map[string]string{discoveryv1.LabelServiceName: "ep-relevant"},
 		},
 	}
 
 	epIrrelevant := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "ep-irrelevant",
-			Labels: map[string]string{v12.ServiceNameLabel: "ep-irrelevant"},
+			Labels: map[string]string{discoveryv1.LabelServiceName: "ep-irrelevant"},
 		},
 	}
 
