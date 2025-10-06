@@ -12,14 +12,23 @@ on:
 jobs:
   build:
     uses: ./.github/workflows/build.yaml
+    permissions:
+      contents: write
+      id-token: write
+      packages: write
     with:
       mode: release
+      run-tests: true
 
   release-to-github-and-bump:
     uses: gardener/cc-utils/.github/workflows/release.yaml@master
     needs:
       - build
     secrets: inherit
+    permissions:
+      contents: write
+      id-token: write
+      packages: write
     with:
       release-commit-target: branch
       next-version: ${{ inputs.next-version }}
