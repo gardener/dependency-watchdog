@@ -10,6 +10,10 @@ on:
         description: |
           the mode to use. either `snapshot` or `release`. Will affect effective version, as well
           as target-oci-registry.
+      run-tests:
+        required: true
+        type: boolean
+
 
 jobs:
   prepare:
@@ -43,6 +47,9 @@ jobs:
 
   unittest:
     runs-on: ubuntu-latest
+    if: ${{ inputs.run-tests }}
+    permissions:
+      contents: read
     steps:
       - uses: actions/setup-go@v5
         with:
