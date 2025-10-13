@@ -1,4 +1,4 @@
-FROM golang:1.24.1 AS builder
+FROM golang:1.25.3 AS builder
 
 WORKDIR /go/src/github.com/gardener/dependency-watchdog
 COPY . .
