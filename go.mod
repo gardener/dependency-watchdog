@@ -8,13 +8,10 @@ require (
 	github.com/go-logr/logr v1.4.3
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/onsi/gomega v1.37.0
-	github.com/spf13/pflag v1.0.6
 	go.uber.org/zap v1.27.0
-	golang.org/x/tools v0.34.0
 	k8s.io/api v0.33.2
 	k8s.io/apimachinery v0.33.2
 	k8s.io/client-go v0.33.2
-	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 	sigs.k8s.io/controller-runtime v0.21.0
 	sigs.k8s.io/kind v0.28.0
@@ -97,6 +94,7 @@ require (
 	github.com/spf13/afero v1.14.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/spf13/cobra v1.9.1 // indirect
+	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
@@ -109,15 +107,14 @@ require (
 	go.opentelemetry.io/otel v1.35.0 // indirect
 	go.opentelemetry.io/otel/trace v1.35.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.39.0 // indirect
+	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
-	golang.org/x/mod v0.25.0 // indirect
-	golang.org/x/net v0.41.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
-	golang.org/x/sync v0.15.0 // indirect
-	golang.org/x/sys v0.33.0 // indirect
-	golang.org/x/term v0.32.0 // indirect
-	golang.org/x/text v0.26.0 // indirect
+	golang.org/x/sync v0.18.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/term v0.37.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250324211829-b45e905df463 // indirect
@@ -134,6 +131,7 @@ require (
 	k8s.io/apiserver v0.33.2 // indirect
 	k8s.io/autoscaler/vertical-pod-autoscaler v1.4.1 // indirect
 	k8s.io/component-base v0.33.2 // indirect
+	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-aggregator v0.33.2 // indirect
 	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff // indirect
 	k8s.io/kubelet v0.33.2 // indirect
