@@ -57,7 +57,7 @@ func createTestDeploymentDependentResourceInfo(name string, scaleUpLevel, scaleD
 func createTestScalableResourceInfos(numResInfosByLevel map[int]int) []scalableResourceInfo {
 	var resInfos []scalableResourceInfo
 	for k, v := range numResInfosByLevel {
-		for i := 0; i < v; i++ {
+		for i := range v {
 			resInfos = append(resInfos, scalableResourceInfo{
 				ref:   &autoscalingv1.CrossVersionObjectReference{Name: fmt.Sprintf("resource-%d%d", k, i)},
 				level: k,
@@ -73,11 +73,11 @@ func parseTaskID(taskID string) (int, []string, error) {
 		return 0, nil, fmt.Errorf("taskID should be of the format scale:level-<level>:<# separated list of resourceRefName>, given %s does not match this format", taskID)
 	}
 	levelStr := taskIDSplits[1]
-	levelStartIndex := strings.Index(levelStr, "-")
-	if levelStartIndex < 0 {
+	_, after, ok := strings.Cut(levelStr, "-")
+	if !ok {
 		return 0, nil, fmt.Errorf("taskID should be of the format scale:level-<level>:<# separated list of resourceRefName>, given %s does not match this format", taskID)
 	}
-	level, err := strconv.Atoi(levelStr[levelStartIndex+1:])
+	level, err := strconv.Atoi(after)
 	if err != nil {
 		return 0, nil, err
 	}

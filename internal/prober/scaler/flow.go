@@ -100,7 +100,7 @@ func (c *creator) doCreateTaskFn(namespace string, resInfo scalableResourceInfo)
 		resScaler := newResourceScaler(c.client, c.scaler, c.logger, c.options, namespace, resInfo)
 		result := util.Retry(ctx, c.logger,
 			operation,
-			func() (interface{}, error) {
+			func() (any, error) {
 				err := resScaler.scale(ctx)
 				return nil, err
 			},

@@ -23,7 +23,7 @@ type Validator struct {
 }
 
 // MustNotBeEmpty checks whether the given value is empty. It returns false if it is empty or nil.
-func (v *Validator) MustNotBeEmpty(key string, value interface{}) bool {
+func (v *Validator) MustNotBeEmpty(key string, value any) bool {
 	if value == nil {
 		v.Error = multierr.Append(v.Error, fmt.Errorf("%s must not be nil or empty", key))
 		return false
@@ -62,7 +62,7 @@ func (v *Validator) MustNotBeZeroDuration(key string, duration metav1.Duration) 
 }
 
 // MustNotBeNil checks whether the given value is nil and returns false if it is nil.
-func (v *Validator) MustNotBeNil(key string, value interface{}) bool {
+func (v *Validator) MustNotBeNil(key string, value any) bool {
 	if value == nil || reflect.ValueOf(value).IsNil() {
 		v.Error = multierr.Append(v.Error, fmt.Errorf("%s must not be nil", key))
 		return false

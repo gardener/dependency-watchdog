@@ -131,7 +131,7 @@ func createShoot(seedName string, workerCount int, workerNodeConditions [][]stri
 // createWorkers creates worker resources with the given count and corresponding node conditions.
 func createWorkers(workerCount int, workerNodeConditions [][]string) []gardencorev1beta1.Worker {
 	workers := make([]gardencorev1beta1.Worker, 0, workerCount)
-	for i := 0; i < workerCount; i++ {
+	for i := range workerCount {
 		mx := rand.Intn(5)
 		w := gardencorev1beta1.Worker{
 			Name:    rand.String(4),

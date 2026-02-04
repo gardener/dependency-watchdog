@@ -58,7 +58,7 @@ func PrintCliUsage(w io.Writer) {
 	_ = bufW.Flush()
 }
 
-func executeTemplate(w io.Writer, tmplText string, tmplData interface{}) {
+func executeTemplate(w io.Writer, tmplText string, tmplData any) {
 	tmpl := template.Must(template.New("usage").Parse(tmplText))
 	if err := tmpl.Execute(w, tmplData); err != nil {
 		panic(err)

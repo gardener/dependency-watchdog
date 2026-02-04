@@ -28,7 +28,7 @@ func (l kindLogger) Warn(message string) {
 	l.logger.Warn(message)
 }
 
-func (l kindLogger) Warnf(format string, args ...interface{}) {
+func (l kindLogger) Warnf(format string, args ...any) {
 	l.logger.Warn(fmt.Sprintf(format, args...))
 }
 
@@ -36,7 +36,7 @@ func (l kindLogger) Error(message string) {
 	l.logger.Error(message)
 }
 
-func (l kindLogger) Errorf(format string, args ...interface{}) {
+func (l kindLogger) Errorf(format string, args ...any) {
 	l.logger.Error(fmt.Sprintf(format, args...))
 }
 
@@ -48,7 +48,7 @@ func (l kindLogger) Info(message string) {
 	l.logger.Info(message)
 }
 
-func (l kindLogger) Infof(format string, args ...interface{}) {
+func (l kindLogger) Infof(format string, args ...any) {
 	l.logger.Info(fmt.Sprintf(format, args...))
 }
 

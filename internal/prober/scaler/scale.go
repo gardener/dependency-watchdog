@@ -151,7 +151,7 @@ func (r *resScaler) updateResourceAndScale(ctx context.Context, scaleSubRes *aut
 	// update the annotation capturing the current spec.replicas as the annotation value if the operation is scale down.
 	// This allows restoration of the resource to the same replica count when a subsequent scale up operation is triggered.
 	if r.resourceInfo.operation == scaleDown {
-		patchBytes := []byte(fmt.Sprintf("{\"metadata\":{\"annotations\":{\"%s\":\"%s\", \"%s\":\"%s\"}}}", replicasAnnotationKey, strconv.Itoa(int(scaleSubRes.Spec.Replicas)), papi.MeltdownProtectionActive, ""))
+		patchBytes := fmt.Appendf(nil, "{\"metadata\":{\"annotations\":{\"%s\":\"%s\", \"%s\":\"%s\"}}}", replicasAnnotationKey, strconv.Itoa(int(scaleSubRes.Spec.Replicas)), papi.MeltdownProtectionActive, "")
 		err := util.PatchResourceAnnotations(ctx, r.client, r.namespace, r.resourceInfo.ref, patchBytes)
 		if err != nil {
 			r.logger.Error(err, "Failed to update annotation to capture the current replicas before scaling it down")
@@ -186,7 +186,7 @@ func (r *resScaler) updateResourceAndScale(ctx context.Context, scaleSubRes *aut
 
 // remove meltdown protection annotation to ensure that the resource is not ignore anymore during shoot reconciliation
 func (r *resScaler) removeMeltdownAnnotations(ctx context.Context) error {
-	patchBytes := []byte(fmt.Sprintf("{\"metadata\":{\"annotations\":{\"%s\":null}}}", papi.MeltdownProtectionActive))
+	patchBytes := fmt.Appendf(nil, "{\"metadata\":{\"annotations\":{\"%s\":null}}}", papi.MeltdownProtectionActive)
 	if err := util.PatchResourceAnnotations(ctx, r.client, r.namespace, r.resourceInfo.ref, patchBytes); err != nil {
 		r.logger.Error(err, "Failed to remove annotations after scaling operation")
 		return err
