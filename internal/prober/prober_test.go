@@ -683,6 +683,6 @@ func createConfig(probeInterval metav1.Duration, initialDelay metav1.Duration, k
 		InitialDelay:                &initialDelay,
 		ProbeTimeout:                &testProbeTimeout,
 		KCMNodeMonitorGraceDuration: &kcmNodeMonitorGraceDuration,
-		NodeLeaseFailureFraction:    ptr.To[float64](DefaultNodeLeaseFailureFraction),
+		NodeLeaseFailureFraction:    ptr.To(DefaultNodeLeaseFailureFraction),
 	}
 }

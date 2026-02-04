@@ -84,10 +84,10 @@ func TestEqualOrBeforeNow(t *testing.T) {
 func TestFillDefaultIfNil(t *testing.T) {
 	g := NewWithT(t)
 	var testInt *int
-	testInt = GetValOrDefault[int](testInt, 10)
+	testInt = GetValOrDefault(testInt, 10)
 	g.Expect(*testInt).To(Equal(10))
 
-	testFloat := ptr.To[float64](1.0)
+	testFloat := ptr.To(1.0)
 	testFloat = GetValOrDefault(testFloat, 2.0)
 	g.Expect(*testFloat).To(Equal(1.0))
 }
