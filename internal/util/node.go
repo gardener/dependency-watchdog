@@ -75,3 +75,10 @@ func GetMachineNotInFailedOrTerminatingState(nodeName string, machines []v1alpha
 	}
 	return nil
 }
+
+// IsNodeUndergoingInPlaceUpdate checks if the node is undergoing an in-place update by checking the InPlaceUpdate condition.
+func IsNodeUndergoingInPlaceUpdate(node *corev1.Node) bool {
+	return slices.ContainsFunc(node.Status.Conditions, func(condition corev1.NodeCondition) bool {
+		return condition.Type == v1alpha1.NodeInPlaceUpdate && condition.Reason == v1alpha1.ReadyForUpdate
+	})
+}
