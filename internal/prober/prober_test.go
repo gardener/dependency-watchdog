@@ -383,7 +383,7 @@ func TestLeaseProbeShouldNotConsiderNodesUndergoingInPlaceUpdate(t *testing.T) {
 			Name: test.Node2Name,
 			Conditions: []corev1.NodeCondition{{
 				Type:   v1alpha1.NodeInPlaceUpdate,
-				Reason: v1alpha1.ReadyForUpdate,
+				Reason: v1alpha1.UpdateFailed,
 			}},
 		},
 		{

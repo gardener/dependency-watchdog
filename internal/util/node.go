@@ -11,6 +11,7 @@ import (
 	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 const (
@@ -79,6 +80,6 @@ func GetMachineNotInFailedOrTerminatingState(nodeName string, machines []v1alpha
 // IsNodeUndergoingInPlaceUpdate checks if the node is undergoing an in-place update by checking the InPlaceUpdate condition.
 func IsNodeUndergoingInPlaceUpdate(node *corev1.Node) bool {
 	return slices.ContainsFunc(node.Status.Conditions, func(condition corev1.NodeCondition) bool {
-		return condition.Type == v1alpha1.NodeInPlaceUpdate && condition.Reason == v1alpha1.ReadyForUpdate
+		return condition.Type == v1alpha1.NodeInPlaceUpdate && sets.New(v1alpha1.ReadyForUpdate, v1alpha1.UpdateFailed).Has(condition.Reason)
 	})
 }

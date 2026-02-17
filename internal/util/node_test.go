@@ -33,6 +33,17 @@ func TestIsNodeUndergoingInPlaceUpdate(t *testing.T) {
 			expected: true,
 		},
 		{
+			description: "should return true when node has InPlaceUpdate condition with UpdateFailed reason",
+			nodeConditions: []corev1.NodeCondition{
+				{
+					Type:   v1alpha1.NodeInPlaceUpdate,
+					Status: corev1.ConditionTrue,
+					Reason: v1alpha1.UpdateFailed,
+				},
+			},
+			expected: true,
+		},
+		{
 			description: "should return true when node has InPlaceUpdate condition with ReadyForUpdate reason among other conditions",
 			nodeConditions: []corev1.NodeCondition{
 				{
@@ -43,6 +54,25 @@ func TestIsNodeUndergoingInPlaceUpdate(t *testing.T) {
 					Type:   v1alpha1.NodeInPlaceUpdate,
 					Status: corev1.ConditionTrue,
 					Reason: v1alpha1.ReadyForUpdate,
+				},
+				{
+					Type:   corev1.NodeDiskPressure,
+					Status: corev1.ConditionFalse,
+				},
+			},
+			expected: true,
+		},
+		{
+			description: "should return true when node has InPlaceUpdate condition with UpdateFailed reason among other conditions",
+			nodeConditions: []corev1.NodeCondition{
+				{
+					Type:   corev1.NodeReady,
+					Status: corev1.ConditionTrue,
+				},
+				{
+					Type:   v1alpha1.NodeInPlaceUpdate,
+					Status: corev1.ConditionTrue,
+					Reason: v1alpha1.UpdateFailed,
 				},
 				{
 					Type:   corev1.NodeDiskPressure,
