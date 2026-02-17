@@ -213,7 +213,8 @@ func (p *Prober) getFilteredNodeNames(ctx context.Context, shootClient client.Cl
 	for _, node := range nodes.Items {
 		if util.IsNodeManagedByMCM(&node) &&
 			util.IsNodeHealthyByConditions(&node, util.GetWorkerUnhealthyNodeConditions(&node, p.workerNodeConditions)) &&
-			util.GetMachineNotInFailedOrTerminatingState(node.Name, machines) != nil {
+			util.GetMachineNotInFailedOrTerminatingState(node.Name, machines) != nil &&
+			!util.IsNodeUndergoingInPlaceUpdate(&node) {
 			nodeNames = append(nodeNames, node.Name)
 		}
 	}

@@ -368,6 +368,120 @@ func TestLeaseProbeShouldNotConsiderUnhealthyNodes(t *testing.T) {
 	}
 }
 
+func TestLeaseProbeShouldNotConsiderNodesUndergoingInPlaceUpdate(t *testing.T) {
+	t.Parallel()
+
+	nodes := test.GenerateNodes([]test.NodeSpec{
+		{
+			Name: test.Node1Name,
+			Conditions: []corev1.NodeCondition{{
+				Type:   v1alpha1.NodeInPlaceUpdate,
+				Reason: v1alpha1.ReadyForUpdate,
+			}},
+		},
+		{
+			Name: test.Node2Name,
+			Conditions: []corev1.NodeCondition{{
+				Type:   v1alpha1.NodeInPlaceUpdate,
+				Reason: v1alpha1.UpdateFailed,
+			}},
+		},
+		{
+			Name: test.Node3Name,
+			Conditions: []corev1.NodeCondition{{
+				Type:   v1alpha1.NodeInPlaceUpdate,
+				Reason: v1alpha1.CandidateForUpdate,
+			}},
+		},
+		{
+			Name:       test.Node4Name,
+			Conditions: []corev1.NodeCondition{},
+		},
+	})
+
+	machines := test.GenerateMachines([]test.MachineSpec{
+		{
+			Name:          test.Machine1Name,
+			Labels:        map[string]string{v1alpha1.NodeLabelKey: test.Node1Name},
+			CurrentStatus: v1alpha1.CurrentStatus{Phase: v1alpha1.MachineInPlaceUpdating},
+		},
+		{
+			Name:          test.Machine2Name,
+			Labels:        map[string]string{v1alpha1.NodeLabelKey: test.Node2Name},
+			CurrentStatus: v1alpha1.CurrentStatus{Phase: v1alpha1.MachineInPlaceUpdating},
+		},
+		{
+			Name:          test.Machine3Name,
+			Labels:        map[string]string{v1alpha1.NodeLabelKey: test.Node3Name},
+			CurrentStatus: v1alpha1.CurrentStatus{Phase: v1alpha1.MachineRunning},
+		},
+		{
+			Name:          test.Machine4Name,
+			Labels:        map[string]string{v1alpha1.NodeLabelKey: test.Node4Name},
+			CurrentStatus: v1alpha1.CurrentStatus{Phase: v1alpha1.MachineRunning},
+		},
+	}, test.DefaultNamespace)
+
+	testCases := []struct {
+		name                       string
+		isLeaseExpired             map[string]bool
+		initialDeploymentReplicas  int32
+		expectedDeploymentReplicas int32
+	}{
+		{
+			name: "scale up decision should not consider nodes undergoing in-place update",
+			isLeaseExpired: map[string]bool{
+				test.Node1Name: true,
+				test.Node2Name: true,
+				test.Node3Name: false,
+				test.Node4Name: false,
+			},
+			initialDeploymentReplicas:  0,
+			expectedDeploymentReplicas: 1,
+		},
+		{
+			name: "scale down decision should not consider nodes undergoing in-place update",
+			isLeaseExpired: map[string]bool{
+				test.Node1Name: false,
+				test.Node2Name: false,
+				test.Node3Name: true,
+				test.Node4Name: true,
+			},
+			initialDeploymentReplicas:  1,
+			expectedDeploymentReplicas: 0,
+		},
+	}
+
+	shootDiscoveryClient := k8sfakes.NewFakeDiscoveryClient(nil)
+	g := NewWithT(t)
+	for _, entry := range testCases {
+		t.Run(entry.name, func(t *testing.T) {
+			entry := entry
+			t.Parallel()
+			ctx := context.Background()
+			leases := test.GenerateNodeLeases([]test.NodeLeaseSpec{
+				{Name: test.Node1Name, IsExpired: entry.isLeaseExpired[test.Node1Name]},
+				{Name: test.Node2Name, IsExpired: entry.isLeaseExpired[test.Node2Name]},
+				{Name: test.Node3Name, IsExpired: entry.isLeaseExpired[test.Node3Name]},
+				{Name: test.Node4Name, IsExpired: entry.isLeaseExpired[test.Node4Name]},
+			})
+			scaleTargetDeployments := generateScaleTargetDeployments(entry.initialDeploymentReplicas)
+			shootClient := initializeShootClientBuilder(nodes, leases).Build()
+			seedClient := initializeSeedClientBuilder(machines, scaleTargetDeployments).Build()
+			scaler := scalefakes.NewFakeScaler(seedClient, test.DefaultNamespace, nil, nil)
+			scc := shootfakes.NewFakeShootClientBuilder(shootDiscoveryClient, shootClient).Build()
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+
+			p := NewProber(ctx, seedClient, test.DefaultNamespace, config, map[string][]string{test.Worker1Name: {test.NodeConditionDiskPressure, test.NodeConditionMemoryPressure}}, scaler, scc, logr.Discard())
+			g.Expect(p.IsClosed()).To(BeFalse())
+
+			g.Expect(runProber(p, testProbeTimeout.Duration)).To(BeNil())
+			g.Expect(p.IsClosed()).To(BeTrue())
+			assertScale(ctx, g, seedClient, getDeploymentRefs(scaleTargetDeployments), entry.expectedDeploymentReplicas)
+		})
+	}
+}
+
 func TestNoScalingIfErrorInListingLeases(t *testing.T) {
 	t.Parallel()
 	nodes := test.GenerateNodes([]test.NodeSpec{{Name: test.Node1Name}, {Name: test.Node2Name}})
