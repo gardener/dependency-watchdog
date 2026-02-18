@@ -16,10 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-const (
-	// WorkerPoolLabel is the label key for the worker pool. It is used to determine the worker pool to which the node belongs.
-	nodeNameLabel = "node"
-)
+const nodeNameLabel = "node"
 
 // DefaultUnhealthyNodeConditions are the default node conditions which indicate that the node is unhealthy.
 // These conditions are borrowed from MCM where these conditions are used to decide if a node is unhealthy and should be replaced.
