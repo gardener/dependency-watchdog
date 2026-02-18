@@ -38,8 +38,9 @@ For all active shoot clusters (which have not been hibernated or deleted or move
 3. If and when a lease probe fails, then it will initiate a scale-down operation for dependent resources as defined in the prober configuration. While scaling down the resource prober will annotate the deployment of the resource with `dependency-watchdog.gardener.cloud/meltdown-protection-active`. This annotation can be checked to ensure not to scale up these resources during a regular shoot maintenance or an out-of-band shoot reconciliation.
 4. In subsequent runs it will keep performing the lease probe. If it is successful, then it will start the scale-up operation for dependent resources as defined in the configuration. It shall also remove the `dependency-watchdog.gardener.cloud/meltdown-protection-active` from deployment metadata of all scaled up resources.
 
->Manual Intervention/Override of DWD behavior:   j
-In case where you don't want DWD to act on a resource during a meltdown, you can annotate the said resource deployment with `"dependency-watchdog.gardener.cloud/ignore-scaling"` annotation. This will ensure that prober will not act on such resource. When this ignore scaling annotation is put by an operator, the `dependency-watchdog.gardener.cloud/meltdown-protection-active` annotation shall be removed to avoid any ambiguity.
+> **Manual Intervention/Override of DWD behavior**:
+>
+> In case where you don't want DWD to act on a resource during a meltdown, you can annotate the said resource deployment with `"dependency-watchdog.gardener.cloud/ignore-scaling"` annotation. This will ensure that prober will not act on such resource. When this ignore scaling annotation is put by an operator, the `dependency-watchdog.gardener.cloud/meltdown-protection-active` annotation shall be removed to avoid any ambiguity.
 
 ### Prober lifecycle
 

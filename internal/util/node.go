@@ -8,7 +8,9 @@ import (
 	"slices"
 
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	gardencorev1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
+	"github.com/gardener/machine-controller-manager/pkg/util/provider/machineutils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -16,9 +18,7 @@ import (
 
 const (
 	// WorkerPoolLabel is the label key for the worker pool. It is used to determine the worker pool to which the node belongs.
-	WorkerPoolLabel                  = "worker.gardener.cloud/pool"
-	nodeNameLabel                    = "node"
-	nodeNotManagedByMCMAnnotationKey = "node.machine.sapcloud.io/not-managed-by-mcm"
+	nodeNameLabel = "node"
 )
 
 // DefaultUnhealthyNodeConditions are the default node conditions which indicate that the node is unhealthy.
@@ -40,7 +40,7 @@ func IsNodeHealthyByConditions(node *corev1.Node, unhealthyWorkerConditionNames 
 
 // IsNodeManagedByMCM determines if a node is managed by MCM by checking if the node has the annotation nodeNotManagedByMCMAnnotationKey"node.machine.sapcloud.io/not-managed-by-mcm" set.
 func IsNodeManagedByMCM(node *corev1.Node) bool {
-	return !metav1.HasAnnotation(node.ObjectMeta, nodeNotManagedByMCMAnnotationKey)
+	return !metav1.HasAnnotation(node.ObjectMeta, machineutils.NotManagedByMCM)
 }
 
 // GetEffectiveNodeConditionsForWorkers initializes the node conditions per worker.
@@ -57,7 +57,7 @@ func GetEffectiveNodeConditionsForWorkers(shoot *v1beta1.Shoot) map[string][]str
 // GetWorkerUnhealthyNodeConditions returns the configured node conditions for the pool where this node belongs.
 // Worker name is extracted from the node labels.
 func GetWorkerUnhealthyNodeConditions(node *corev1.Node, workerNodeConditions map[string][]string) []string {
-	if poolName, foundWorkerPoolLabel := node.Labels[WorkerPoolLabel]; foundWorkerPoolLabel {
+	if poolName, foundWorkerPoolLabel := node.Labels[gardencorev1beta1constants.LabelWorkerPool]; foundWorkerPoolLabel {
 		if conditions, foundWorkerPoolNodeConditions := workerNodeConditions[poolName]; foundWorkerPoolNodeConditions {
 			return conditions
 		}

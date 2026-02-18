@@ -21,7 +21,7 @@ func TestMustNotBeEmpty(t *testing.T) {
 	g := NewWithT(t)
 	tests := []struct {
 		key    string
-		value  interface{}
+		value  any
 		result bool
 	}{
 		{"", nil, false},
@@ -70,7 +70,7 @@ func TestMustNotBeNil(t *testing.T) {
 	var ch chan struct{}
 	tests := []struct {
 		key    string
-		value  interface{}
+		value  any
 		result bool
 	}{
 		{"k1", nil, false},

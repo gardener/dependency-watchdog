@@ -24,7 +24,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/kubernetes"
 )
 
 const (
@@ -264,14 +263,6 @@ func (p *Prober) backOffIfNeeded() {
 		p.backOff.Stop()
 		p.backOff = nil
 	}
-}
-
-func (p *Prober) doProbe(client kubernetes.Interface) error {
-	_, err := client.Discovery().ServerVersion()
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (p *Prober) setBackOffIfThrottlingError(err error) {

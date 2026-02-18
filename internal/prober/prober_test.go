@@ -19,7 +19,6 @@ import (
 	scalefakes "github.com/gardener/dependency-watchdog/internal/prober/fakes/scale"
 	shootfakes "github.com/gardener/dependency-watchdog/internal/prober/fakes/shoot"
 	"github.com/gardener/dependency-watchdog/internal/test"
-	"github.com/gardener/dependency-watchdog/internal/util"
 	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machineutils"
 	appsv1 "k8s.io/api/apps/v1"
@@ -316,10 +315,10 @@ func TestLeaseProbeShouldNotConsiderFailedOrTerminatingMachines(t *testing.T) {
 func TestLeaseProbeShouldNotConsiderUnhealthyNodes(t *testing.T) {
 	t.Parallel()
 	nodes := test.GenerateNodes([]test.NodeSpec{
-		{Name: test.Node1Name, Labels: map[string]string{util.WorkerPoolLabel: test.Worker1Name}, Conditions: []corev1.NodeCondition{{Type: test.NodeConditionDiskPressure, Status: corev1.ConditionTrue}}},
-		{Name: test.Node2Name, Labels: map[string]string{util.WorkerPoolLabel: test.Worker1Name}, Conditions: []corev1.NodeCondition{{Type: test.NodeConditionMemoryPressure, Status: corev1.ConditionTrue}}},
-		{Name: test.Node3Name, Labels: map[string]string{util.WorkerPoolLabel: test.Worker2Name}, Conditions: []corev1.NodeCondition{{Type: test.NodeConditionMemoryPressure, Status: corev1.ConditionTrue}}}, // This node will not be considered as unhealthy as the corresponding worker has DefaultUnhealthyNodeConditions which does not include MemoryPressure.
-		{Name: test.Node4Name, Labels: map[string]string{util.WorkerPoolLabel: test.Worker2Name}},
+		{Name: test.Node1Name, Labels: map[string]string{"worker.gardener.cloud/pool": test.Worker1Name}, Conditions: []corev1.NodeCondition{{Type: test.NodeConditionDiskPressure, Status: corev1.ConditionTrue}}},
+		{Name: test.Node2Name, Labels: map[string]string{"worker.gardener.cloud/pool": test.Worker1Name}, Conditions: []corev1.NodeCondition{{Type: test.NodeConditionMemoryPressure, Status: corev1.ConditionTrue}}},
+		{Name: test.Node3Name, Labels: map[string]string{"worker.gardener.cloud/pool": test.Worker2Name}, Conditions: []corev1.NodeCondition{{Type: test.NodeConditionMemoryPressure, Status: corev1.ConditionTrue}}}, // This node will not be considered as unhealthy as the corresponding worker has DefaultUnhealthyNodeConditions which does not include MemoryPressure.
+		{Name: test.Node4Name, Labels: map[string]string{"worker.gardener.cloud/pool": test.Worker2Name}},
 	})
 	machines := test.GenerateMachines([]test.MachineSpec{
 		{Name: test.Machine1Name, Labels: map[string]string{v1alpha1.NodeLabelKey: test.Node1Name}, CurrentStatus: v1alpha1.CurrentStatus{Phase: v1alpha1.MachineUnknown}},
@@ -798,6 +797,6 @@ func createConfig(probeInterval metav1.Duration, initialDelay metav1.Duration, k
 		InitialDelay:                &initialDelay,
 		ProbeTimeout:                &testProbeTimeout,
 		KCMNodeMonitorGraceDuration: &kcmNodeMonitorGraceDuration,
-		NodeLeaseFailureFraction:    ptr.To[float64](DefaultNodeLeaseFailureFraction),
+		NodeLeaseFailureFraction:    ptr.To(DefaultNodeLeaseFailureFraction),
 	}
 }
