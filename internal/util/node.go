@@ -11,6 +11,7 @@ import (
 	gardencorev1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machineutils"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -27,10 +28,11 @@ const (
 var DefaultUnhealthyNodeConditions = []string{"KernelDeadlock", "ReadonlyFilesystem", "DiskPressure", "NetworkUnavailable"}
 
 // IsNodeHealthyByConditions determines if a node is healthy by checking that none of the given unhealthyWorkerConditionNames have Status set to true.
-func IsNodeHealthyByConditions(node *corev1.Node, unhealthyWorkerConditionNames []string) bool {
+func IsNodeHealthyByConditions(logger logr.Logger, node *corev1.Node, unhealthyWorkerConditionNames []string) bool {
 	for _, nc := range node.Status.Conditions {
 		if slices.Contains(unhealthyWorkerConditionNames, string(nc.Type)) {
 			if nc.Status == corev1.ConditionTrue {
+				logger.V(4).Info("Node is unhealthy due to condition", "nodeName", node.Name, "condition", nc.Type)
 				return false
 			}
 		}
