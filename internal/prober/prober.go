@@ -252,7 +252,7 @@ func (p *Prober) getFilteredNodeLeases(ctx context.Context, shootClient client.C
 	}
 
 	var (
-		filteredLeases   []coordinationv1.Lease
+		filteredLeases     []coordinationv1.Lease
 		filteredLeaseNames []string
 	)
 	for _, lease := range leases.Items {
