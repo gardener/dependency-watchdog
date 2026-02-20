@@ -14,6 +14,8 @@ import (
 	"github.com/gardener/dependency-watchdog/internal/prober/shoot"
 	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	papi "github.com/gardener/dependency-watchdog/api/prober"
@@ -99,7 +101,7 @@ func (p *Prober) probe(ctx context.Context) {
 		p.l.Info("API server probe failed, Skipping lease probe and scaling operation", "err", err.Error())
 		return
 	}
-	p.l.Info("API server probe is successful, will conduct node lease probe")
+	p.l.V(5).Info("API server probe is successful, will conduct node lease probe")
 
 	shootClient, err := p.setupProbeClient(ctx)
 	if err != nil {
@@ -153,6 +155,7 @@ func (p *Prober) shouldPerformScaleUp(candidateNodeLeases []coordinationv1.Lease
 	var expiredNodeLeaseCount float64
 	for _, lease := range candidateNodeLeases {
 		if p.isLeaseExpired(lease) {
+			p.l.V(3).Info("Lease expired", "lease", types.NamespacedName{Namespace: lease.Namespace, Name: lease.Name}, "renewTime", lease.Spec.RenewTime)
 			expiredNodeLeaseCount++
 		}
 	}
@@ -210,11 +213,18 @@ func (p *Prober) getFilteredNodeNames(ctx context.Context, shootClient client.Cl
 	}
 	nodeNames := make([]string, 0, len(nodes.Items))
 	for _, node := range nodes.Items {
-		if util.IsNodeManagedByMCM(&node) &&
-			util.IsNodeHealthyByConditions(&node, util.GetWorkerUnhealthyNodeConditions(&node, p.workerNodeConditions)) &&
-			util.GetMachineNotInFailedOrTerminatingState(node.Name, machines) != nil &&
-			!util.IsNodeUndergoingInPlaceUpdate(&node) {
+		nodeManagedByMCM := util.IsNodeManagedByMCM(&node)
+		nodeIsHealthy := util.IsNodeHealthyByConditions(p.l, &node, util.GetWorkerUnhealthyNodeConditions(&node, p.workerNodeConditions))
+		machineNotInFailedOrTerminating := util.GetMachineNotInFailedOrTerminatingState(node.Name, machines)
+		nodeUndergoingInPlaceUpdate := util.IsNodeUndergoingInPlaceUpdate(&node)
+
+		if nodeManagedByMCM &&
+			nodeIsHealthy &&
+			machineNotInFailedOrTerminating != nil &&
+			!nodeUndergoingInPlaceUpdate {
 			nodeNames = append(nodeNames, node.Name)
+		} else {
+			p.l.V(2).Info("Filtering out node from node lease probe as it does not satisfy the criteria", "nodeName", node.Name, "nodeManagedByMCM", nodeManagedByMCM, "nodeIsHealthy", nodeIsHealthy, "machineNotInFailedOrTerminating", machineNotInFailedOrTerminating != nil, "nodeUndergoingInPlaceUpdate", nodeUndergoingInPlaceUpdate)
 		}
 	}
 	return nodeNames, nil
@@ -241,13 +251,23 @@ func (p *Prober) getFilteredNodeLeases(ctx context.Context, shootClient client.C
 		return nil, err
 	}
 
-	var filteredLeases []coordinationv1.Lease
+	var (
+		filteredLeases     []coordinationv1.Lease
+		filteredLeaseNames []string
+	)
 	for _, lease := range leases.Items {
 		if slices.Contains(nodeNames, lease.Name) {
 			// node leases have the same names as nodes
 			filteredLeases = append(filteredLeases, lease)
+			filteredLeaseNames = append(filteredLeaseNames, lease.Name)
 		}
 	}
+
+	nodesWithoutLeases := sets.New(nodeNames...).Difference(sets.New(filteredLeaseNames...))
+	if len(nodesWithoutLeases) > 0 {
+		p.l.V(2).Info("Node leases are not present for some nodes, these nodes will be ignored for lease expiry check", "nodesWithoutLeases", nodesWithoutLeases.UnsortedList())
+	}
+
 	return filteredLeases, nil
 }
 
