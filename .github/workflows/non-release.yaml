@@ -11,9 +11,10 @@ jobs:
     uses: ./.github/workflows/build.yaml
     with:
       mode: snapshot
+      run-tests: false
     secrets: inherit
     permissions:
-      contents: write
+      contents: read
       packages: write
       id-token: write
 
@@ -21,7 +22,6 @@ jobs:
     uses: gardener/cc-utils/.github/workflows/post-build.yaml@master
     needs:
       - build
-    secrets: inherit
     permissions:
       id-token: write
       contents: write
