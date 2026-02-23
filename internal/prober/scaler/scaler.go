@@ -87,9 +87,8 @@ func (i operation) getMinTargetReplicas() int32 {
 func (i operation) shouldScaleReplicas(currentReplicas int32) bool {
 	if i == scaleUp {
 		return currentReplicas == 0
-	} else {
-		return currentReplicas > 0
 	}
+	return currentReplicas > 0
 }
 
 // minTargetReplicasReached checks if scaling of the resource is complete based on the current and minimum target replica count.
@@ -99,9 +98,8 @@ func (i operation) minTargetReplicasReached(currentReplicas int32) bool {
 	minTargetReplicas := i.getMinTargetReplicas()
 	if i == scaleUp {
 		return currentReplicas >= minTargetReplicas
-	} else {
-		return currentReplicas == minTargetReplicas
 	}
+	return currentReplicas == minTargetReplicas
 }
 
 // scalableResourceInfo captures scaling configuration for a DependentResourceInfo.

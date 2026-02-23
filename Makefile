@@ -68,7 +68,7 @@ import-boss: $(GO_IMPORT_BOSS)
 	@$(HACK_DIR)/check-imports.sh ./cmd/...
 
 .PHONY: format
-format:
+format: $(GOIMPORTS)
 	@$(HACK_DIR)/format.sh ./controllers ./internal
 
 .PHONY: test

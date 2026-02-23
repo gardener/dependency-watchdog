@@ -96,11 +96,8 @@ func (r *resScaler) scale(ctx context.Context) error {
 		}
 		return err
 	}
-	if r.resourceInfo.operation.shouldScaleReplicas(scaleSubRes.Spec.Replicas) {
-		if err := r.updateResourceAndScale(ctx, scaleSubRes, resourceAnnot); err != nil {
-			return err
-		}
-	} else {
+
+	if !r.resourceInfo.operation.shouldScaleReplicas(scaleSubRes.Spec.Replicas) {
 		if r.resourceInfo.operation == scaleUp {
 			r.logger.Info("Skipping scale-up for resource as current spec replicas > 0")
 			// It is possible that the meltdown protection annotation was not removed during the last scale up operation.
@@ -115,6 +112,11 @@ func (r *resScaler) scale(ctx context.Context) error {
 		} else {
 			r.logger.Info("Skipping scale-down for resource as current spec replicas == 0")
 		}
+		return nil
+	}
+
+	if err = r.updateResourceAndScale(ctx, scaleSubRes, resourceAnnot); err != nil {
+		return err
 	}
 
 	return r.waitTillMinTargetReplicasReached(ctx)
@@ -181,6 +183,7 @@ func (r *resScaler) updateResourceAndScale(ctx context.Context, scaleSubRes *aut
 			return err
 		}
 	}
+	r.logger.Info("Successfully updated the replicas for resource", "targetReplicas", targetReplicas)
 	return nil
 }
 
