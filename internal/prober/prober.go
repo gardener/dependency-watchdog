@@ -101,7 +101,7 @@ func (p *Prober) probe(ctx context.Context) {
 		p.l.Info("API server probe failed, Skipping lease probe and scaling operation", "err", err.Error())
 		return
 	}
-	p.l.V(5).Info("API server probe is successful, will conduct node lease probe")
+	p.l.V(3).Info("API server probe is successful, will conduct node lease probe")
 
 	shootClient, err := p.setupProbeClient(ctx)
 	if err != nil {

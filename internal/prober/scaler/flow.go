@@ -91,17 +91,17 @@ func (c *creator) createScaleTaskFn(namespace string, resourceInfos []scalableRe
 
 func (c *creator) doCreateTaskFn(namespace string, resInfo scalableResourceInfo) flow.TaskFn {
 	return func(ctx context.Context) error {
-		var operation string
+		var op string
 		if resInfo.operation == scaleUp {
-			operation = fmt.Sprintf("scaleUp-resource-%s.%s", namespace, resInfo.ref.Name)
+			op = fmt.Sprintf("scaleUp-resource-%s.%s", namespace, resInfo.ref.Name)
 		} else {
-			operation = fmt.Sprintf("scaleDown-resource-%s.%s", namespace, resInfo.ref.Name)
+			op = fmt.Sprintf("scaleDown-resource-%s.%s", namespace, resInfo.ref.Name)
 		}
-		resScaler := newResourceScaler(c.client, c.scaler, c.logger, c.options, namespace, resInfo)
+		rs := newResourceScaler(c.client, c.scaler, c.logger, c.options, namespace, resInfo)
 		result := util.Retry(ctx, c.logger,
-			operation,
+			op,
 			func() (any, error) {
-				err := resScaler.scale(ctx)
+				err := rs.scale(ctx)
 				return nil, err
 			},
 			defaultMaxResourceScalingAttempts,

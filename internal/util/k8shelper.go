@@ -131,21 +131,19 @@ func CreateScalesGetter(config *rest.Config) (scale.ScalesGetter, error) {
 }
 
 // GetScaleResource returns a kubernetes scale subresource.
-func GetScaleResource(ctx context.Context, client client.Client, scaler scale.ScaleInterface, logger logr.Logger, resourceRef *autoscalingv1.CrossVersionObjectReference, timeout time.Duration) (*schema.GroupResource, *autoscalingv1.Scale, error) {
-	gr, err := getGroupResource(client, logger, resourceRef)
+func GetScaleResource(ctx context.Context, client client.Client, scaler scale.ScaleInterface, logger logr.Logger, resourceRef *autoscalingv1.CrossVersionObjectReference, timeout time.Duration) (gr *schema.GroupResource, scaleRes *autoscalingv1.Scale, err error) {
+	gr, err = getGroupResource(client, logger, resourceRef)
 	if err != nil {
 		return nil, nil, err
 	}
-	scaleRes, err := func() (*autoscalingv1.Scale, error) {
-		childCtx, cancelFn := context.WithTimeout(ctx, timeout)
-		defer cancelFn()
-		return scaler.Get(childCtx, gr, resourceRef.Name, metav1.GetOptions{})
-	}()
-	return &gr, scaleRes, err
+	resGetCtx, cancelFn := context.WithTimeout(ctx, timeout)
+	defer cancelFn()
+	scaleRes, err = scaler.Get(resGetCtx, *gr, resourceRef.Name, metav1.GetOptions{})
+	return
 }
 
 // getGroupResource returns a schema.GroupResource for the given resourceRef.
-func getGroupResource(client client.Client, logger logr.Logger, resourceRef *autoscalingv1.CrossVersionObjectReference) (schema.GroupResource, error) {
+func getGroupResource(client client.Client, logger logr.Logger, resourceRef *autoscalingv1.CrossVersionObjectReference) (*schema.GroupResource, error) {
 	gv, _ := schema.ParseGroupVersion(resourceRef.APIVersion) // Ignoring the error as this validation has already been done when initially validating the Config
 	gk := schema.GroupKind{
 		Group: gv.Group,
@@ -154,9 +152,10 @@ func getGroupResource(client client.Client, logger logr.Logger, resourceRef *aut
 	mapping, err := client.RESTMapper().RESTMapping(gk, gv.Version)
 	if err != nil {
 		logger.Error(err, "Failed to get RESTMapping for resource")
-		return schema.GroupResource{}, err
+		return &schema.GroupResource{}, err
 	}
-	return mapping.Resource.GroupResource(), nil
+	gr := mapping.Resource.GroupResource()
+	return &gr, nil
 }
 
 // GetResourceAnnotations gets the annotations for a resource identified by resourceRef withing the given namespace.

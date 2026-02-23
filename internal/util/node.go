@@ -32,7 +32,7 @@ func IsNodeHealthyByConditions(logger logr.Logger, node *corev1.Node, unhealthyW
 	for _, nc := range node.Status.Conditions {
 		if slices.Contains(unhealthyWorkerConditionNames, string(nc.Type)) {
 			if nc.Status == corev1.ConditionTrue {
-				logger.V(4).Info("Node is unhealthy due to condition", "nodeName", node.Name, "condition", nc.Type)
+				logger.V(3).Info("Node is unhealthy due to condition", "nodeName", node.Name, "condition", nc.Type)
 				return false
 			}
 		}

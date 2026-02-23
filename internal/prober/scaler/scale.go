@@ -115,6 +115,7 @@ func (r *resScaler) scale(ctx context.Context) error {
 		} else {
 			r.logger.Info("Skipping scale-down for resource as current spec replicas == 0")
 		}
+		return nil
 	}
 
 	return r.waitTillMinTargetReplicasReached(ctx)
@@ -181,6 +182,7 @@ func (r *resScaler) updateResourceAndScale(ctx context.Context, scaleSubRes *aut
 			return err
 		}
 	}
+	r.logger.Info("Successfully updated the replicas for resource", "targetReplicas", targetReplicas)
 	return nil
 }
 
