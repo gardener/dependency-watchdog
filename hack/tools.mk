@@ -18,16 +18,16 @@ GOSEC             := $(TOOLS_BIN_DIR)/gosec
 version_gomod = $(shell go list -mod=mod -f '{{ .Version }}' -m $(1))
 
 #default tool versions
-GOLANGCI_LINT_VERSION ?= v2.0.2
+GOLANGCI_LINT_VERSION ?= v2.7.2
 GO_VULN_CHECK_VERSION ?= latest
 GOIMPORTS_VERSION ?= latest
 LOGCHECK_VERSION ?= ee13c7d8519f930e352785de176d09d75e65027c # this commit hash corresponds to v1.115.2 which is the gardener/gardener version in go.mod - we could use regular tags when https://github.com/gardener/gardener/issues/8811 is resolved
-GO_ADD_LICENSE_VERSION ?= v1.1.1
+GO_ADD_LICENSE_VERSION ?= v1.2.0
 # k8s version is required as import-boss is part of the kubernetes/kubernetes repository.
 K8S_VERSION ?= $(subst v0,v1,$(call version_gomod,k8s.io/api))
 GO_STRESS_VERSION ?= latest
 CONTROLLER_RUNTIME_VERSION ?= $(call version_gomod,sigs.k8s.io/controller-runtime)
-GOSEC_VERSION ?= v2.21.4
+GOSEC_VERSION ?= v2.22.10
 
 # add ./hack/tools/bin to the PATH
 export TOOLS_BIN_DIR := $(TOOLS_BIN_DIR)
@@ -57,7 +57,7 @@ $(GO_ADD_LICENSE):
 $(GO_IMPORT_BOSS):
 	mkdir -p hack/tools/bin/work/import-boss
 	curl -L -o hack/tools/bin/work/import-boss/main.go https://raw.githubusercontent.com/kubernetes/kubernetes/$(K8S_VERSION)/cmd/import-boss/main.go
-	go build -o $(TOOLS_BIN_DIR) ./hack/tools/bin/work/import-boss
+	cd hack/tools/bin/work/import-boss && go mod init import-boss && go mod tidy && go build -o $(abspath $(TOOLS_BIN_DIR))/import-boss .
 
 $(GO_STRESS):
 	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install golang.org/x/tools/cmd/stress@$(GO_STRESS_VERSION)

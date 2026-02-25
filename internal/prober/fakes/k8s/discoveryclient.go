@@ -27,7 +27,7 @@ func (t *discoveryClient) ServerVersion() (*version.Info, error) {
 // NewFakeDiscoveryClient creates a new DiscoveryClient.
 func NewFakeDiscoveryClient(err error) discovery.DiscoveryInterface {
 	return &discoveryClient{
-		DiscoveryInterface: fake.NewSimpleClientset().Discovery(),
+		DiscoveryInterface: fake.NewClientset().Discovery(),
 		err:                err,
 	}
 }
