@@ -57,7 +57,7 @@ $(GO_ADD_LICENSE):
 $(GO_IMPORT_BOSS):
 	mkdir -p hack/tools/bin/work/import-boss
 	curl -L -o hack/tools/bin/work/import-boss/main.go https://raw.githubusercontent.com/kubernetes/kubernetes/$(K8S_VERSION)/cmd/import-boss/main.go
-	go build -o $(TOOLS_BIN_DIR) ./hack/tools/bin/work/import-boss
+	cd hack/tools/bin/work/import-boss && go mod init import-boss && go mod tidy && go build -o $(abspath $(TOOLS_BIN_DIR))/import-boss .
 
 $(GO_STRESS):
 	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install golang.org/x/tools/cmd/stress@$(GO_STRESS_VERSION)
