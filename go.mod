@@ -10,7 +10,7 @@ require (
 	github.com/onsi/gomega v1.39.1
 	go.uber.org/zap v1.27.1
 	k8s.io/api v0.35.1
-	k8s.io/apimachinery v0.35.1
+	k8s.io/apimachinery v0.36.0-alpha.1
 	k8s.io/client-go v0.35.1
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 	sigs.k8s.io/controller-runtime v0.22.5
@@ -204,11 +204,11 @@ require (
 	k8s.io/component-base v0.35.0 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-aggregator v0.34.3 // indirect
-	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 // indirect
+	k8s.io/kube-openapi v0.0.0-20260127142750-a19766b6e2d4 // indirect
 	k8s.io/kubelet v0.34.3 // indirect
 	k8s.io/metrics v0.34.3 // indirect
 	k8s.io/pod-security-admission v0.34.3 // indirect
-	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20250517180713-32e5e9e948a5 // indirect
+	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20260305141020-105baa6284da // indirect
 	sigs.k8s.io/gateway-api v1.3.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
