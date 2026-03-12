@@ -3,7 +3,7 @@ module github.com/gardener/dependency-watchdog
 go 1.25.6
 
 require (
-	github.com/gardener/gardener v1.136.2
+	github.com/gardener/gardener v1.138.0
 	github.com/gardener/machine-controller-manager v0.61.2
 	github.com/go-logr/logr v1.4.3
 	github.com/hashicorp/go-multierror v1.1.1
