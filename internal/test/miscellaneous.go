@@ -37,7 +37,7 @@ func FileExistsOrFail(filepath string) {
 		log.Fatalf("%s does not exist. This should not have happened. Check testdata directory.\n", filepath)
 	}
 	if err != nil {
-		log.Fatalf("Error occured in finding file %s : %v", filepath, err)
+		log.Fatalf("Error occurred in finding file %s : %v", filepath, err)
 	}
 }
 
