@@ -60,11 +60,11 @@ func TestAPIServerProbeFailure(t *testing.T) {
 		{name: "Throttling error is returned by api server", discoveryErr: apierrors.NewTooManyRequests("Too many requests", 10), shouldBackOff: true},
 	}
 
-	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
 			entry := entry
 			t.Parallel()
+			g := NewWithT(t)
 			scc := shootfakes.NewFakeShootClientBuilder(k8sfakes.NewFakeDiscoveryClient(entry.discoveryErr), k8sfakes.NewFakeClientBuilder().Build()).Build()
 			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
 
@@ -90,11 +90,11 @@ func TestDiscoveryClientCreationFailed(t *testing.T) {
 		{name: "Unauthorized request error is returned while creating discovery client", discoveryClientCreationErr: apierrors.NewUnauthorized("unauthorized"), shouldBackOff: false},
 		{name: "Throttling error is returned while creating discovery client", discoveryClientCreationErr: apierrors.NewTooManyRequests("Too many requests", 10), shouldBackOff: true},
 	}
-	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
 			entry := entry
 			t.Parallel()
+			g := NewWithT(t)
 			scc := shootfakes.NewFakeShootClientBuilder(nil, nil).WithDiscoveryClientCreationError(entry.discoveryClientCreationErr).Build()
 			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.1)
 
@@ -122,11 +122,11 @@ func TestClientCreationFailed(t *testing.T) {
 	}
 
 	shootDiscoveryClient := k8sfakes.NewFakeDiscoveryClient(nil)
-	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
 			entry := entry
 			t.Parallel()
+			g := NewWithT(t)
 			scc := shootfakes.NewFakeShootClientBuilder(shootDiscoveryClient, nil).WithClientCreationError(entry.clientCreationErr).Build()
 			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
 
@@ -160,11 +160,11 @@ func TestNoScalingIfErrorInListingNodes(t *testing.T) {
 		{name: "no scale down should happen if error in listing nodes", nodeListErr: apierrors.NewTooManyRequests("Too many requests", 10), areLeasesExpired: true, initialDeploymentReplicas: 1, shouldBackOff: true},
 	}
 	shootDiscoveryClient := k8sfakes.NewFakeDiscoveryClient(nil)
-	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
 			entry := entry
 			t.Parallel()
+			g := NewWithT(t)
 			ctx := context.Background()
 			leases := test.GenerateNodeLeases([]test.NodeLeaseSpec{{Name: test.Node1Name, IsExpired: entry.areLeasesExpired}, {Name: test.Node2Name, IsExpired: entry.areLeasesExpired}})
 			scaleTargetDeployments := generateScaleTargetDeployments(entry.initialDeploymentReplicas)
@@ -206,11 +206,11 @@ func TestNoScalingIfErrorInListingMachines(t *testing.T) {
 		{name: "no scale down should happen if error in listing machines", machineListErr: apierrors.NewTooManyRequests("Too many requests", 10), areLeasesExpired: true, initialDeploymentReplicas: 1, shouldBackOff: true},
 	}
 	shootDiscoveryClient := k8sfakes.NewFakeDiscoveryClient(nil)
-	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
 			entry := entry
 			t.Parallel()
+			g := NewWithT(t)
 			ctx := context.Background()
 			leases := test.GenerateNodeLeases([]test.NodeLeaseSpec{{Name: test.Node1Name, IsExpired: entry.areLeasesExpired}, {Name: test.Node2Name, IsExpired: entry.areLeasesExpired}})
 			scaleTargetDeployments := generateScaleTargetDeployments(entry.initialDeploymentReplicas)
@@ -283,11 +283,11 @@ func TestLeaseProbeShouldNotConsiderFailedOrTerminatingMachines(t *testing.T) {
 	}
 
 	shootDiscoveryClient := k8sfakes.NewFakeDiscoveryClient(nil)
-	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
 			entry := entry
 			t.Parallel()
+			g := NewWithT(t)
 			ctx := context.Background()
 			leases := test.GenerateNodeLeases([]test.NodeLeaseSpec{
 				{Name: test.Node1Name, IsExpired: entry.isLeaseExpired[test.Node1Name]},
@@ -338,11 +338,11 @@ func TestLeaseProbeShouldNotConsiderUnhealthyNodes(t *testing.T) {
 	}
 
 	shootDiscoveryClient := k8sfakes.NewFakeDiscoveryClient(nil)
-	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
 			entry := entry
 			t.Parallel()
+			g := NewWithT(t)
 			ctx := context.Background()
 			leases := test.GenerateNodeLeases([]test.NodeLeaseSpec{
 				{Name: test.Node1Name, IsExpired: entry.isLeaseExpired[test.Node1Name]},
@@ -452,11 +452,11 @@ func TestLeaseProbeShouldNotConsiderNodesUndergoingInPlaceUpdate(t *testing.T) {
 	}
 
 	shootDiscoveryClient := k8sfakes.NewFakeDiscoveryClient(nil)
-	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
 			entry := entry
 			t.Parallel()
+			g := NewWithT(t)
 			ctx := context.Background()
 			leases := test.GenerateNodeLeases([]test.NodeLeaseSpec{
 				{Name: test.Node1Name, IsExpired: entry.isLeaseExpired[test.Node1Name]},
@@ -500,11 +500,11 @@ func TestNoScalingIfErrorInListingLeases(t *testing.T) {
 		{name: "no scale down should happen if error in listing leases", leaseListErr: apierrors.NewTooManyRequests("Too many requests", 10), initialDeploymentReplicas: 1, shouldBackOff: true},
 	}
 	shootDiscoveryClient := k8sfakes.NewFakeDiscoveryClient(nil)
-	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
 			entry := entry
 			t.Parallel()
+			g := NewWithT(t)
 			ctx := context.Background()
 			leases := test.GenerateNodeLeases([]test.NodeLeaseSpec{{Name: test.Node1Name, IsExpired: entry.areLeasesExpired}, {Name: test.Node2Name, IsExpired: entry.areLeasesExpired}})
 			scaleTargetDeployments := generateScaleTargetDeployments(entry.initialDeploymentReplicas)
@@ -540,12 +540,11 @@ func TestNoScalingInSingleNodeClusters(t *testing.T) {
 		{name: "no scale up should happen", isLeaseExpired: false, initialDeploymentReplicas: 0},
 		{name: "no scale down should happen", isLeaseExpired: true, initialDeploymentReplicas: 1},
 	}
-	g := NewWithT(t)
-	t.Parallel()
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
 			entry := entry
 			t.Parallel()
+			g := NewWithT(t)
 			ctx := context.Background()
 			scaleTargetDeployments := generateScaleTargetDeployments(entry.initialDeploymentReplicas)
 			leases := test.GenerateNodeLeases([]test.NodeLeaseSpec{{Name: test.Node1Name, IsExpired: entry.isLeaseExpired}})
@@ -586,11 +585,11 @@ func TestLeaseProbeShouldNotConsiderOrphanedLeases(t *testing.T) {
 	}
 
 	shootDiscoveryClient := k8sfakes.NewFakeDiscoveryClient(nil)
-	g := NewWithT(t)
 	for _, entry := range testCases {
 		t.Run(entry.name, func(t *testing.T) {
 			entry := entry
 			t.Parallel()
+			g := NewWithT(t)
 			ctx := context.Background()
 			leases := test.GenerateNodeLeases([]test.NodeLeaseSpec{
 				{Name: test.Node1Name, IsExpired: entry.isLeaseExpired[test.Node1Name]},
@@ -617,7 +616,6 @@ func TestLeaseProbeShouldNotConsiderOrphanedLeases(t *testing.T) {
 
 func TestSuccessfulProbesShouldRunScaleUp(t *testing.T) {
 	t.Parallel()
-	g := NewWithT(t)
 	nodes := test.GenerateNodes([]test.NodeSpec{{Name: test.Node1Name}, {Name: test.Node2Name}})
 	leases := test.GenerateNodeLeases([]test.NodeLeaseSpec{
 		{Name: test.Node1Name, IsExpired: false},
@@ -646,6 +644,7 @@ func TestSuccessfulProbesShouldRunScaleUp(t *testing.T) {
 		t.Run(entry.name, func(t *testing.T) {
 			entry := entry
 			t.Parallel()
+			g := NewWithT(t)
 			ctx := context.Background()
 			scaler := scalefakes.NewFakeScaler(seedClient, test.DefaultNamespace, entry.scaleUpErr, nil)
 			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
@@ -668,7 +667,6 @@ func TestSuccessfulProbesShouldRunScaleUp(t *testing.T) {
 
 func TestLeaseProbeFailureShouldRunScaleDown(t *testing.T) {
 	t.Parallel()
-	g := NewWithT(t)
 	nodes := test.GenerateNodes([]test.NodeSpec{{Name: test.Node1Name}, {Name: test.Node2Name}})
 	leases := test.GenerateNodeLeases([]test.NodeLeaseSpec{
 		{Name: test.Node1Name, IsExpired: true},
@@ -697,6 +695,7 @@ func TestLeaseProbeFailureShouldRunScaleDown(t *testing.T) {
 		t.Run(entry.name, func(t *testing.T) {
 			entry := entry
 			t.Parallel()
+			g := NewWithT(t)
 			ctx := context.Background()
 			scaler := scalefakes.NewFakeScaler(seedClient, test.DefaultNamespace, nil, entry.scaleDownErr)
 			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
