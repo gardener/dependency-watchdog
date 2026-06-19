@@ -8,6 +8,7 @@ package util
 
 import (
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -63,6 +64,65 @@ func TestMustNotBeZeroDuration(t *testing.T) {
 			g.Expect(v.Error).To(HaveOccurred())
 		}
 	}
+}
+
+func TestMustBeGreater(t *testing.T) {
+	g := NewWithT(t)
+
+	tests := []struct {
+		name     string
+		key      string
+		val      any
+		refVal   any
+		expected bool
+	}{
+		// Success cases
+		{"int greater", "age", 25, 18, true},
+		{"int not greater", "age", 18, 25, false},
+		{"int equal", "age", 20, 20, false},
+
+		{"float64 greater", "score", 95.5, 90.0, true},
+		{"float64 not greater", "score", 85.0, 90.0, false},
+
+		{"string greater", "name", "zebra", "apple", true},
+		{"string not greater", "name", "apple", "zebra", false},
+
+		{"uint greater", "count", uint(100), uint(50), true},
+
+		// Edge cases
+		{"negative numbers", "temp", -5, -10, true},
+		{"zero", "value", 0, -1, true},
+		{"float edge", "pi", 3.1416, 3.14, true},
+
+		// Failure cases - type mismatch
+		{"different types int/float", "value", 10, 10.0, false},
+		{"int and string", "value", 100, "50", false},
+		{"nil value", "value", nil, 10, false},
+		{"nil ref", "value", 10, nil, false},
+		{"both nil", "value", nil, nil, false},
+
+		// Unsupported types
+		{"time.Time", "date", time.Now(), time.Now().Add(-time.Hour), false},
+		{"bool", "flag", true, false, false},
+		{"slice", "items", []int{1, 2}, []int{1}, false},
+	}
+
+	for _, entry := range tests {
+		v := Validator{}
+		t.Run(entry.name, func(t *testing.T) {
+			actualResult := v.MustBeGreater(entry.key, entry.val, entry.refVal)
+			g.Expect(entry.expected).To(Equal(actualResult))
+			if !actualResult {
+				g.Expect(v.Error).To(HaveOccurred())
+			}
+		})
+	}
+}
+
+func TestMustBeGreaterOne(t *testing.T) {
+	v := Validator{}
+	result := v.MustBeGreater("bingo", 1.0, 2.0)
+	t.Log("result=", result, "err=", v.Error)
 }
 
 func TestMustNotBeNil(t *testing.T) {

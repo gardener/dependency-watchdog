@@ -61,6 +61,76 @@ func (v *Validator) MustNotBeZeroDuration(key string, duration metav1.Duration) 
 	return true
 }
 
+// MustBeGreater checks whether the given value is greater than specified reference value, returns false otherwise.
+// value types are expected to satisfy [cmp.Ordered].
+// TODO: Simplify after Go 1.27 which supports generic methods — methods that can declare their own type parameters.
+func (v *Validator) MustBeGreater(key string, val, refVal any) bool {
+	if val == nil || refVal == nil {
+		v.Error = multierr.Append(v.Error, fmt.Errorf("value/reference value for key %s must be not be nil", key))
+		return false
+	}
+	switch v1 := val.(type) {
+	case int:
+		if v2, ok := refVal.(int); ok && v1 > v2 {
+			return true
+		}
+	case int8:
+		if v2, ok := refVal.(int8); ok && v1 > v2 {
+			return true
+		}
+	case int16:
+		if v2, ok := refVal.(int16); ok && v1 > v2 {
+			return true
+		}
+	case int32:
+		if v2, ok := refVal.(int32); ok && v1 > v2 {
+			return true
+		}
+	case int64:
+		if v2, ok := refVal.(int64); ok && v1 > v2 {
+			return true
+		}
+	case uint:
+		if v2, ok := refVal.(uint); ok && v1 > v2 {
+			return true
+		}
+	case uint8:
+		if v2, ok := refVal.(uint8); ok && v1 > v2 {
+			return true
+		}
+	case uint16:
+		if v2, ok := refVal.(uint16); ok && v1 > v2 {
+			return true
+		}
+	case uint32:
+		if v2, ok := refVal.(uint32); ok && v1 > v2 {
+			return true
+		}
+	case uint64:
+		if v2, ok := refVal.(uint64); ok && v1 > v2 {
+			return true
+		}
+	case uintptr:
+		if v2, ok := refVal.(uintptr); ok && v1 > v2 {
+			return true
+		}
+	case float32:
+		if v2, ok := refVal.(float32); ok && v1 > v2 {
+			return true
+		}
+	case float64:
+		if v2, ok := refVal.(float64); ok && v1 > v2 {
+			return true
+		}
+	case string:
+		if v2, ok := refVal.(string); ok && v1 > v2 {
+			return true
+		}
+	}
+	v.Error = multierr.Append(v.Error, fmt.Errorf("value for key %s must be greater than %v but is %v", key, refVal, val))
+	return false
+}
+
 // MustNotBeNil checks whether the given value is nil and returns false if it is nil.
 func (v *Validator) MustNotBeNil(key string, value any) bool {
 	if value == nil || reflect.ValueOf(value).IsNil() {
