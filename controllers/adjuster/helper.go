@@ -103,19 +103,23 @@ func CanAcceptForAdjusterReconcile(log logr.Logger, objOld, objNew client.Object
 		(currPhase == machinev1alpha1.MachineAvailable || currPhase == machinev1alpha1.MachineRunning) {
 		accept = true
 	}
-	if currPhase == machinev1alpha1.MachineAvailable {
-		// sometime times Pending->Running event is missed and hence we need to check Available->Available update events too
-		// for Machines that have successfully joined cluster.
+	if oldPhase == machinev1alpha1.MachinePending && currPhase == machinev1alpha1.MachineFailed {
 		accept = true
 	}
+	//if currPhase == machinev1alpha1.MachineAvailable {
+	//	// sometime times Pending->Running event is missed and hence we need to check Available->Available update events too
+	//	// for Machines that have successfully joined cluster.
+	//	// I am not able to reproduce this currently.
+	//	accept = true
+	//}
 	if accept {
-		log.V(2).Info("Machine accepted as candidate for adjuster reconcile",
+		log.V(2).Info("Machine accepted for adjuster reconcile",
 			"name", machineNew.Name,
 			"oldPhase", oldPhase,
 			"currPhase", currPhase,
 			"lastOperation", machineNew.Status.LastOperation)
 	} else {
-		log.V(3).Info("Machine rejected as candidate for adjuster reconcile", "name", machineNew.Name, "oldPhase", oldPhase, "currPhase", currPhase, "status.lastOperation", machineNew.Status.LastOperation)
+		log.V(3).Info("Machine skipped for adjuster reconcile", "name", machineNew.Name, "oldPhase", oldPhase, "currPhase", currPhase, "status.lastOperation", machineNew.Status.LastOperation)
 	}
 	return
 }
@@ -197,11 +201,11 @@ func GetMachineDeploymentName(machine *machinev1alpha1.Machine) string {
 }
 
 // AdjustTimeout adjusts the currTimeout by the growthFactor bounded to maxTimeout. Returns 0 if there was no adjustment.
-func AdjustTimeout(currTimeout time.Duration, growthFactor float32, maxTimeout time.Duration) time.Duration {
+func AdjustTimeout(currTimeout time.Duration, growthFactor float64, maxTimeout time.Duration) time.Duration {
 	if growthFactor <= 1.0 || currTimeout >= maxTimeout || currTimeout <= 0 {
 		return 0
 	}
-	newTimeout := time.Duration(float32(currTimeout) * growthFactor)
+	newTimeout := time.Duration(float64(currTimeout) * growthFactor)
 	if newTimeout > maxTimeout {
 		newTimeout = maxTimeout
 	}

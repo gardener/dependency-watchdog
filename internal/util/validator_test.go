@@ -119,12 +119,6 @@ func TestMustBeGreater(t *testing.T) {
 	}
 }
 
-func TestMustBeGreaterOne(t *testing.T) {
-	v := Validator{}
-	result := v.MustBeGreater("bingo", 1.0, 2.0)
-	t.Log("result=", result, "err=", v.Error)
-}
-
 func TestMustNotBeNil(t *testing.T) {
 	g := NewWithT(t)
 	var ch chan struct{}

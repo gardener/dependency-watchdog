@@ -1,6 +1,7 @@
 package adjuster
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -19,10 +20,11 @@ type state struct {
 }
 
 type machineBasicInfo struct {
-	provisionKey adjustapi.ProvisionKey
-	expiry       time.Duration
-	joined       bool
-	failed       bool
+	namespacedName types.NamespacedName
+	provisionKey   adjustapi.ProvisionKey
+	expiry         time.Duration
+	joined         bool
+	failed         bool
 }
 
 type statData struct {
@@ -34,6 +36,12 @@ type statData struct {
 	failCount              int32
 	relatedDeploymentNames sets.Set[types.NamespacedName]
 }
+
+func (s statData) String() string {
+	return fmt.Sprintf("(createCount=%d,joinCount=%d,failCount=%d,createDuration=%d,joinDuration=%d,relatedDeploymentNames=%s,expiry=%s)",
+		s.createCount, s.joinCount, s.failCount, s.createDuration, s.joinDuration, s.relatedDeploymentNames, s.expiry)
+}
+
 type statUpdateFunc func(existingStat *statData) (updatedStat statData)
 type statGetFunc[T any] func(existingStat *statData) T
 
@@ -58,13 +66,13 @@ func (s *state) isFailRecorded(nn types.NamespacedName) bool {
 	return basicInfo.failed
 }
 
-func (s *state) recordFresh(nn types.NamespacedName, basicInfo machineBasicInfo, createDuration time.Duration) statData {
-	s.freshMachineInfos.Set(nn, basicInfo, basicInfo.expiry)
+func (s *state) recordFresh(basicInfo machineBasicInfo, deploymentName string, createDuration time.Duration) statData {
+	s.freshMachineInfos.Set(basicInfo.namespacedName, basicInfo, basicInfo.expiry)
 	return s.updateStatWithFreshData(basicInfo.provisionKey, statData{
 		expiry:                 basicInfo.expiry,
 		createCount:            1,
 		createDuration:         createDuration,
-		relatedDeploymentNames: sets.New(nn),
+		relatedDeploymentNames: sets.New(types.NamespacedName{Name: deploymentName, Namespace: basicInfo.namespacedName.Namespace}),
 	})
 }
 
@@ -99,6 +107,9 @@ func (s *state) recordFail(nn types.NamespacedName) (basicInfo machineBasicInfo,
 // given statData using the given statKey. the entry expires after stateData.expiry.
 func (s *state) updateStatWithFreshData(key adjustapi.ProvisionKey, data statData) statData {
 	return performStatUpdate(s.stats, s.mu, key, func(existingData *statData) (updatedStat statData) {
+		if existingData == nil {
+			return data
+		}
 		data.createDuration = max(existingData.createDuration, data.createDuration)
 		data.createCount += existingData.createCount
 		data.joinDuration = max(existingData.joinDuration, data.joinDuration)

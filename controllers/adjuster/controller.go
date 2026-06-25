@@ -157,7 +157,7 @@ func (r *defaultController) reconcileFailed(ctx context.Context, m *machinev1alp
 		"provisionKey", bInfo.provisionKey,
 		"statData", sData,
 		"config.FailureThreshold", *r.config.FailureThreshold)
-	err = r.adjustEffectiveCreationTimeouts(ctx, bInfo.provisionKey, time.Now())
+	//err = r.adjustEffectiveCreationTimeouts(ctx, bInfo.provisionKey, time.Now())
 	return
 }
 
@@ -256,14 +256,17 @@ func (r *defaultController) recordCreated(ctx context.Context, m *machinev1alpha
 	if err != nil {
 		return err
 	}
-	expiry := time.Duration(float32(timeout) * *r.config.CreationTimeoutGrowthFactor)
+	// TODO: Q: What should be a good expiry for map entry?
+	//expiry := max(10*timeout, adjustapi.DefaultCreationTimeoutMax)
+	expiry := time.Duration(float64(timeout) * *r.config.CreationTimeoutGrowthFactor * 2)
 	basicInfo := machineBasicInfo{
-		expiry:       expiry,
-		provisionKey: pKey,
+		namespacedName: client.ObjectKeyFromObject(m),
+		expiry:         expiry,
+		provisionKey:   pKey,
 	}
 	createDuration := time.Now().Sub(m.CreationTimestamp.Time)
-	updatedData := r.state.recordFresh(client.ObjectKeyFromObject(m), basicInfo, createDuration)
-	log.V(3).Info("created fresh machine record.", "recordKey", pKey, "recordData", updatedData)
+	updatedData := r.state.recordFresh(basicInfo, deploymentName, createDuration)
+	log.V(3).Info("created fresh machine record.", "recordKey", pKey, "recordData", updatedData, "expiry", expiry)
 	return nil
 }
 

@@ -24,7 +24,7 @@ const (
 	// took to join the cluster. The value is a Go Duration string.
 	AnnotationKeyMachineJoinDuration = "node.machine.sapcloud.io/machine-join-duration"
 	//DefaultCreationTimeoutMax is the max limit beyond upto which the machine-creation-timeout can be adjusted
-	DefaultCreationTimeoutMax = 2 * time.Hour
+	DefaultCreationTimeoutMax = 90 * time.Minute
 	// DefaultFailureThreshold is the default value of the threshold for number of Failed Machines beyond which
 	// the adjuster will revise the machine-creation-timeout.
 	DefaultFailureThreshold = 2
@@ -36,7 +36,7 @@ const (
 // Config provides typed access to adjuster configuration. Corresponds to the config map used to configure the adjuster controller
 type Config struct {
 	// CreationTimeoutGrowthFactor is the growth factor used by adjuster for increasing the effective machine-creation-timeout
-	CreationTimeoutGrowthFactor *float32 `json:"creationTimeoutGrowthFactor"`
+	CreationTimeoutGrowthFactor *float64 `json:"creationTimeoutGrowthFactor"`
 	// CreationTimeoutMax is the maximum effective machine-creation-timeout set by the adjuster on MachineDeployment objects.
 	CreationTimeoutMax *metav1.Duration `json:"creationTimeoutMax"`
 	// FailureThreshold is the threshold for number of Failed Machines for a given instance type+zone combo following which
