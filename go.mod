@@ -206,7 +206,7 @@ require (
 	k8s.io/kubelet v0.35.5 // indirect
 	k8s.io/metrics v0.35.5 // indirect
 	k8s.io/pod-security-admission v0.35.5 // indirect
-	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20250517180713-32e5e9e948a5 // indirect
+	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.24.1 // indirect
 	sigs.k8s.io/gateway-api v1.5.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
