@@ -1,6 +1,6 @@
 module github.com/gardener/dependency-watchdog
 
-go 1.25.9
+go 1.26.3
 
 require (
 	github.com/gardener/gardener v1.143.0
