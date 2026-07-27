@@ -109,7 +109,7 @@ func TestMustBeGreater(t *testing.T) {
 
 	for _, entry := range tests {
 		v := Validator{}
-		t.Run(entry.name, func(t *testing.T) {
+		t.Run(entry.name, func(_ *testing.T) {
 			actualResult := v.MustBeGreater(entry.key, entry.val, entry.refVal)
 			g.Expect(entry.expected).To(Equal(actualResult))
 			if !actualResult {

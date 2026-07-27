@@ -2,7 +2,6 @@ package adjuster
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -27,8 +26,7 @@ import (
 const controllerName = "adjuster"
 
 var (
-	noRequeue ctrl.Result
-	_         adjustapi.Controller = (*defaultController)(nil)
+	_ adjustapi.Controller = (*defaultController)(nil)
 )
 
 type defaultController struct {
@@ -48,41 +46,43 @@ func NewController(scheme *runtime.Scheme, client client.Client, config *adjusta
 		config:                  config,
 		maxConcurrentReconciles: maxConcurrentReconciles,
 		state: state{
-			mu:                new(sync.Mutex),
-			stats:             cache.NewExpiring(),
-			freshMachineInfos: cache.NewExpiring(),
+			mu:                  new(sync.Mutex),
+			deploymentStats:     cache.NewExpiring(),
+			machineTrackInfos:   cache.NewExpiring(),
+			provisionKeyEntries: cache.NewExpiring(),
 		},
 	})
 }
 
 // Reconcile listens to filtered Update events for [machinev1alpha1.Machine] resources and adjusts effective `machine-creation-timeout`s
 // on [machinev1alpha1.MachineDeployment]'s.
-func (r *defaultController) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
+func (r *defaultController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var (
 		m   = new(machinev1alpha1.Machine)
 		log = logf.FromContext(ctx)
 	)
-	log.V(2).Info("Adjuster controller received request.")
-	if err = r.client.Get(ctx, req.NamespacedName, m); err != nil {
+	log.V(2).Info("Adjuster controller received request")
+	if err := r.client.Get(ctx, req.NamespacedName, m); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.state.clearDataForMachine(req.NamespacedName)
-			err = nil
-			return
+			return ctrl.Result{}, nil
 		}
-		return
+		return ctrl.Result{}, err
 	}
-	if r.isFresh(m) {
-		result, err = r.reconcileFresh(ctx, m)
+	if r.isFistSeenPending(m) {
+		return r.reconcileMachineCreate(ctx, m)
 	} else if r.isFirstJoin(m) {
-		result = r.reconcileJoin(ctx, m)
+		return r.reconcileMachineJoin(ctx, m)
 	} else if r.isFirstSeenFailed(m) {
-		result, err = r.reconcileFailed(ctx, m)
+		return r.reconcileMachineFail(ctx, m)
+	} else if m.DeletionTimestamp != nil {
+		r.state.clearDataForMachine(req.NamespacedName)
 	}
-	return
+	return ctrl.Result{}, nil
 }
 
-func (r *defaultController) isFresh(m *machinev1alpha1.Machine) bool {
-	return isNewlyCreated(m) && !r.state.isRecorded(client.ObjectKeyFromObject(m))
+func (r *defaultController) isFistSeenPending(m *machinev1alpha1.Machine) bool {
+	return isPending(m) && !r.state.isRecorded(client.ObjectKeyFromObject(m))
 }
 func (r *defaultController) isFirstJoin(m *machinev1alpha1.Machine) bool {
 	return hasJoined(m) && !r.state.isJoinRecorded(client.ObjectKeyFromObject(m))
@@ -90,87 +90,124 @@ func (r *defaultController) isFirstJoin(m *machinev1alpha1.Machine) bool {
 func (r *defaultController) isFirstSeenFailed(m *machinev1alpha1.Machine) bool {
 	return machineutils.IsMachineFailed(m) && !r.state.isFailRecorded(client.ObjectKeyFromObject(m))
 }
-func (r *defaultController) reconcileFresh(ctx context.Context, m *machinev1alpha1.Machine) (result ctrl.Result, err error) {
+func (r *defaultController) reconcileMachineCreate(ctx context.Context, m *machinev1alpha1.Machine) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 	machineClass, err := r.getMachineClass(ctx, m)
 	if apierrors.IsNotFound(err) {
-		err = nil
-		return
+		return ctrl.Result{}, nil
 	}
 	if machineClass == nil || err != nil {
-		return
+		return ctrl.Result{}, nil
 	}
-	if err = r.recordCreated(ctx, m, machineClass); err != nil {
-		log.V(2).Error(err, "could not record freshly created Machine",
-			"machineName", m.Name,
-			"machineDeploymentName", GetMachineDeploymentName(m),
-			"instanceType", machineClass.NodeTemplate.InstanceType,
-			"zone", m.Labels[corev1.LabelTopologyZone])
-		return
+	deploymentName := GetMachineDeploymentName(m)
+	if deploymentName == "" {
+		log.V(2).Info("Cannot reconcileMachineCreate - no 'name' (deployment name) on Machine", "machineName", m.Name)
+		return ctrl.Result{}, nil
 	}
-	return
+	pKey := adjustapi.ProvisionKey{
+		InstanceType: machineClass.NodeTemplate.InstanceType, // TODO: later this will be available as label on Machine object
+		Zone:         m.Spec.NodeTemplateSpec.Labels[corev1.LabelTopologyZone],
+	}
+	timeout, err := GetEffectiveCreationTimeoutOnMachine(m)
+	if err != nil {
+		log.Error(err, "Cannot reconcileMachineCreate")
+		return ctrl.Result{}, nil
+	}
+	// TODO: Q: Is this acceptable ttl for map entry?
+	ttl := time.Duration(float64(timeout) * *r.config.CreationTimeoutGrowthFactor * 4)
+	trackInfo := machineTrackInfo{
+		provisionKey:   pKey,
+		namespacedName: client.ObjectKeyFromObject(m),
+		ttl:            ttl,
+	}
+	createDuration := time.Since(m.CreationTimestamp.Time)
+	deploymentStat := r.state.trackMachineCreate(trackInfo, deploymentName, createDuration)
+	log.V(3).Info("Completed reconcileMachineCreate",
+		"machineName", m.GetName(),
+		"machineDeploymentName", deploymentName,
+		"machineClassName", machineClass.Name,
+		"provisionKey", pKey,
+		"machineDeploymentStat", deploymentStat)
+	return ctrl.Result{}, nil
 }
 
-func (r *defaultController) reconcileJoin(ctx context.Context, m *machinev1alpha1.Machine) ctrl.Result {
+func (r *defaultController) reconcileMachineJoin(ctx context.Context, m *machinev1alpha1.Machine) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
+	deploymentName := GetMachineDeploymentName(m)
+	if deploymentName == "" {
+		log.V(2).Info("Cannot reconcileMachineJoin - no 'name' (deployment name) on Machine", "machineName", m.Name)
+		return ctrl.Result{}, nil
+	}
+	deploymentNamespacedName := types.NamespacedName{Namespace: m.Namespace, Name: deploymentName}
 	joinDuration := m.Status.LastOperation.LastUpdateTime.Sub(m.CreationTimestamp.Time)
-	bInfo, sData, ok := r.state.recordJoin(client.ObjectKeyFromObject(m), joinDuration)
+	trackInfo, deploymentStat, ok := r.state.trackMachineJoin(client.ObjectKeyFromObject(m), deploymentNamespacedName, joinDuration)
 	if !ok {
-		log.V(2).Info("cannot record join for Machine",
+		log.V(2).Info("Cannot trackMachineJoin",
 			"machineName", m.Name,
 			"machineCreationTimestamp", m.CreationTimestamp,
-			"joinDuration", joinDuration)
-		return noRequeue
+			"machineJoinDuration", joinDuration)
+		return ctrl.Result{}, nil
 	}
-	log.Info("recorded join for Machine",
+	var mcd machinev1alpha1.MachineDeployment
+	if err := r.client.Get(ctx, deploymentNamespacedName, &mcd); err != nil {
+		if apierrors.IsNotFound(err) {
+			r.state.clearStateForDeployments(trackInfo.provisionKey, sets.New(deploymentNamespacedName))
+			return ctrl.Result{}, nil
+		}
+		log.Error(err, "Cannot get MachineDeployment in reconcileMachineJoin", "deploymentNamespacedName", deploymentNamespacedName)
+		return ctrl.Result{}, err
+	}
+	watermarkTime := time.Now()
+	log.Info("Invoking checkAndUpdateEffectiveCreationTimeout from trackMachineJoin",
 		"machineName", m.Name,
 		"machineCreationTimestamp", m.CreationTimestamp,
-		"machineBasicInfo", bInfo,
-		"joinDuration", joinDuration,
-		"statData", sData)
-	return noRequeue
+		"machineTrackInfo", trackInfo,
+		"provisionKey", trackInfo.provisionKey,
+		"watermarkTime", watermarkTime,
+		"machineDeploymentStat", deploymentStat)
+	return ctrl.Result{}, r.checkAndAdjustEffectiveCreationTimeout(ctx, trackInfo.provisionKey, &mcd, watermarkTime, deploymentStat.joinDuration)
 }
 
-func (r *defaultController) reconcileFailed(ctx context.Context, m *machinev1alpha1.Machine) (result ctrl.Result, err error) {
+func (r *defaultController) reconcileMachineFail(ctx context.Context, m *machinev1alpha1.Machine) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
-	bInfo, sData, ok := r.state.recordFail(client.ObjectKeyFromObject(m))
+	deploymentName := GetMachineDeploymentName(m)
+	if deploymentName == "" {
+		log.V(2).Info("Cannot reconcileMachineFail - no 'name' (deployment name) on Machine", "machineName", m.Name)
+		return ctrl.Result{}, nil
+	}
+	trackInfo, deploymentStat, ok := r.state.trackMachineFail(client.ObjectKeyFromObject(m), deploymentName)
 	if !ok {
-		log.V(2).Info("cannot record fail for Machine",
+		log.V(2).Info("Cannot trackMachineFail",
 			"machineName", m.Name,
+			"machineDeploymentName", deploymentName,
 			"machineCreationTimestamp", m.CreationTimestamp,
 			"lastOperation", m.Status.LastOperation,
 			"currentStatus", m.Status.CurrentStatus)
-		return
+		return ctrl.Result{}, nil
 	}
-	log.Info("recorded fail for Machine",
-		"machineName", m.Name,
-		"machineCreationTimestamp", m.CreationTimestamp,
-		"machineBasicInfo", bInfo,
-		"statData", sData,
-		"lastOperation", m.Status.LastOperation,
-		"currentStatus", m.Status.CurrentStatus)
-	// now add code here to check failure thresholds and revise the MachineDeployment creation-timeout.
-	if sData.failCount < *r.config.FailureThreshold {
-		return
+	failureThreshold := *r.config.FailureThreshold
+	if deploymentStat.failCount < failureThreshold {
+		return ctrl.Result{}, nil
 	}
-	log.Info("statData.failCount breached configured FailureThreshold",
-		"provisionKey", bInfo.provisionKey,
-		"statData", sData,
-		"config.FailureThreshold", *r.config.FailureThreshold)
-	//err = r.adjustEffectiveCreationTimeouts(ctx, bInfo.provisionKey, time.Now())
-	return
+	watermarkTime := time.Now()
+	log.Info("FailCount has breached configured failureThreshold, invoking growEffectiveCreationTimeoutsOnDeployments",
+		"provisionKey", trackInfo.provisionKey,
+		"machineDeploymentStat", deploymentStat,
+		"watermarkTime", watermarkTime,
+		"failureThreshold", failureThreshold)
+	return ctrl.Result{}, r.growEffectiveCreationTimeoutsOnDeployments(ctx, trackInfo.provisionKey, watermarkTime)
 }
 
-func (r *defaultController) adjustEffectiveCreationTimeouts(ctx context.Context, key adjustapi.ProvisionKey, markTime time.Time) error {
+func (r *defaultController) growEffectiveCreationTimeoutsOnDeployments(ctx context.Context, provisionKey adjustapi.ProvisionKey, waterMarkTime time.Time) error {
 	log := logf.FromContext(ctx)
-	//adjusted := sets.New[types.NamespacedName]()
 	var (
 		mcd             = new(machinev1alpha1.MachineDeployment)
-		mcdCopy         *machinev1alpha1.MachineDeployment
-		deploymentNames = r.state.getMachineDeploymentNames(key)
+		deploymentNames = r.state.getMachineDeploymentNamespacedNames(provisionKey)
 		notFoundNames   sets.Set[types.NamespacedName]
 	)
-
+	if len(deploymentNames) == 0 {
+		log.Info("Cannot growEffectiveCreationTimeoutsOnDeployments since no deploymentNames found for provisionKey", "provisionKey", provisionKey)
+	}
 	for _, mcdName := range deploymentNames.UnsortedList() {
 		if err := r.client.Get(ctx, mcdName, mcd); err != nil {
 			if apierrors.IsNotFound(err) {
@@ -179,49 +216,78 @@ func (r *defaultController) adjustEffectiveCreationTimeouts(ctx context.Context,
 			}
 			return err
 		}
-		effectiveTimeout, err := GetEffectiveMachineCreationTimeoutFromRuntimeObject(mcd)
+		existingEffectiveTimeout, err := GetEffectiveCreationTimeoutOnMachineDeployment(mcd)
 		if err != nil {
-			log.Error(err, "cannot get effective-creation-timeout from MachineDeployment", "machineDeployment", mcdName)
+			log.Error(err, "Cannot get effective-creation-timeout for MachineDeployment", "machineDeployment", mcdName)
 			continue
 		}
-		lastAdjusted, err := GetLastAdjustedEffectiveCreationTimeout(mcd)
+		newEffectiveTimeout := IncreaseTimeout(existingEffectiveTimeout, *r.config.CreationTimeoutGrowthFactor, r.config.CreationTimeoutMax.Duration)
+		if newEffectiveTimeout == 0 {
+			continue
+		}
+		log.Info("Invoking checkAndAdjustEffectiveCreationTimeout for MachineDeployment",
+			"machineDeployment", mcd.Name,
+			"provisionKey", provisionKey,
+			"existingEffectiveTimeout", existingEffectiveTimeout.String(),
+			"newEffectiveTimeout", newEffectiveTimeout.String(),
+			"waterMarkTime", waterMarkTime)
+		err = r.checkAndAdjustEffectiveCreationTimeout(ctx, provisionKey, mcd, waterMarkTime, newEffectiveTimeout)
 		if err != nil {
-			log.Error(err, "cannot get last-adjusted-effective-creation-timeout from MachineDeployment", "machineDeployment", mcdName)
-			continue
-		}
-		if markTime.Sub(lastAdjusted) <= effectiveTimeout {
-			log.V(3).Info("Skipping adjustment since MachineDeployment was last adjusted within the effective timeout",
-				"machineDeployment", mcdName,
-				"watermarkTime", markTime,
-				"lastAdjusted", lastAdjusted,
-				"effectiveTimeout", effectiveTimeout)
-			continue
-		}
-		adjustedTimeout := AdjustTimeout(effectiveTimeout, *r.config.CreationTimeoutGrowthFactor, r.config.CreationTimeoutMax.Duration)
-		if adjustedTimeout == 0 {
-			continue
-		}
-		mcdCopy = mcd.DeepCopy()
-		metav1.SetMetaDataAnnotation(&mcdCopy.ObjectMeta, adjustapi.AnnotationKeyEffectiveCreationTimeout, adjustedTimeout.String())
-		metav1.SetMetaDataAnnotation(&mcdCopy.ObjectMeta, adjustapi.AnnotationKeyLastAdjustedEffectiveCreationTimeout, markTime.Format(time.RFC3339))
-		err = r.client.Update(ctx, mcdCopy)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				notFoundNames.Insert(mcdName)
+			if apierrors.IsConflict(err) || apierrors.IsNotFound(err) {
 				continue
 			}
 			return err
 		}
-		log.Info("Adjusted effective-creation-timeout for MachineDeployment.",
-			"machineDeployment", mcdName,
-			"adjustedTimeout", adjustedTimeout,
-			"previousTimeout", effectiveTimeout,
-			"markTime", markTime)
 	}
 	if len(notFoundNames) > 0 {
-		log.V(3).Info("MachineDeployment(s) were not found. Removing from relatedDeployments", "notFoundNames", notFoundNames)
-		r.state.removeFromRelatedDeployments(key, notFoundNames.UnsortedList()...)
+		log.V(3).Info("MachineDeployment(s) were not found - clearing state", "notFoundNames", notFoundNames)
+		r.state.clearStateForDeployments(provisionKey, notFoundNames)
 	}
+	return nil
+}
+
+func (r *defaultController) checkAndAdjustEffectiveCreationTimeout(ctx context.Context, provisionKey adjustapi.ProvisionKey, mcd *machinev1alpha1.MachineDeployment, waterMarkTime time.Time, effectiveTimeout time.Duration) error {
+	log := logf.FromContext(ctx)
+	lastAdjusted, err := GetLastAdjustedEffectiveCreationTimeout(mcd)
+	if err != nil {
+		log.Error(err, "Cannot get last-adjusted-effective-creation-timeout from MachineDeployment", "machineDeployment", mcd.Name)
+		return err
+	}
+	if waterMarkTime.Sub(lastAdjusted) <= effectiveTimeout {
+		log.V(3).Info("Skipping since MachineDeployment's effective-creation-timeout was last adjusted within the effective timeout",
+			"machineDeployment", mcd.Name,
+			"provisionKey", provisionKey,
+			"watermarkTime", waterMarkTime,
+			"effectiveTimeout", effectiveTimeout,
+			"lastAdjusted", lastAdjusted)
+		return nil
+	}
+	// Check that effectiveTimeout does not go below explicit MCD spec template machine creation timeout (if specified)
+	// TODO: Discuss if this is really needed ?
+	if mcd.Spec.Template.Spec.MachineCreationTimeout != nil {
+		mcdSpecTemplateTimeout := mcd.Spec.Template.Spec.MachineCreationTimeout.Duration
+		if mcdSpecTemplateTimeout > effectiveTimeout {
+			log.V(3).Info("Skipping adjust since MachineDeployment.Spec.Template.Spec.MachineCreationTimeout is greater than effectiveTimeout",
+				"machineDeployment", mcd.Name,
+				"provisionKey", provisionKey,
+				"watermarkTime", waterMarkTime,
+				"specMachineCreationTimeout", mcdSpecTemplateTimeout,
+				"effectiveTimeout", effectiveTimeout)
+			return nil
+		}
+	}
+	mcdCopy := mcd.DeepCopy()
+	metav1.SetMetaDataAnnotation(&mcdCopy.ObjectMeta, adjustapi.AnnotationKeyEffectiveCreationTimeout, effectiveTimeout.String())
+	metav1.SetMetaDataAnnotation(&mcdCopy.ObjectMeta, adjustapi.AnnotationKeyLastAdjustedEffectiveCreationTimeout, waterMarkTime.Format(time.RFC3339))
+	if err = r.client.Update(ctx, mcdCopy); err != nil {
+		log.Error(err, "Failed to update MachineDeployment", "machineDeployment", mcd.Name)
+		return err
+	}
+	log.Info("Successfully adjusted effective-creation-timeout for MachineDeployment",
+		"machineDeployment", mcd.Name,
+		"provisionKey", provisionKey,
+		"effectiveTimeout", effectiveTimeout.String(),
+		"waterMarkTime", waterMarkTime)
 	return nil
 }
 
@@ -242,34 +308,6 @@ func (r *defaultController) SetupWithManager(mgr ctrl.Manager) error {
 		&handler.EnqueueRequestForObject{}, EventPredicate(c.GetLogger())))
 }
 
-func (r *defaultController) recordCreated(ctx context.Context, m *machinev1alpha1.Machine, mcc *machinev1alpha1.MachineClass) error {
-	log := logf.FromContext(ctx)
-	deploymentName := GetMachineDeploymentName(m)
-	if deploymentName == "" {
-		return fmt.Errorf("%w: no 'name' (deployment name) annotation on Machine %q", ErrCannotRecordFreshMachine, m.Name)
-	}
-	pKey := adjustapi.ProvisionKey{
-		InstanceType: mcc.NodeTemplate.InstanceType,
-		Zone:         m.Spec.NodeTemplateSpec.Labels[corev1.LabelTopologyZone],
-	}
-	timeout, err := GetEffectiveCreationTimeoutOnMachine(m)
-	if err != nil {
-		return err
-	}
-	// TODO: Q: What should be a good expiry for map entry?
-	//expiry := max(10*timeout, adjustapi.DefaultCreationTimeoutMax)
-	expiry := time.Duration(float64(timeout) * *r.config.CreationTimeoutGrowthFactor * 2)
-	basicInfo := machineBasicInfo{
-		namespacedName: client.ObjectKeyFromObject(m),
-		expiry:         expiry,
-		provisionKey:   pKey,
-	}
-	createDuration := time.Now().Sub(m.CreationTimestamp.Time)
-	updatedData := r.state.recordFresh(basicInfo, deploymentName, createDuration)
-	log.V(3).Info("created fresh machine record.", "recordKey", pKey, "recordData", updatedData, "expiry", expiry)
-	return nil
-}
-
 func (r *defaultController) getMachineClass(ctx context.Context, m *machinev1alpha1.Machine) (*machinev1alpha1.MachineClass, error) {
 	var mcc = new(machinev1alpha1.MachineClass)
 	mccName := m.Spec.Class.Name
@@ -288,7 +326,7 @@ func (r *defaultController) getMachineDeploymentAndMachineClass(ctx context.Cont
 	)
 	mcdName := GetMachineDeploymentName(m)
 	if mcdName == "" {
-		log.V(5).Info("MachineDeployment Name not set for Machine.", "machineName", m.Name)
+		log.V(5).Info("MachineDeployment 'name' not set as Machine label", "machineName", m.Name)
 		return nil, nil, nil
 	}
 	err := r.client.Get(ctx, client.ObjectKey{Namespace: m.Namespace, Name: mcdName}, mcd)

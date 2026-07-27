@@ -36,6 +36,7 @@ func LoadConfig(configPath string) (config *adjustapi.Config, err error) {
 	return config, nil
 }
 
+// ValidateConfig validates the given adjuster Configuration.
 func ValidateConfig(c *adjustapi.Config) error {
 	v := new(util.Validator)
 	if c.CreationTimeoutMax != nil {
@@ -52,7 +53,7 @@ func ValidateConfig(c *adjustapi.Config) error {
 
 // FillConfigDefaults fills default values for missing config entries inside the given [adjustapi.Config]
 func FillConfigDefaults(c *adjustapi.Config) {
-	c.CreationTimeoutGrowthFactor = util.GetValOrDefault(c.CreationTimeoutGrowthFactor, 2.0)
+	c.CreationTimeoutGrowthFactor = util.GetValOrDefault(c.CreationTimeoutGrowthFactor, adjustapi.DefaultCreationTimeoutGrowthFactor)
 	c.CreationTimeoutMax = util.GetValOrDefault(c.CreationTimeoutMax, metav1.Duration{Duration: adjustapi.DefaultCreationTimeoutMax})
 	c.FailureThreshold = util.GetValOrDefault(c.FailureThreshold, adjustapi.DefaultFailureThreshold)
 }
@@ -60,11 +61,11 @@ func FillConfigDefaults(c *adjustapi.Config) {
 // EventPredicate creates controller runtime [predicate.Predicate] for [machinev1alpha1.Machine] Updated event that satisfy [CanAcceptForAdjusterReconcile]
 func EventPredicate(logger logr.Logger) predicate.Predicate {
 	return predicate.Funcs{
-		CreateFunc: func(event event.CreateEvent) bool {
+		CreateFunc: func(_ event.CreateEvent) bool {
 			return false
 		},
-		DeleteFunc: func(event event.DeleteEvent) bool {
-			return false
+		DeleteFunc: func(_ event.DeleteEvent) bool {
+			return true
 		},
 		UpdateFunc: func(updateEvent event.UpdateEvent) bool {
 			return CanAcceptForAdjusterReconcile(logger, updateEvent.ObjectOld, updateEvent.ObjectNew)
@@ -119,7 +120,7 @@ func CanAcceptForAdjusterReconcile(log logr.Logger, objOld, objNew client.Object
 			"currPhase", currPhase,
 			"lastOperation", machineNew.Status.LastOperation)
 	} else {
-		log.V(3).Info("Machine skipped for adjuster reconcile", "name", machineNew.Name, "oldPhase", oldPhase, "currPhase", currPhase, "status.lastOperation", machineNew.Status.LastOperation)
+		log.V(5).Info("Machine skipped for adjuster reconcile", "name", machineNew.Name, "oldPhase", oldPhase, "currPhase", currPhase, "status.lastOperation", machineNew.Status.LastOperation)
 	}
 	return
 }
@@ -187,21 +188,8 @@ func GetEffectiveMachineCreationTimeoutFromRuntimeObject(object runtime.Object) 
 	return
 }
 
-func isNewlyCreated(m *machinev1alpha1.Machine) bool {
-	return m.Status.CurrentStatus.Phase == machinev1alpha1.MachinePending || m.Status.CurrentStatus.Phase == machinev1alpha1.MachineAvailable
-}
-
-func hasJoined(m *machinev1alpha1.Machine) bool {
-	return m.Status.CurrentStatus.Phase == machinev1alpha1.MachineRunning && strings.Contains(m.Status.LastOperation.Description, "successfully joined the cluster")
-}
-
-// GetMachineDeploymentName gets the name of the MachineDeployment associated with this Machine
-func GetMachineDeploymentName(machine *machinev1alpha1.Machine) string {
-	return machine.Labels["name"]
-}
-
-// AdjustTimeout adjusts the currTimeout by the growthFactor bounded to maxTimeout. Returns 0 if there was no adjustment.
-func AdjustTimeout(currTimeout time.Duration, growthFactor float64, maxTimeout time.Duration) time.Duration {
+// IncreaseTimeout increases the currTimeout by the growthFactor bounded to maxTimeout. Returns 0 if there was no adjustment.
+func IncreaseTimeout(currTimeout time.Duration, growthFactor float64, maxTimeout time.Duration) time.Duration {
 	if growthFactor <= 1.0 || currTimeout >= maxTimeout || currTimeout <= 0 {
 		return 0
 	}
@@ -213,4 +201,33 @@ func AdjustTimeout(currTimeout time.Duration, growthFactor float64, maxTimeout t
 		return 0
 	}
 	return newTimeout
+}
+
+// GetMachineDeploymentName gets the name of the MachineDeployment associated with this Machine
+func GetMachineDeploymentName(machine *machinev1alpha1.Machine) string {
+	return machine.Labels["name"]
+}
+
+func combineDeploymentStat(existingData, data machineDeploymentStat) machineDeploymentStat {
+	data.createDuration = max(existingData.createDuration, data.createDuration)
+	data.joinDuration = max(existingData.joinDuration, data.joinDuration)
+	if data.joinCount > 0 {
+		existingData.failCount = 0
+	} else if data.failCount > 0 {
+		existingData.joinCount = 0
+	}
+	data.joinCount += existingData.joinCount
+	data.failCount += existingData.failCount
+	if data.ttl == 0 {
+		data.ttl = existingData.ttl
+	}
+	return data
+}
+
+func isPending(m *machinev1alpha1.Machine) bool {
+	return m.Status.CurrentStatus.Phase == machinev1alpha1.MachinePending //|| m.Status.CurrentStatus.Phase == machinev1alpha1.MachineAvailable
+}
+
+func hasJoined(m *machinev1alpha1.Machine) bool {
+	return m.Status.CurrentStatus.Phase == machinev1alpha1.MachineRunning && strings.Contains(m.Status.LastOperation.Description, "successfully joined the cluster")
 }
