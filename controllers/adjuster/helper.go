@@ -91,12 +91,6 @@ func CanAcceptForAdjusterReconcile(log logr.Logger, objOld, objNew client.Object
 	oldPhase := machineOld.Status.CurrentStatus.Phase
 	currPhase := machineNew.Status.CurrentStatus.Phase
 
-	// TODO: BEGIN REMOVE ME {
-	if !strings.Contains(machineNew.Name, "i034796") {
-		return
-	}
-	// TODO: END REMOVE ME
-
 	if oldPhase == "" && currPhase == machinev1alpha1.MachinePending {
 		accept = true
 	}

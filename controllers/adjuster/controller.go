@@ -185,6 +185,7 @@ func (r *defaultController) reconcileMachineFail(ctx context.Context, m *machine
 			"currentStatus", m.Status.CurrentStatus)
 		return ctrl.Result{}, nil
 	}
+	// TODO: Currently dumb: how to improve this ?
 	failureThreshold := *r.config.FailureThreshold
 	if deploymentStat.failCount < failureThreshold {
 		return ctrl.Result{}, nil
@@ -223,6 +224,7 @@ func (r *defaultController) growEffectiveCreationTimeoutsOnDeployments(ctx conte
 		}
 		newEffectiveTimeout := IncreaseTimeout(existingEffectiveTimeout, *r.config.CreationTimeoutGrowthFactor, r.config.CreationTimeoutMax.Duration)
 		if newEffectiveTimeout == 0 {
+			// Add Log if breached maximum creation timeout
 			continue
 		}
 		log.Info("Invoking checkAndAdjustEffectiveCreationTimeout for MachineDeployment",

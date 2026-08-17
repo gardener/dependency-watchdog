@@ -1,0 +1,37 @@
+@startuml
+start
+title Adjuster Controller Reconciliation
+
+:Watch Machines phase transitions
+ (None)->Failed,
+ Pending->Failed,
+ Pending->Running;
+:Reconcile(machineKey);
+if (isFirstSeen(machine)) then (yes)
+    :reconcileMachineCreate(machine);
+    :GetMachineDeploymentAndMachineClass(machine);
+    :Create ProvisionKey(instanceType, Zone);
+    :Add to provisionKeys to deploymentName expiring map;
+    :Add MachineTrackInfo(provisionKey,joined,failed)
+     to expiring machineTrack map;
+    :Add DeploymentStat:(joinDuration,failCount,joinCount)
+    to expiring DeploymentStat map by deploymentName;
+(no) elseif (isFirstJoin(machine)) then (yes)
+    :reconcileMachineJoin(machine);
+(no) elseif (isFirstSeenFailed(machine)) then (yes)
+    :reconcileMachineJoin(machine);
+(no) elseif (isDeleted(machine)) then (yes)
+    :clearStateData(machine);
+endif
+
+
+'if (Graphviz installed?) then (yes)
+'  :process all\ndiagrams;
+'else (no)
+'  :process only
+'  __sequence__ and __activity__ diagrams;
+'endif
+
+stop
+
+@enduml
