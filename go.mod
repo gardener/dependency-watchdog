@@ -5,7 +5,7 @@ go 1.25.9
 require (
 	github.com/gardener/gardener v1.143.0
 	github.com/gardener/machine-controller-manager v0.61.3
-	github.com/go-logr/logr v1.4.3
+	github.com/go-logr/logr v1.4.4
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/onsi/gomega v1.41.0
 	go.uber.org/zap v1.28.0
