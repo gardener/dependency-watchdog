@@ -55,7 +55,7 @@ func ValidateConfig(c *adjustapi.Config) error {
 func FillConfigDefaults(c *adjustapi.Config) {
 	c.CreationTimeoutGrowthFactor = util.GetValOrDefault(c.CreationTimeoutGrowthFactor, adjustapi.DefaultCreationTimeoutGrowthFactor)
 	c.CreationTimeoutMax = util.GetValOrDefault(c.CreationTimeoutMax, metav1.Duration{Duration: adjustapi.DefaultCreationTimeoutMax})
-	c.FailureThreshold = util.GetValOrDefault(c.FailureThreshold, adjustapi.DefaultFailureThreshold)
+	c.MachineFailureFractionThreshold = util.GetValOrDefault(c.MachineFailureFractionThreshold, adjustapi.DefaultMachineFailureFractionThreshold)
 }
 
 // EventPredicate creates controller runtime [predicate.Predicate] for [machinev1alpha1.Machine] Updated event that satisfy [CanAcceptForAdjusterReconcile]
@@ -91,22 +91,12 @@ func CanAcceptForAdjusterReconcile(log logr.Logger, objOld, objNew client.Object
 	oldPhase := machineOld.Status.CurrentStatus.Phase
 	currPhase := machineNew.Status.CurrentStatus.Phase
 
-	if oldPhase == "" && currPhase == machinev1alpha1.MachinePending {
-		accept = true
-	}
-	if (oldPhase == "" || oldPhase == machinev1alpha1.MachinePending) &&
-		(currPhase == machinev1alpha1.MachineAvailable || currPhase == machinev1alpha1.MachineRunning) {
+	if (oldPhase == "" || oldPhase == machinev1alpha1.MachinePending) && currPhase == machinev1alpha1.MachineRunning {
 		accept = true
 	}
 	if oldPhase == machinev1alpha1.MachinePending && currPhase == machinev1alpha1.MachineFailed {
 		accept = true
 	}
-	//if currPhase == machinev1alpha1.MachineAvailable {
-	//	// sometime times Pending->Running event is missed and hence we need to check Available->Available update events too
-	//	// for Machines that have successfully joined cluster.
-	//	// I am not able to reproduce this currently.
-	//	accept = true
-	//}
 	if accept {
 		log.V(2).Info("Machine accepted for adjuster reconcile",
 			"name", machineNew.Name,
@@ -127,7 +117,7 @@ func GetEffectiveCreationTimeoutOnMachine(m *machinev1alpha1.Machine) (duration 
 	if err != nil || duration != 0 {
 		return
 	}
-	if m.Spec.MachineCreationTimeout != nil {
+	if m.Spec.MachineConfiguration != nil && m.Spec.MachineCreationTimeout != nil {
 		duration = m.Spec.MachineCreationTimeout.Duration
 		return
 	}
@@ -143,7 +133,7 @@ func GetEffectiveCreationTimeoutOnMachineDeployment(mcd *machinev1alpha1.Machine
 	if err != nil || duration != 0 {
 		return
 	}
-	if mcd.Spec.Template.Spec.MachineCreationTimeout != nil {
+	if mcd.Spec.Template.Spec.MachineConfiguration != nil && mcd.Spec.Template.Spec.MachineCreationTimeout != nil {
 		duration = mcd.Spec.Template.Spec.MachineCreationTimeout.Duration
 		return
 	}
@@ -151,7 +141,7 @@ func GetEffectiveCreationTimeoutOnMachineDeployment(mcd *machinev1alpha1.Machine
 	return
 }
 
-// GetLastAdjustedEffectiveCreationTimeout returns the parsed value of the annotation [adjustapi.AnnotationKeyLastAdjustedEffectiveCreationTimeout].
+// GetLastAdjustedEffectiveCreationTimeout returns the parsed value of the annotation [adjustapi.AnnotationKeyEffectiveCreationTimeoutLastAdjustedAt].
 // This represents the time at which the [adjustapi.AnnotationKeyEffectiveCreationTimeout] was last set on this machine.
 // Returns zero if not set
 func GetLastAdjustedEffectiveCreationTimeout(mcd *machinev1alpha1.MachineDeployment) (lastAdjusted time.Time, err error) {
@@ -159,7 +149,7 @@ func GetLastAdjustedEffectiveCreationTimeout(mcd *machinev1alpha1.MachineDeploym
 	if err != nil {
 		return
 	}
-	lastAdjustedStr, ok := metaObject.GetAnnotations()[adjustapi.AnnotationKeyLastAdjustedEffectiveCreationTimeout]
+	lastAdjustedStr, ok := metaObject.GetAnnotations()[adjustapi.AnnotationKeyEffectiveCreationTimeoutLastAdjustedAt]
 	if !ok {
 		return
 	}
@@ -203,18 +193,15 @@ func GetMachineDeploymentName(machine *machinev1alpha1.Machine) string {
 }
 
 func combineDeploymentStat(existingData, data machineDeploymentStat) machineDeploymentStat {
-	data.createDuration = max(existingData.createDuration, data.createDuration)
-	data.joinDuration = max(existingData.joinDuration, data.joinDuration)
-	if data.joinCount > 0 {
-		existingData.failCount = 0
-	} else if data.failCount > 0 {
-		existingData.joinCount = 0
+	data.maxJoinDuration = max(existingData.maxJoinDuration, data.maxJoinDuration)
+	if data.joinStreakCount > 0 {
+		existingData.failStreakCount = 0
+	} else if data.failStreakCount > 0 {
+		existingData.joinStreakCount = 0
 	}
-	data.joinCount += existingData.joinCount
-	data.failCount += existingData.failCount
-	if data.ttl == 0 {
-		data.ttl = existingData.ttl
-	}
+	data.joinStreakCount += existingData.joinStreakCount
+	data.failStreakCount += existingData.failStreakCount
+	data.ttl = max(existingData.ttl, data.ttl)
 	return data
 }
 

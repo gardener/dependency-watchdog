@@ -17,14 +17,14 @@ type state struct {
 	machineTrackInfos *cache.Expiring
 	// deploymentStats is an expiring map of MachineDeployment namespaced name to machineDeploymentStat
 	deploymentStats *cache.Expiring
-	// provisionKeyEntries is an expiring map of [adjustapi.ProvisionKey] to provisionKeyEntry
-	provisionKeyEntries *cache.Expiring
+	// provisionKeyStats is an expiring map of [adjustapi.MachineProvisionKey] to machineProvisionKeyStat
+	provisionKeyStats *cache.Expiring
 }
 
-// machineTrackInfo represents minimal tracking information about a Machine object - its [adjustapi.ProvisionKey]
-// and whether it has joined the cluster or considered failed.
+// machineTrackInfo represents minimal tracking information about a Machine object - its [adjustapi.MachineProvisionKey]
+// and whether it has joined the cluster or considered failed. Information is only preserved for a ttl.
 type machineTrackInfo struct {
-	provisionKey   adjustapi.ProvisionKey
+	provisionKey   adjustapi.MachineProvisionKey
 	namespacedName types.NamespacedName
 	ttl            time.Duration
 	joined         bool
@@ -36,28 +36,43 @@ func (t machineTrackInfo) String() string {
 		t.provisionKey, t.namespacedName, t.joined, t.failed, t.ttl)
 }
 
-// machineDeploymentStats stores aggregated observations for a MachineDeployment within a ttl.
+// machineDeploymentStats stores some observations for a MachineDeployment - the machine join streak count and machine fail streak count.
+// The stat is associated with a ttl that is refreshed whenever a machine belonging to the MachineDeployment is tracked.
 type machineDeploymentStat struct {
-	ttl            time.Duration
-	createDuration time.Duration // createDuration maximum
-	joinDuration   time.Duration // join duration maximum
-	joinCount      uint32        // recent join counts after last failure
-	failCount      uint32        // recent failure counts after last join
+	ttl             time.Duration
+	maxJoinDuration time.Duration // max machine join duration maximum
+	joinStreakCount uint32        // recent join counts after last failure
+	failStreakCount uint32        // recent failure counts after last join
 }
 
 func (s machineDeploymentStat) String() string {
-	return fmt.Sprintf("(joinCount=%d,failCount=%d,createDuration=%s,joinDuration=%s,ttl=%s)",
-		s.joinCount, s.failCount, s.createDuration, s.joinDuration, s.ttl)
+	return fmt.Sprintf("(joinStreakCount=%d,failStreakCount=%d,maxJoinDuration=%s,ttl=%s)",
+		s.joinStreakCount, s.failStreakCount, s.maxJoinDuration, s.ttl)
 }
 
-// provisionKeyTrackInfo stores information associated with a [adjustapi.ProvisionKey]
-type provisionKeyEntry struct {
+// machineProvisionKeyStat stores observations associated with a [adjustapi.MachineProvisionKey]
+type machineProvisionKeyStat struct {
 	ttl             time.Duration
+	joinCount       uint32
+	failCount       uint32
 	deploymentNames sets.Set[types.NamespacedName]
 }
 
-type statUpdateFunc func(existingStat *machineDeploymentStat) (updatedStat machineDeploymentStat)
-type statGetFunc[T any] func(existingStat *machineDeploymentStat) T
+func (s machineProvisionKeyStat) String() string {
+	return fmt.Sprintf("(joinCount=%d,failCount=%d,#deploymentNames=%d,ttl=%s)",
+		s.joinCount, s.failCount, len(s.deploymentNames), s.ttl)
+}
+
+// HasBreached confirms whether the fraction failCount/failCount+jointCount has breached the given threshold.
+func (s machineProvisionKeyStat) HasBreached(threshold float64) bool {
+	total := s.failCount + s.joinCount
+	if total == 0 {
+		return false
+	}
+	return float64(s.failCount)/float64(total) >= threshold
+}
+
+type deploymentStatUpdateFunc func(existingStat *machineDeploymentStat) (updatedStat machineDeploymentStat)
 
 func (s *state) isRecorded(nn types.NamespacedName) bool {
 	_, ok := s.getMachineTrackInfo(nn)
@@ -80,72 +95,85 @@ func (s *state) isFailRecorded(nn types.NamespacedName) bool {
 	return false
 }
 
-func (s *state) trackMachineCreate(trackInfo machineTrackInfo, deploymentName string, createDuration time.Duration) machineDeploymentStat {
+func (s *state) recordMachineJoin(machineNsName types.NamespacedName, deploymentName string, provisionKey adjustapi.MachineProvisionKey, joinDuration time.Duration, ttl time.Duration) (machineDeploymentStat, machineProvisionKeyStat) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.machineTrackInfos.Set(trackInfo.namespacedName, trackInfo, trackInfo.ttl)
-	mcdNsName := types.NamespacedName{Namespace: trackInfo.namespacedName.Namespace, Name: deploymentName}
-	deploymentStat := s.updateMachineDeploymentStat(mcdNsName, machineDeploymentStat{
-		createDuration: createDuration,
-		ttl:            trackInfo.ttl})
-	s.recordProvisionEntry(trackInfo.provisionKey, mcdNsName, deploymentStat.ttl)
-	return deploymentStat
-}
-
-func (s *state) trackMachineJoin(machineNsName types.NamespacedName, mcdNsName types.NamespacedName, joinDuration time.Duration) (trackInfo machineTrackInfo, deploymentStat machineDeploymentStat, ok bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	trackInfo, ok = s.getMachineTrackInfo(machineNsName)
-	if !ok {
-		return
+	trackInfo := machineTrackInfo{
+		provisionKey:   provisionKey,
+		namespacedName: machineNsName,
+		ttl:            ttl,
+		joined:         true,
 	}
-	trackInfo.joined = true
 	s.machineTrackInfos.Set(machineNsName, trackInfo, trackInfo.ttl)
-	deploymentStat = s.updateMachineDeploymentStat(mcdNsName, machineDeploymentStat{
-		joinDuration: joinDuration,
-		joinCount:    1,
+	mcdNsName := types.NamespacedName{Namespace: trackInfo.namespacedName.Namespace, Name: deploymentName}
+	deploymentStat := s.combineUpdateMachineDeploymentStat(mcdNsName, machineDeploymentStat{
+		maxJoinDuration: joinDuration,
+		joinStreakCount: 1,
+		ttl:             ttl,
 	})
-	s.recordProvisionEntry(trackInfo.provisionKey, mcdNsName, deploymentStat.ttl)
-	return
+	provisionKeyStat := s.updateProvisionKeyStat(provisionKey, mcdNsName, 1, 0, deploymentStat.ttl)
+	return deploymentStat, provisionKeyStat
 }
 
-func (s *state) trackMachineFail(nn types.NamespacedName, deploymentName string) (trackInfo machineTrackInfo, deploymentStat machineDeploymentStat, ok bool) {
+func (s *state) recordMachineFail(machineNsName types.NamespacedName, deploymentName string, provisionKey adjustapi.MachineProvisionKey, ttl time.Duration) (machineDeploymentStat, machineProvisionKeyStat) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	trackInfo, ok = s.getMachineTrackInfo(nn)
-	if !ok {
-		return
+	trackInfo := machineTrackInfo{
+		provisionKey:   provisionKey,
+		namespacedName: machineNsName,
+		ttl:            ttl,
+		failed:         true,
 	}
-	trackInfo.failed = true
-	s.machineTrackInfos.Set(nn, trackInfo, trackInfo.ttl)
+	s.machineTrackInfos.Set(machineNsName, trackInfo, trackInfo.ttl)
 	mcdNsName := types.NamespacedName{Namespace: trackInfo.namespacedName.Namespace, Name: deploymentName}
-	deploymentStat = s.updateMachineDeploymentStat(mcdNsName, machineDeploymentStat{
-		failCount: 1,
+	deploymentStat := s.combineUpdateMachineDeploymentStat(mcdNsName, machineDeploymentStat{
+		failStreakCount: 1,
+		ttl:             ttl,
 	})
-	s.recordProvisionEntry(trackInfo.provisionKey, mcdNsName, deploymentStat.ttl)
-	return
+	provisionKeyStat := s.updateProvisionKeyStat(trackInfo.provisionKey, mcdNsName, 0, 1, deploymentStat.ttl)
+	return deploymentStat, provisionKeyStat
 }
 
-// updateMachineDeploymentStat updates the existing machineDeploymentStat in the backing deploymentStats map with the given
-// data or inserts the given data. The entry expires after data.ttl. The key for the deploymentStatus map is the
-// [types.NamespacedName] of the MachineDeployment.
-func (s *state) updateMachineDeploymentStat(mcdNsName types.NamespacedName, data machineDeploymentStat) machineDeploymentStat {
+// updateProvisionKeyStat inserts or updates the machineProvisionKeyStat associated with the given [adjustapi.MachineProvisionKey],
+// incrementing the machineProvisionKeyStat's machine join count and fail count with the given joinCount and failCount for the given machine deployment
+// and also remembering the machine deployment name.
+func (s *state) updateProvisionKeyStat(provisionKey adjustapi.MachineProvisionKey, mcdNsName types.NamespacedName, joinCount, failCount uint32, ttl time.Duration) machineProvisionKeyStat {
+	var nameSet sets.Set[types.NamespacedName]
+	stat, ok := s.getMachineProvisionKeyStat(provisionKey)
+	if ok {
+		nameSet = stat.deploymentNames
+	} else {
+		nameSet = sets.New[types.NamespacedName]()
+	}
+	nameSet.Insert(mcdNsName)
+	stat.ttl = max(stat.ttl, ttl)
+	stat.deploymentNames = nameSet
+	stat.joinCount += joinCount
+	stat.failCount += failCount
+	s.provisionKeyStats.Set(provisionKey, stat, ttl)
+	return stat
+}
+
+// combineUpdateMachineDeploymentStat updates the existing machineDeploymentStat in the backing deploymentStats map by
+// combining with the given data or inserts the given data. The entry expires after data.ttl. The key for the
+// deploymentStatus map is the [types.NamespacedName] of the MachineDeployment.
+func (s *state) combineUpdateMachineDeploymentStat(mcdNsName types.NamespacedName, data machineDeploymentStat) machineDeploymentStat {
 	var (
-		existingData, updatedData machineDeploymentStat
+		existingStat, updatedStat machineDeploymentStat
 	)
 	val, ok := s.deploymentStats.Get(mcdNsName)
 	if !ok {
-		updatedData = data
+		updatedStat = data
 	} else {
-		existingData = val.(machineDeploymentStat)
-		updatedData = combineDeploymentStat(existingData, data)
+		existingStat = val.(machineDeploymentStat)
+		updatedStat = combineDeploymentStat(existingStat, data)
 	}
-	s.deploymentStats.Set(mcdNsName, updatedData, updatedData.ttl)
-	return updatedData
+	s.deploymentStats.Set(mcdNsName, updatedStat, updatedStat.ttl)
+	return updatedStat
 }
 
-func (s *state) getMachineDeploymentNamespacedNames(key adjustapi.ProvisionKey) sets.Set[types.NamespacedName] {
-	entry, ok := s.getProvisionKeyEntry(key)
+func (s *state) getMachineDeploymentNamespacedNames(key adjustapi.MachineProvisionKey) sets.Set[types.NamespacedName] {
+	entry, ok := s.getMachineProvisionKeyStat(key)
 	if !ok {
 		return nil
 	}
@@ -161,25 +189,7 @@ func (s *state) getMachineTrackInfo(machineNamespacedName types.NamespacedName) 
 	return
 }
 
-func (s *state) clearDataForMachine(machineName types.NamespacedName) {
-	s.machineTrackInfos.Delete(machineName)
-}
-
-func (s *state) recordProvisionEntry(key adjustapi.ProvisionKey, mcdNsName types.NamespacedName, ttl time.Duration) {
-	var nameSet sets.Set[types.NamespacedName]
-	entry, ok := s.getProvisionKeyEntry(key)
-	if ok {
-		nameSet = entry.deploymentNames
-	} else {
-		nameSet = sets.New[types.NamespacedName]()
-	}
-	nameSet.Insert(mcdNsName)
-	entry.ttl = ttl
-	entry.deploymentNames = nameSet
-	s.provisionKeyEntries.Set(key, entry, ttl)
-}
-
-func (s *state) performStatUpdate(mcdNsName types.NamespacedName, updateFn statUpdateFunc) machineDeploymentStat {
+func (s *state) execDeploymentStatUpdate(mcdNsName types.NamespacedName, updateFn deploymentStatUpdateFunc) machineDeploymentStat {
 	var (
 		existingData, updatedData machineDeploymentStat
 	)
@@ -194,12 +204,16 @@ func (s *state) performStatUpdate(mcdNsName types.NamespacedName, updateFn statU
 	return updatedData
 }
 
-func (s *state) clearStateForDeployments(key adjustapi.ProvisionKey, notFoundNames sets.Set[types.NamespacedName]) {
+func (s *state) untrackMachine(machineName types.NamespacedName) {
+	s.machineTrackInfos.Delete(machineName)
+}
+
+func (s *state) clearDeploymentStats(key adjustapi.MachineProvisionKey, notFoundNames sets.Set[types.NamespacedName]) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, dn := range notFoundNames.UnsortedList() {
 		s.deploymentStats.Delete(dn)
-		entry, ok := s.getProvisionKeyEntry(key)
+		entry, ok := s.getMachineProvisionKeyStat(key)
 		if !ok {
 			continue
 		}
@@ -207,15 +221,24 @@ func (s *state) clearStateForDeployments(key adjustapi.ProvisionKey, notFoundNam
 			continue
 		}
 		entry.deploymentNames.Delete(dn)
-		s.provisionKeyEntries.Set(key, entry, entry.ttl)
+		s.provisionKeyStats.Set(key, entry, entry.ttl)
 	}
 }
 
-func (s *state) getProvisionKeyEntry(provisionKey adjustapi.ProvisionKey) (entry provisionKeyEntry, ok bool) {
-	val, ok := s.provisionKeyEntries.Get(provisionKey)
+func (s *state) getMachineDeploymentStat(mcdNsName types.NamespacedName) (stat machineDeploymentStat, ok bool) {
+	val, ok := s.deploymentStats.Get(mcdNsName)
 	if !ok {
 		return
 	}
-	entry = val.(provisionKeyEntry)
+	stat = val.(machineDeploymentStat)
+	return
+}
+
+func (s *state) getMachineProvisionKeyStat(provisionKey adjustapi.MachineProvisionKey) (stat machineProvisionKeyStat, ok bool) {
+	val, ok := s.provisionKeyStats.Get(provisionKey)
+	if !ok {
+		return
+	}
+	stat = val.(machineProvisionKeyStat)
 	return
 }

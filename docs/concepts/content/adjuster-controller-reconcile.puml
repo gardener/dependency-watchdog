@@ -1,37 +1,78 @@
 @startuml
-start
 title Adjuster Controller Reconciliation
 
-:Watch Machines phase transitions
- (None)->Failed,
- Pending->Failed,
- Pending->Running;
-:Reconcile(machineKey);
-if (isFirstSeen(machine)) then (yes)
-    :reconcileMachineCreate(machine);
-    :GetMachineDeploymentAndMachineClass(machine);
-    :Create ProvisionKey(instanceType, Zone);
-    :Add to provisionKeys to deploymentName expiring map;
-    :Add MachineTrackInfo(provisionKey,joined,failed)
-     to expiring machineTrack map;
-    :Add DeploymentStat:(joinDuration,failCount,joinCount)
-    to expiring DeploymentStat map by deploymentName;
-(no) elseif (isFirstJoin(machine)) then (yes)
-    :reconcileMachineJoin(machine);
-(no) elseif (isFirstSeenFailed(machine)) then (yes)
-    :reconcileMachineJoin(machine);
-(no) elseif (isDeleted(machine)) then (yes)
-    :clearStateData(machine);
+start
+
+:Receive Machine reconcile request;
+:Get Machine;
+
+if (Machine not found?) then (yes)
+  :Untrack machine from state;
+  stop
 endif
 
+if (isFirstJoin?\nphase==Running, lastOp "successfully joined",\njoin not yet recorded) then (yes)
 
-'if (Graphviz installed?) then (yes)
-'  :process all\ndiagrams;
-'else (no)
-'  :process only
-'  __sequence__ and __activity__ diagrams;
-'endif
+  partition "reconcileMachineJoin" {
+    :Build ProvisionKey {InstanceType, Zone}\nfrom MachineClass + Machine zone label;
+    :Compute joinDuration and cache TTL;
+    :recordMachineJoin → deploymentStat\n(joinStreakCount += 1, failStreakCount reset to 0);
+    :Get MachineDeployment;
+    if (not found?) then (yes)
+      :Clear deployment state;
+      stop
+    endif
+    :checkAndAdjustEffectiveCreationTimeout\n(mcd, now, maxJoinDuration);
+  }
+
+elseif (isFirstSeenFailed?\nphase==Failed,\nfail not yet recorded) then (yes)
+
+  partition "reconcileMachineFail" {
+    :Build ProvisionKey {InstanceType, Zone}\nfrom MachineClass + Machine zone label;
+    :Compute cache TTL;
+    :recordMachineFail → provisionKeyStat\n(failStreakCount += 1, joinStreakCount reset to 0\nfailCount += 1, deploymentName remembered);
+    if (failCount / (failCount + joinCount)\n< machineFailureFractionThreshold?) then (yes)
+      :Below threshold — nothing to do;
+      stop
+    endif
+    :growEffectiveCreationTimeoutsOnDeployments\n(provisionKey, now);
+  }
+
+elseif (DeletionTimestamp set?) then (yes)
+  :Untrack machine from state;
+endif
 
 stop
+
+partition "growEffectiveCreationTimeoutsOnDeployments" {
+  :For each MachineDeployment known\nfor this provisionKey;
+  :newTimeout = existingTimeout × growthFactor\n(capped at creationTimeoutMax);
+  if (newTimeout == 0?\n[already at/above max]) then (yes)
+    :Skip;
+  else (no)
+    :checkAndAdjustEffectiveCreationTimeout\n(mcd, watermarkTime, newTimeout);
+  endif
+}
+
+partition "checkAndAdjustEffectiveCreationTimeout" {
+  :hasGrown = newTimeout > existingAnnotationTimeout;
+
+  if (watermarkTime − lastAdjusted\n<= newTimeout?\n[cooldown gate]) then (yes)
+    :Skip;
+    stop
+  endif
+
+  if (mcd.Spec MachineCreationTimeout\n> newTimeout?\n[spec floor guard]) then (yes)
+    :Skip;
+    stop
+  endif
+
+  if (joinStreakCount > 0\nand hasGrown?\n[join guard]) then (yes)
+    :Skip — machines are actively joining,\ndo not grow timeout;
+    stop
+  endif
+
+  :Write annotations on MachineDeployment:\neffective-creation-timeout = newTimeout\neffective-creation-timeout-last-adjusted-at = watermarkTime;
+}
 
 @enduml

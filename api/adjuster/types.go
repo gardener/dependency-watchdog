@@ -9,8 +9,6 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
@@ -18,19 +16,17 @@ const (
 	// the effective creation timeout for all Machine's belonging to this MachineDeployment. If specified, the value for this
 	// annotation takes precedence over the MachineDeployment.Spec.Template.Spec.MachineCreationTimeout.
 	AnnotationKeyEffectiveCreationTimeout = "node.machine.sapcloud.io/effective-creation-timeout"
-	// AnnotationKeyLastAdjustedEffectiveCreationTimeout is the annotation key set on the MachineDeployment that indicates
+	// AnnotationKeyEffectiveCreationTimeoutLastAdjustedAt is the annotation key set on the MachineDeployment that indicates
 	// the time that the effective creation timeout was last adjusted for this MachineDeployment.
-	AnnotationKeyLastAdjustedEffectiveCreationTimeout = "node.machine.sapcloud.io/last-adjusted-effective-creation-timeout"
-	// AnnotationKeyMachineJoinDuration is the annotation key set on the Machine that indicates the amount of time Machine
-	// took to join the cluster. The value is a Go Duration string.
-	AnnotationKeyMachineJoinDuration = "node.machine.sapcloud.io/machine-join-duration"
+	AnnotationKeyEffectiveCreationTimeoutLastAdjustedAt = "node.machine.sapcloud.io/effective-creation-timeout-last-adjusted-at"
 	//DefaultCreationTimeoutGrowthFactor is the default value for growth of the effective-creation-timeout.
 	DefaultCreationTimeoutGrowthFactor = 2.0
 	//DefaultCreationTimeoutMax is the max limit beyond upto which the machine-creation-timeout can be adjusted
 	DefaultCreationTimeoutMax = 90 * time.Minute
-	// DefaultFailureThreshold is the default value of the threshold for number of Failed Machines beyond which
-	// the adjuster will revise the machine-creation-timeout.
-	DefaultFailureThreshold = 1
+	// DefaultMachineFailureFractionThreshold is the default value of the threshold fraction for Failed Machines corresponding
+	// to a [adjustapi.ProvisionKey]. Once breached, the adjuster will revise the effective machine-creation-timeout upwards
+	// by the [CreationTimeoutGrowthFactor].
+	DefaultMachineFailureFractionThreshold = 0.2
 	// StandardCreationTimeout is the standard machine creation timeout in gardener clusters if not overridden.
 	// See https://github.com/gardener/gardener/blob/e140ccc402b8732499cb804190fc4fe1ce82c078/example/90-shoot.yaml#L142
 	StandardCreationTimeout = 20 * time.Minute
@@ -44,30 +40,24 @@ type Config struct {
 	// CreationTimeoutMax is the maximum effective machine-creation-timeout set by the adjuster on MachineDeployment objects.
 	// If unspecified, the default value is [DefaultCreationTimeoutMax]
 	CreationTimeoutMax *metav1.Duration `json:"creationTimeoutMax"`
-	// FailureThreshold is the threshold for number of Failed Machines for a given instance type+zone combo following which
-	// the adjuster will revise the effective machine-creation-timeout upwards by the [CreationTimeoutGrowthFactor].
+	// MachineFailureFractionThreshold is the fraction  for Failed Machines corresponding to a [adjustapi.ProvisionKey].
+	// Once breached, the adjuster will revise the effective machine-creation-timeout upwards by the
+	// [CreationTimeoutGrowthFactor].
 	// If unspecified, the default value is [DefaultFailureThreshold]
-	FailureThreshold *uint32 `json:"failureThreshold"`
+	MachineFailureFractionThreshold *float64 `json:"machineFailureFractionThreshold"`
 }
 
-// ProvisionKey identifies a group of machines with the same instance
+// MachineProvisionKey identifies a group of machines with the same instance
 // type and availability zone for which provisioning statistics are tracked.
 //
 // Machines with the same instance type and availability zone share the same
 // provisioning characteristics, such as capacity availability, machine join
 // latency, and provisioning failure rates.
-type ProvisionKey struct {
+type MachineProvisionKey struct {
 	InstanceType string
 	Zone         string
 }
 
-func (k ProvisionKey) String() string {
+func (k MachineProvisionKey) String() string {
 	return fmt.Sprintf("(instanceType=%s,Zone=%s)", k.InstanceType, k.Zone)
-}
-
-// Controller is the facade exposed by the adjuster controller.
-type Controller interface {
-	reconcile.Reconciler
-	// SetupWithManager sets up the controller with the controller-runtime Manager.
-	SetupWithManager(manager.Manager) error
 }
