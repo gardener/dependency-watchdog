@@ -37,7 +37,7 @@ type Reconciler struct {
 // NewController returns the default adjuster controller initialized with the given [runtime.Scheme], given
 // [client.Client], given adjuster [adjustapi.Config] and maximum number of concurrent Reconciles which can be run.
 func NewController(scheme *runtime.Scheme, client client.Client, config *adjustapi.Config, maxConcurrentReconciles int) *Reconciler {
-	return new(Reconciler{
+	return &Reconciler{
 		scheme:                  scheme,
 		client:                  client,
 		config:                  config,
@@ -48,7 +48,7 @@ func NewController(scheme *runtime.Scheme, client client.Client, config *adjusta
 			machineTrackInfos: cache.NewExpiring(),
 			provisionKeyStats: cache.NewExpiring(),
 		},
-	})
+	}
 }
 
 // Reconcile listens to filtered Update events for [machinev1alpha1.Machine] resources and adjusts effective `machine-creation-timeout`s
