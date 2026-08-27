@@ -180,17 +180,20 @@ The adjuster configuration is mounted as a `ConfigMap` to the container. The pat
 
 You can view an example YAML configuration provided as `data` in a `ConfigMap` [here](../../example/05-dwd-adjuster-configmap.yaml).
 
-| Name                            | Type            | Required | Default Value | Description                                                                                                                                                                                                                  |
-|---------------------------------|-----------------|----------|---------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| creationTimeoutGrowthFactor     | float64         | No       | 2.0           | Factor by which the `effective-creation-timeout` annotation is multiplied when the machine failure fraction breaches the threshold. Must be greater than 1.0.                                                                 |
-| creationTimeoutMax              | metav1.Duration | No       | 90m           | Upper bound for the `effective-creation-timeout` annotation. The adjuster will never grow the timeout beyond this value.                                                                                                      |
-| machineFailureFractionThreshold | float64         | No       | 0.2           | Fraction of failed machines out of total machines (failed + joined) for a given `MachineProvisionKey` (instance type + zone) that, once breached, triggers an upward adjustment of `effective-creation-timeout` on all associated `MachineDeployment`s. |
+| Name                            | Type            | Required | Default Value | Description                                                                                                                                                                                                                                             |
+|---------------------------------|-----------------|----------|---------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| creationTimeoutGrowthFactor     | float64         | No       | 2.0           | Factor by which the `effective-creation-timeout` annotation is multiplied when the machine failure fraction breaches the threshold. Must be greater than 1.0.                                                                                           |
+| creationTimeoutMax              | metav1.Duration | No       | 90m           | Upper bound for the `effective-creation-timeout` annotation. The adjuster will never grow the timeout beyond this value.                                                                                                                                |
+| machineFailureThresholdFraction | float64         | No       | 0.2           | Fraction of failed machines out of total machines (failed + joined) for a given `MachineProvisionKey` (instance type + zone) that, once breached, triggers an upward adjustment of `effective-creation-timeout` on all associated `MachineDeployment`s. |
+| machineFailureThresholdMin      | uint32          | No       | 2             | Minumum number of failed machines machines  for a given `MachineProvisionKey` (instance type + zone) that needs to be breached before checking against `MachineFailureThresholdFraction`                                                           |
 
 ### How the adjuster works
 
 The adjuster watches `Machine` UPDATE events and tracks per-`MachineDeployment` and per-`MachineProvisionKey` (instance type + zone) statistics in expiring in-memory caches.
 
-**On machine failure:** when `failCount / (failCount + joinCount) >= machineFailureFractionThreshold` for a `MachineProvisionKey`, the adjuster grows the `node.machine.sapcloud.io/effective-creation-timeout` annotation on all `MachineDeployment`s associated with that key by `creationTimeoutGrowthFactor`, bounded to `creationTimeoutMax`.
+**On machine failure:** 
+
+when `failCount >= machineFailureThresholdMin` and `failCount / (failCount + joinCount) >= machineFailureThresholdFraction` for a `MachineProvisionKey`, the adjuster grows the `node.machine.sapcloud.io/effective-creation-timeout` annotation on all `MachineDeployment`s associated with that key by `creationTimeoutGrowthFactor`, bounded to `creationTimeoutMax`.
 
 **On machine join:** when a machine successfully joins the cluster, the adjuster resets the annotation on the associated `MachineDeployment` down to the observed join duration, provided the cooldown window has elapsed.
 

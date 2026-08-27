@@ -63,13 +63,17 @@ func (s machineProvisionKeyStat) String() string {
 		s.joinCount, s.failCount, len(s.deploymentNames), s.ttl)
 }
 
-// HasBreached confirms whether the fraction failCount/failCount+jointCount has breached the given threshold.
-func (s machineProvisionKeyStat) HasBreached(threshold float64) bool {
+// HasBreached confirms whether the failCount > thresholdMin and the fraction failCount/failCount+jointCount has breached
+// the given thresholdFraction.
+func (s machineProvisionKeyStat) HasBreached(thresholdMin uint32, thresholdFraction float64) bool {
+	if s.failCount < thresholdMin {
+		return false
+	}
 	total := s.failCount + s.joinCount
 	if total == 0 {
 		return false
 	}
-	return float64(s.failCount)/float64(total) >= threshold
+	return float64(s.failCount)/float64(total) >= thresholdFraction
 }
 
 type deploymentStatUpdateFunc func(existingStat *machineDeploymentStat) (updatedStat machineDeploymentStat)

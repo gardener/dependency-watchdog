@@ -155,17 +155,17 @@ func (r *Reconciler) reconcileMachineFail(ctx context.Context, m *machinev1alpha
 		"machineDeploymentName", deploymentName,
 		"provisionKey", provisionKey,
 		"machineDeploymentStat", deploymentStat)
-	failureThreshold := *r.config.MachineFailureFractionThreshold
-	if !provisionKeyStat.HasBreached(failureThreshold) {
+	if !provisionKeyStat.HasBreached(*r.config.MachineFailureThresholdMin, *r.config.MachineFailureThresholdFraction) {
 		return ctrl.Result{}, nil
 	}
 	watermarkTime := time.Now()
-	log.Info("MachineFailureFractionThreshold Breached, invoking growEffectiveCreationTimeoutsOnDeployments",
+	log.Info("MachineFailureThresholdFraction Breached, invoking growEffectiveCreationTimeoutsOnDeployments",
 		"provisionKey", provisionKey,
 		"machineProvisionKeyStat", provisionKeyStat,
 		"machineDeploymentStat", deploymentStat,
 		"watermarkTime", watermarkTime,
-		"failureThreshold", failureThreshold)
+		"machineFailureThresholdMin", *r.config.MachineFailureThresholdMin,
+		"machineFailureThresholdFraction", *r.config.MachineFailureThresholdFraction)
 	return ctrl.Result{}, r.growEffectiveCreationTimeoutsOnDeployments(ctx, provisionKey, watermarkTime)
 }
 
@@ -199,24 +199,24 @@ func (r *Reconciler) growEffectiveCreationTimeoutsOnDeployments(ctx context.Cont
 			}
 			return err
 		}
-		existingEffectiveTimeout, err := GetEffectiveCreationTimeoutOnMachineDeployment(mcd)
+		currentEffectiveTimeout, err := GetEffectiveCreationTimeoutOnMachineDeployment(mcd)
 		if err != nil {
 			log.Error(err, "Cannot get effective-creation-timeout for MachineDeployment", "machineDeployment", mcdName)
 			continue
 		}
-		newEffectiveTimeout := IncreaseTimeout(existingEffectiveTimeout, *r.config.CreationTimeoutGrowthFactor, r.config.CreationTimeoutMax.Duration)
+		newEffectiveTimeout := IncreaseTimeout(currentEffectiveTimeout, *r.config.CreationTimeoutGrowthFactor, r.config.CreationTimeoutMax.Duration)
 		if newEffectiveTimeout == 0 {
 			log.Info("Skipping MachineDeployment: effective-creation-timeout already at or above maximum",
 				"machineDeployment", mcdName,
 				"provisionKey", provisionKey,
-				"existingEffectiveTimeout", existingEffectiveTimeout,
+				"currentEffectiveTimeout", currentEffectiveTimeout,
 				"creationTimeoutMax", r.config.CreationTimeoutMax.Duration)
 			continue
 		}
 		log.Info("Invoking checkAndAdjustEffectiveCreationTimeout for MachineDeployment",
 			"machineDeployment", mcd.Name,
 			"provisionKey", provisionKey,
-			"existingEffectiveTimeout", existingEffectiveTimeout.String(),
+			"currentEffectiveTimeout", currentEffectiveTimeout.String(),
 			"newEffectiveTimeout", newEffectiveTimeout.String(),
 			"waterMarkTime", waterMarkTime)
 		err = r.checkAndAdjustEffectiveCreationTimeout(ctx, provisionKey, mcd, waterMarkTime, newEffectiveTimeout)
@@ -234,41 +234,42 @@ func (r *Reconciler) growEffectiveCreationTimeoutsOnDeployments(ctx context.Cont
 	return nil
 }
 
-func (r *Reconciler) checkAndAdjustEffectiveCreationTimeout(ctx context.Context, provisionKey adjustapi.MachineProvisionKey, mcd *machinev1alpha1.MachineDeployment, waterMarkTime time.Time, effectiveTimeout time.Duration) error {
+func (r *Reconciler) checkAndAdjustEffectiveCreationTimeout(ctx context.Context, provisionKey adjustapi.MachineProvisionKey, mcd *machinev1alpha1.MachineDeployment, waterMarkTime time.Time, newEffectiveTimeout time.Duration) error {
 	log := logf.FromContext(ctx)
-	existingEffectiveTimeout, err := GetEffectiveCreationTimeoutOnMachineDeployment(mcd)
+	currentEffectiveTimeout, err := GetEffectiveCreationTimeoutOnMachineDeployment(mcd)
 	if err != nil {
 		log.Error(err, "Cannot get effective-creation-timeout from MachineDeployment", "machineDeployment", mcd.Name)
 		return err
 	}
-	hasGrown := effectiveTimeout > existingEffectiveTimeout
 	lastAdjusted, err := GetLastAdjustedEffectiveCreationTimeout(mcd)
 	if err != nil {
 		log.Error(err, "Cannot get last-adjusted-effective-creation-timeout from MachineDeployment", "machineDeployment", mcd.Name)
 		return err
 	}
 	// Skip if the annotation was last written within the current effectiveTimeout window.
-	// This acts as a cooldown: machines already spawning under the previous timeout are still
-	// within their allowed creation window, so growing the timeout again is premature.
-	if waterMarkTime.Sub(lastAdjusted) <= effectiveTimeout {
-		log.V(3).Info("Skipping since MachineDeployment's effective-creation-timeout was last adjusted within the effective timeout",
+	// This acts as a cooldown: machines already spawning under the current effective timeout are still
+	// within their allowed creation window, so changing the timeout again is premature.
+	if waterMarkTime.Sub(lastAdjusted) <= currentEffectiveTimeout {
+		log.V(3).Info("Skipping since MachineDeployment's effective-creation-timeout was last adjusted within the current effective timeout",
 			"machineDeployment", mcd.Name,
 			"provisionKey", provisionKey,
 			"watermarkTime", waterMarkTime,
-			"effectiveTimeout", effectiveTimeout,
+			"newEffectiveTimeout", newEffectiveTimeout,
+			"currentEffectiveTimeout", currentEffectiveTimeout,
 			"lastAdjusted", lastAdjusted)
 		return nil
 	}
 	// Check that effectiveTimeout does not go below explicit MCD spec template machine creation timeout (if specified)
 	if mcd.Spec.Template.Spec.MachineConfiguration != nil && mcd.Spec.Template.Spec.MachineCreationTimeout != nil {
 		mcdSpecTemplateTimeout := mcd.Spec.Template.Spec.MachineCreationTimeout.Duration
-		if mcdSpecTemplateTimeout > effectiveTimeout {
+		if mcdSpecTemplateTimeout > newEffectiveTimeout {
 			log.V(3).Info("Skipping adjust since MachineDeployment.Spec.Template.Spec.MachineCreationTimeout is greater than effectiveTimeout",
 				"machineDeployment", mcd.Name,
 				"provisionKey", provisionKey,
 				"watermarkTime", waterMarkTime,
 				"specMachineCreationTimeout", mcdSpecTemplateTimeout,
-				"effectiveTimeout", effectiveTimeout)
+				"currentEffectiveTimeout", currentEffectiveTimeout,
+				"newEffectiveTimeout", newEffectiveTimeout)
 			return nil
 		}
 	}
@@ -276,19 +277,20 @@ func (r *Reconciler) checkAndAdjustEffectiveCreationTimeout(ctx context.Context,
 	if !ok {
 		return nil
 	}
+	hasGrown := newEffectiveTimeout > currentEffectiveTimeout
 	if deploymentStat.joinStreakCount > 0 && hasGrown {
 		// Do not increase adjustapi.AnnotationKeyEffectiveCreationTimeout if Machines are joining for the MachineDeployment.
 		// Shrinks bypass this guard so that a join can reset the annotation down to the observed join duration.
 		log.V(3).Info("Skipping adjust since machines are joining for the MachineDeployment and effectiveTimeout is not a reduction",
 			"machineDeployment", mcd.Name,
 			"machineDeploymentStat", deploymentStat,
-			"existingEffectiveTimeout", existingEffectiveTimeout,
-			"effectiveTimeout", effectiveTimeout,
+			"currentEffectiveTimeout", currentEffectiveTimeout,
+			"newEffectiveTimeout", newEffectiveTimeout,
 			"watermarkTime", waterMarkTime)
 		return nil
 	}
 	mcdCopy := mcd.DeepCopy()
-	metav1.SetMetaDataAnnotation(&mcdCopy.ObjectMeta, adjustapi.AnnotationKeyEffectiveCreationTimeout, effectiveTimeout.String())
+	metav1.SetMetaDataAnnotation(&mcdCopy.ObjectMeta, adjustapi.AnnotationKeyEffectiveCreationTimeout, newEffectiveTimeout.String())
 	metav1.SetMetaDataAnnotation(&mcdCopy.ObjectMeta, adjustapi.AnnotationKeyEffectiveCreationTimeoutLastAdjustedAt, waterMarkTime.Format(time.RFC3339))
 	if err = r.client.Update(ctx, mcdCopy); err != nil {
 		log.Error(err, "Failed to update MachineDeployment", "machineDeployment", mcd.Name)
@@ -297,7 +299,8 @@ func (r *Reconciler) checkAndAdjustEffectiveCreationTimeout(ctx context.Context,
 	log.Info("Successfully adjusted effective-creation-timeout for MachineDeployment",
 		"machineDeployment", mcd.Name,
 		"provisionKey", provisionKey,
-		"effectiveTimeout", effectiveTimeout.String(),
+		"previousEffectiveTimeout", currentEffectiveTimeout,
+		"newEffectiveTimeout", newEffectiveTimeout,
 		"waterMarkTime", waterMarkTime)
 	return nil
 }

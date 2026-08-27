@@ -31,7 +31,7 @@ elseif (isFirstSeenFailed?\nphase==Failed,\nfail not yet recorded) then (yes)
     :Build ProvisionKey {InstanceType, Zone}\nfrom MachineClass + Machine zone label;
     :Compute cache TTL;
     :recordMachineFail → provisionKeyStat\n(failStreakCount += 1, joinStreakCount reset to 0\nfailCount += 1, deploymentName remembered);
-    if (failCount / (failCount + joinCount)\n< machineFailureFractionThreshold?) then (yes)
+    if (failCount < machineFailureThresholdMin && failCount / (failCount + joinCount)\n< machineFailureThresholdFraction?) then (yes)
       :Below threshold — nothing to do;
       stop
     endif

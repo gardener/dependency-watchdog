@@ -23,10 +23,14 @@ const (
 	DefaultCreationTimeoutGrowthFactor = 2.0
 	//DefaultCreationTimeoutMax is the max limit beyond upto which the machine-creation-timeout can be adjusted
 	DefaultCreationTimeoutMax = 90 * time.Minute
-	// DefaultMachineFailureFractionThreshold is the default value of the threshold fraction for Failed Machines corresponding
+	// DefaultMachineFailureThresholdFraction is the default value of the threshold fraction for Failed Machines corresponding
 	// to a [adjustapi.ProvisionKey]. Once breached, the adjuster will revise the effective machine-creation-timeout upwards
 	// by the [CreationTimeoutGrowthFactor].
-	DefaultMachineFailureFractionThreshold = 0.2
+	DefaultMachineFailureThresholdFraction = 0.2
+	// DefaultMachineFailureThresholdMin default value of the minimum number for Failed Machines corresponding
+	// to an [adjustapi.ProvisionKey]. Only once this is surpassed, will the failure fraction be computed for comparing
+	// against MachineFailureThresholdFraction.
+	DefaultMachineFailureThresholdMin = 2
 	// StandardCreationTimeout is the standard machine creation timeout in gardener clusters if not overridden.
 	// See https://github.com/gardener/gardener/blob/e140ccc402b8732499cb804190fc4fe1ce82c078/example/90-shoot.yaml#L142
 	StandardCreationTimeout = 20 * time.Minute
@@ -40,11 +44,14 @@ type Config struct {
 	// CreationTimeoutMax is the maximum effective machine-creation-timeout set by the adjuster on MachineDeployment objects.
 	// If unspecified, the default value is [DefaultCreationTimeoutMax]
 	CreationTimeoutMax *metav1.Duration `json:"creationTimeoutMax"`
-	// MachineFailureFractionThreshold is the fraction  for Failed Machines corresponding to a [adjustapi.ProvisionKey].
+	// MachineFailureThresholdFraction is the fraction  for Failed Machines corresponding to a [adjustapi.ProvisionKey].
 	// Once breached, the adjuster will revise the effective machine-creation-timeout upwards by the
 	// [CreationTimeoutGrowthFactor].
 	// If unspecified, the default value is [DefaultFailureThreshold]
-	MachineFailureFractionThreshold *float64 `json:"machineFailureFractionThreshold"`
+	MachineFailureThresholdFraction *float64 `json:"machineFailureThresholdFraction"`
+	// MachineFailureThresholdMin indicates the minimum Machine failures corresponding to an [adjustapi.ProvisionKey]
+	// only after which the fraction threshold is considered.
+	MachineFailureThresholdMin *uint32 `json:"machineFailureThresholdMin"`
 }
 
 // MachineProvisionKey identifies a group of machines with the same instance

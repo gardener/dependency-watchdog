@@ -55,7 +55,8 @@ func ValidateConfig(c *adjustapi.Config) error {
 func FillConfigDefaults(c *adjustapi.Config) {
 	c.CreationTimeoutGrowthFactor = util.GetValOrDefault(c.CreationTimeoutGrowthFactor, adjustapi.DefaultCreationTimeoutGrowthFactor)
 	c.CreationTimeoutMax = util.GetValOrDefault(c.CreationTimeoutMax, metav1.Duration{Duration: adjustapi.DefaultCreationTimeoutMax})
-	c.MachineFailureFractionThreshold = util.GetValOrDefault(c.MachineFailureFractionThreshold, adjustapi.DefaultMachineFailureFractionThreshold)
+	c.MachineFailureThresholdFraction = util.GetValOrDefault(c.MachineFailureThresholdFraction, adjustapi.DefaultMachineFailureThresholdFraction)
+	c.MachineFailureThresholdMin = util.GetValOrDefault(c.MachineFailureThresholdMin, adjustapi.DefaultMachineFailureThresholdMin)
 }
 
 // EventPredicate creates controller runtime [predicate.Predicate] for [machinev1alpha1.Machine] Updated event that satisfy [CanAcceptForAdjusterReconcile]

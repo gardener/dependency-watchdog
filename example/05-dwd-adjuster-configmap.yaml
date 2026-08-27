@@ -8,4 +8,5 @@ data:
   dep-config.yaml: |
     creationTimeoutGrowthFactor: 2.0
     creationTimeoutMax: 90m
-    machineFailureFractionThreshold: 0.2
+    machineFailureThresholdFraction: 0.2
+    machineFailureThresholdMin: 2
