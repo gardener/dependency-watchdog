@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app: dependency-watchdog-adjuster
+  name: dependency-watchdog-adjuster-config
+data:
+  dep-config.yaml: |
+    creationTimeoutGrowthFactor: 2.0
+    creationTimeoutMax: 90m
+    machineFailureThresholdFraction: 0.2
+    machineFailureThresholdMin: 2

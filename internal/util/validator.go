@@ -61,6 +61,51 @@ func (v *Validator) MustNotBeZeroDuration(key string, duration metav1.Duration) 
 	return true
 }
 
+// MustBeGreater checks whether the given value is greater than specified compare value, returns false otherwise.
+// value types are expected to satisfy [cmp.Ordered].
+// TODO: Simplify after Go 1.27 which supports generic methods — methods that can declare their own type parameters.
+func (v *Validator) MustBeGreater(key string, val, compareVal any) bool {
+	if val == nil || compareVal == nil {
+		v.Error = multierr.Append(v.Error, fmt.Errorf("value & compare value for key %s must be not be nil", key))
+		return false
+	}
+	t1 := reflect.TypeOf(val)
+	t2 := reflect.TypeOf(compareVal)
+
+	if t1 != t2 {
+		v.Error = multierr.Append(v.Error, fmt.Errorf("for key %s, value of type %q differs from compare value of type %q", key, t1, t2))
+		return false
+	}
+	v1 := reflect.ValueOf(val)
+	v2 := reflect.ValueOf(compareVal)
+
+	switch v1.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if v1.Int() > v2.Int() {
+			return true
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		if v1.Uint() > v2.Uint() {
+			return true
+		}
+
+	case reflect.Float32, reflect.Float64:
+		if v1.Float() > v2.Float() {
+			return true
+		}
+	case reflect.String:
+		if v1.String() > v2.String() {
+			return true
+		}
+	default:
+		v.Error = multierr.Append(v.Error, fmt.Errorf("key %s cannot be compared due to unsupported value type %s", key, t1))
+		return false
+	}
+
+	v.Error = multierr.Append(v.Error, fmt.Errorf("value for key %s must be greater than %v but is instead %v", key, compareVal, val))
+	return false
+}
+
 // MustNotBeNil checks whether the given value is nil and returns false if it is nil.
 func (v *Validator) MustNotBeNil(key string, value any) bool {
 	if value == nil || reflect.ValueOf(value).IsNil() {
