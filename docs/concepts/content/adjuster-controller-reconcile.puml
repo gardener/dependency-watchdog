@@ -22,7 +22,7 @@ if (isFirstJoin?\nphase==Running, lastOp "successfully joined",\njoin not yet re
       :Clear deployment state;
       stop
     endif
-    :checkAndAdjustEffectiveCreationTimeout\n(mcd, now, maxJoinDuration);
+    :checkAndAdjustEffectiveCreationTimeout\n(mcd, watermarkTime=now, newTimeout=maxJoinDuration);
   }
 
 elseif (isFirstSeenFailed?\nphase==Failed,\nfail not yet recorded) then (yes)
@@ -31,11 +31,11 @@ elseif (isFirstSeenFailed?\nphase==Failed,\nfail not yet recorded) then (yes)
     :Build ProvisionKey {InstanceType, Zone}\nfrom MachineClass + Machine zone label;
     :Compute cache TTL;
     :recordMachineFail → provisionKeyStat\n(failStreakCount += 1, joinStreakCount reset to 0\nfailCount += 1, deploymentName remembered);
-    if (failCount < machineFailureThresholdMin && failCount / (failCount + joinCount)\n< machineFailureThresholdFraction?) then (yes)
+    if (threshold NOT breached?\nfailCount < machineFailureThresholdMin\nor failCount / (failCount + joinCount)\n< machineFailureThresholdFraction) then (yes)
       :Below threshold — nothing to do;
       stop
     endif
-    :growEffectiveCreationTimeoutsOnDeployments\n(provisionKey, now);
+    :growEffectiveCreationTimeoutsOnDeployments\n(provisionKey, watermarkTime=now);
   }
 
 elseif (DeletionTimestamp set?) then (yes)
@@ -46,7 +46,7 @@ stop
 
 partition "growEffectiveCreationTimeoutsOnDeployments" {
   :For each MachineDeployment known\nfor this provisionKey;
-  :newTimeout = existingTimeout × growthFactor\n(capped at creationTimeoutMax);
+  :newTimeout = currentEffectiveTimeout × growthFactor\n(capped at creationTimeoutMax);
   if (newTimeout == 0?\n[already at/above max]) then (yes)
     :Skip;
   else (no)
@@ -55,19 +55,24 @@ partition "growEffectiveCreationTimeoutsOnDeployments" {
 }
 
 partition "checkAndAdjustEffectiveCreationTimeout" {
-  :hasGrown = newTimeout > existingAnnotationTimeout;
+  :Get currentEffectiveTimeout and lastAdjustedAt\nfrom MachineDeployment annotations;
 
-  if (watermarkTime − lastAdjusted\n<= newTimeout?\n[cooldown gate]) then (yes)
-    :Skip;
+  if (watermarkTime − lastAdjustedAt\n<= currentEffectiveTimeout?\n[cooldown gate]) then (yes)
+    :Skip — still within current timeout window;
     stop
   endif
 
   if (mcd.Spec MachineCreationTimeout\n> newTimeout?\n[spec floor guard]) then (yes)
+    :Skip — spec timeout is stricter;
+    stop
+  endif
+
+  if (deploymentStat not found\nin state?) then (yes)
     :Skip;
     stop
   endif
 
-  if (joinStreakCount > 0\nand hasGrown?\n[join guard]) then (yes)
+  if (joinStreakCount > 0\nand newTimeout > currentEffectiveTimeout?\n[join guard]) then (yes)
     :Skip — machines are actively joining,\ndo not grow timeout;
     stop
   endif

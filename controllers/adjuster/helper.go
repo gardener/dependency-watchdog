@@ -206,10 +206,6 @@ func combineDeploymentStat(existingData, data machineDeploymentStat) machineDepl
 	return data
 }
 
-func isPending(m *machinev1alpha1.Machine) bool {
-	return m.Status.CurrentStatus.Phase == machinev1alpha1.MachinePending //|| m.Status.CurrentStatus.Phase == machinev1alpha1.MachineAvailable
-}
-
 func hasJoined(m *machinev1alpha1.Machine) bool {
 	return m.Status.CurrentStatus.Phase == machinev1alpha1.MachineRunning && strings.Contains(m.Status.LastOperation.Description, "successfully joined the cluster")
 }

@@ -86,7 +86,10 @@ func (r *Reconciler) reconcileMachineJoin(ctx context.Context, m *machinev1alpha
 	log := logf.FromContext(ctx)
 	provisionKey, err := r.getProvisionKey(ctx, m)
 	if err != nil {
-		return ctrl.Result{}, nil
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
 	}
 	deploymentName := GetMachineDeploymentName(m)
 	if deploymentName == "" {
@@ -98,7 +101,7 @@ func (r *Reconciler) reconcileMachineJoin(ctx context.Context, m *machinev1alpha
 		log.Error(err, "Cannot reconcileMachineJoin")
 		return ctrl.Result{}, nil
 	}
-	ttl := time.Duration(float64(timeout) * *r.config.CreationTimeoutGrowthFactor * 4)
+	ttl := time.Duration(float64(timeout) * *r.config.CreationTimeoutGrowthFactor)
 	joinDuration := m.Status.LastOperation.LastUpdateTime.Sub(m.CreationTimestamp.Time)
 	machineNsName := client.ObjectKeyFromObject(m)
 	deploymentStat, _ := r.state.recordMachineJoin(machineNsName, deploymentName, provisionKey, joinDuration, ttl)
@@ -134,7 +137,10 @@ func (r *Reconciler) reconcileMachineFail(ctx context.Context, m *machinev1alpha
 	log := logf.FromContext(ctx)
 	provisionKey, err := r.getProvisionKey(ctx, m)
 	if err != nil {
-		return ctrl.Result{}, nil
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
 	}
 	deploymentName := GetMachineDeploymentName(m)
 	if deploymentName == "" {
@@ -146,7 +152,7 @@ func (r *Reconciler) reconcileMachineFail(ctx context.Context, m *machinev1alpha
 		log.Error(err, "Cannot reconcileMachineFail")
 		return ctrl.Result{}, nil
 	}
-	ttl := time.Duration(float64(timeout) * *r.config.CreationTimeoutGrowthFactor * 4)
+	ttl := time.Duration(float64(timeout) * *r.config.CreationTimeoutGrowthFactor)
 	machineNsName := client.ObjectKeyFromObject(m)
 	deploymentStat, provisionKeyStat := r.state.recordMachineFail(machineNsName, deploymentName, provisionKey, ttl)
 	log.V(3).Info("Successful recordMachineFail",
@@ -190,6 +196,7 @@ func (r *Reconciler) growEffectiveCreationTimeoutsOnDeployments(ctx context.Cont
 	)
 	if len(deploymentNames) == 0 {
 		log.Info("Cannot growEffectiveCreationTimeoutsOnDeployments since no deploymentNames found for provisionKey", "provisionKey", provisionKey)
+		return nil
 	}
 	for _, mcdName := range deploymentNames.UnsortedList() {
 		if err := r.client.Get(ctx, mcdName, mcd); err != nil {
@@ -250,7 +257,7 @@ func (r *Reconciler) checkAndAdjustEffectiveCreationTimeout(ctx context.Context,
 	// This acts as a cooldown: machines already spawning under the current effective timeout are still
 	// within their allowed creation window, so changing the timeout again is premature.
 	if waterMarkTime.Sub(lastAdjusted) <= currentEffectiveTimeout {
-		log.V(3).Info("Skipping since MachineDeployment's effective-creation-timeout was last adjusted within the current effective timeout",
+		log.V(4).Info("Skipping since MachineDeployment's effective-creation-timeout was last adjusted within the current effective timeout",
 			"machineDeployment", mcd.Name,
 			"provisionKey", provisionKey,
 			"watermarkTime", waterMarkTime,
@@ -263,7 +270,7 @@ func (r *Reconciler) checkAndAdjustEffectiveCreationTimeout(ctx context.Context,
 	if mcd.Spec.Template.Spec.MachineConfiguration != nil && mcd.Spec.Template.Spec.MachineCreationTimeout != nil {
 		mcdSpecTemplateTimeout := mcd.Spec.Template.Spec.MachineCreationTimeout.Duration
 		if mcdSpecTemplateTimeout > newEffectiveTimeout {
-			log.V(3).Info("Skipping adjust since MachineDeployment.Spec.Template.Spec.MachineCreationTimeout is greater than effectiveTimeout",
+			log.V(4).Info("Skipping adjust since MachineDeployment.Spec.Template.Spec.MachineCreationTimeout is greater than effectiveTimeout",
 				"machineDeployment", mcd.Name,
 				"provisionKey", provisionKey,
 				"watermarkTime", waterMarkTime,

@@ -193,21 +193,6 @@ func (s *state) getMachineTrackInfo(machineNamespacedName types.NamespacedName) 
 	return
 }
 
-func (s *state) execDeploymentStatUpdate(mcdNsName types.NamespacedName, updateFn deploymentStatUpdateFunc) machineDeploymentStat {
-	var (
-		existingData, updatedData machineDeploymentStat
-	)
-	val, ok := s.deploymentStats.Get(mcdNsName)
-	if !ok {
-		updatedData = updateFn(nil)
-	} else {
-		existingData = val.(machineDeploymentStat)
-		updatedData = updateFn(&existingData)
-	}
-	s.deploymentStats.Set(mcdNsName, updatedData, updatedData.ttl)
-	return updatedData
-}
-
 func (s *state) untrackMachine(machineName types.NamespacedName) {
 	s.machineTrackInfos.Delete(machineName)
 }
