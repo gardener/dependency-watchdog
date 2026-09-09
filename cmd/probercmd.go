@@ -7,6 +7,7 @@ package cmd
 import (
 	"flag"
 	"fmt"
+
 	machinev1alpha1 "github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
@@ -24,8 +25,9 @@ import (
 )
 
 const (
-	proberLeaderElectionID = "dwd-prober-leader-election"
-	weederLeaderElectionID = "dwd-weeder-leader-election"
+	proberLeaderElectionID   = "dwd-prober-leader-election"
+	weederLeaderElectionID   = "dwd-weeder-leader-election"
+	adjusterLeaderElectionID = "dwd-adjuster-leader-election"
 )
 
 var (

@@ -1,0 +1,36 @@
+@startuml
+left to right direction
+node "Seed Garden" {
+    [dwd-adjuster] as adjuster
+}
+frame "Shoot A Control Plane" as SACP {
+    [machine-controller-manager] as mcma
+    folder "MachineDeploymentAP" as mcdap {
+        frame MachineAP1 #Salmon {
+        }
+        frame "..." as mapo #Salmon {
+        }
+
+    }
+    note bottom of MachineAP1: (m5.xlarge, eu-west1-a) \n FAILED
+    mcdap-[hidden]down->mcma
+}
+frame "Shoot B Control Plane" as SBCP {
+    [machine-controller-manager] as mcmb
+    folder "MachineDeploymentBP" as mcdbp {
+        frame MachineBP1 #MistyRose {
+        }
+        frame "..." as mbpo {
+        }
+    }
+    note bottom of MachineBP1: (m5.xlarge, eu-west1-a) \n Launched with new \n effective-creation-timeout
+    mcdbp -[hidden]down-> mcmb
+}
+
+mcma-->mcdap:<manages>
+mcmb-->mcdbp:<manages>
+adjuster-->mcdap:set effective-creation-timeout
+adjuster-->mcdbp:set effective-creation-timeout
+adjuster-->SACP:watches
+adjuster-->SBCP:watches
+@enduml
