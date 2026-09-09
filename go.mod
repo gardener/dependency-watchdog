@@ -9,7 +9,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/onsi/gomega v1.41.0
 	go.uber.org/zap v1.28.0
-	k8s.io/api v0.35.5
+	k8s.io/api v0.37.0
 	k8s.io/apimachinery v0.35.5
 	k8s.io/client-go v0.35.5
 	k8s.io/utils v0.0.0-20260507154919-ff6756f316d2
