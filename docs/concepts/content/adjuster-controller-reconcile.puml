@@ -1,0 +1,83 @@
+@startuml
+title Adjuster Controller Reconciliation
+
+start
+
+:Receive Machine reconcile request;
+:Get Machine;
+
+if (Machine not found?) then (yes)
+  :Untrack machine from state;
+  stop
+endif
+
+if (isFirstJoin?\nphase==Running, lastOp "successfully joined",\njoin not yet recorded) then (yes)
+
+  partition "reconcileMachineJoin" {
+    :Build ProvisionKey {InstanceType, Zone}\nfrom MachineClass + Machine zone label;
+    :Compute joinDuration and cache TTL;
+    :recordMachineJoin → deploymentStat\n(joinStreakCount += 1, failStreakCount reset to 0);
+    :Get MachineDeployment;
+    if (not found?) then (yes)
+      :Clear deployment state;
+      stop
+    endif
+    :checkAndAdjustEffectiveCreationTimeout\n(mcd, watermarkTime=now, newTimeout=maxJoinDuration);
+  }
+
+elseif (isFirstSeenFailed?\nphase==Failed,\nfail not yet recorded) then (yes)
+
+  partition "reconcileMachineFail" {
+    :Build ProvisionKey {InstanceType, Zone}\nfrom MachineClass + Machine zone label;
+    :Compute cache TTL;
+    :recordMachineFail → provisionKeyStat\n(failStreakCount += 1, joinStreakCount reset to 0\nfailCount += 1, deploymentName remembered);
+    if (threshold NOT breached?\nfailCount < machineFailureThresholdMin\nor failCount / (failCount + joinCount)\n< machineFailureThresholdFraction) then (yes)
+      :Below threshold — nothing to do;
+      stop
+    endif
+    :growEffectiveCreationTimeoutsOnDeployments\n(provisionKey, watermarkTime=now);
+  }
+
+elseif (DeletionTimestamp set?) then (yes)
+  :Untrack machine from state;
+endif
+
+stop
+
+partition "growEffectiveCreationTimeoutsOnDeployments" {
+  :For each MachineDeployment known\nfor this provisionKey;
+  :newTimeout = currentEffectiveTimeout × growthFactor\n(capped at creationTimeoutMax);
+  if (newTimeout == 0?\n[already at/above max]) then (yes)
+    :Skip;
+  else (no)
+    :checkAndAdjustEffectiveCreationTimeout\n(mcd, watermarkTime, newTimeout);
+  endif
+}
+
+partition "checkAndAdjustEffectiveCreationTimeout" {
+  :Get currentEffectiveTimeout and lastAdjustedAt\nfrom MachineDeployment annotations;
+
+  if (watermarkTime − lastAdjustedAt\n<= currentEffectiveTimeout?\n[cooldown gate]) then (yes)
+    :Skip — still within current timeout window;
+    stop
+  endif
+
+  if (mcd.Spec MachineCreationTimeout\n> newTimeout?\n[spec floor guard]) then (yes)
+    :Skip — spec timeout is stricter;
+    stop
+  endif
+
+  if (deploymentStat not found\nin state?) then (yes)
+    :Skip;
+    stop
+  endif
+
+  if (joinStreakCount > 0\nand newTimeout > currentEffectiveTimeout?\n[join guard]) then (yes)
+    :Skip — machines are actively joining,\ndo not grow timeout;
+    stop
+  endif
+
+  :Write annotations on MachineDeployment:\neffective-creation-timeout = newTimeout\neffective-creation-timeout-last-adjusted-at = watermarkTime;
+}
+
+@enduml

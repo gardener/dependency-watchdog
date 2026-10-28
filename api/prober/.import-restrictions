@@ -6,4 +6,4 @@ rules:
   - selectorRegexp: github[.]com/gardener/dependency-watchdog
     allowedPrefixes:
     # should be self-contained and must not import any other dependency watchdog packages
-      - github.com/gardener/dependency-watchdog/api/prober
+      - github.com/gardener/dependency-watchdog/api/adjuster
