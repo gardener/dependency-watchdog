@@ -16,14 +16,14 @@ import (
 
 // ReadFile reads the file present at the given filePath and returns a byte Buffer containing its contents.
 func ReadFile(filePath string) (*bytes.Buffer, error) {
-	f, err := os.Open(filePath) // #nosec G304 -- Test only
+	f, err := os.Open(filePath) // #nosec  GO-2026-6809 -- Test only
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
 
 	buff := new(bytes.Buffer)
-	_, err = buff.ReadFrom(f)
+	_, err = buff.ReadFrom(f) // #nosec  GO-2026-6809 -- Test only
 	if err != nil {
 		return nil, err
 	}
