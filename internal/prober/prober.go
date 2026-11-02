@@ -273,6 +273,10 @@ func (p *Prober) getFilteredNodeLeases(ctx context.Context, shootClient client.C
 }
 
 func (p *Prober) isLeaseExpired(lease coordinationv1.Lease) bool {
+	if lease.Spec.RenewTime == nil || lease.Spec.RenewTime.IsZero() {
+		p.l.Info("Lease has nil or zero RenewTime, treating as expired", "lease", types.NamespacedName{Namespace: lease.Namespace, Name: lease.Name})
+		return true
+	}
 	revisedNodeLeaseExpiryTime := float64(p.config.KCMNodeMonitorGraceDuration.Duration) * expiryBufferFraction
 	expiryTime := lease.Spec.RenewTime.Add(time.Duration(revisedNodeLeaseExpiryTime))
 	return util.EqualOrBeforeNow(expiryTime)
