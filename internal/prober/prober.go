@@ -33,8 +33,8 @@ const (
 	// expiryBufferFraction is used to compute a revised expiry time used by the prober to determine expired leases
 	// Using a fraction allows the prober to intervene before KCM marks a node as unknown, but at the same time allowing
 	// kubelet sufficient retries to renew the node lease.
-	// Eg:- nodeLeaseDuration = 40s, kcmNodeMonitorGraceDuration = 40s, kubeletRenewTime = 10s.
-	// 		The node lease will be considered expired by the prober at 30s. This allows kubelet 3 attempts instead of 4
+	// Eg:- nodeLeaseDuration = 50s, kcmNodeMonitorGraceDuration = 50s, kubeletRenewTime = 10s.
+	// 		The node lease will be considered expired by the prober at 37.5s. This allows kubelet 3 attempts instead of 4
 	// 		to renew the node lease.
 	expiryBufferFraction = 0.75
 	nodeLeaseNamespace   = "kube-node-lease"

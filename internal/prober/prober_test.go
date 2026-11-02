@@ -66,7 +66,7 @@ func TestAPIServerProbeFailure(t *testing.T) {
 			t.Parallel()
 			g := NewWithT(t)
 			scc := shootfakes.NewFakeShootClientBuilder(k8sfakes.NewFakeDiscoveryClient(entry.discoveryErr), k8sfakes.NewFakeClientBuilder().Build()).Build()
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: DefaultKCMNodeMonitorGraceDuration}, 0.2)
 
 			p := NewProber(context.Background(), nil, test.DefaultNamespace, config, nil, nil, scc, logr.Discard())
 			g.Expect(p.IsClosed()).To(BeFalse())
@@ -96,7 +96,7 @@ func TestDiscoveryClientCreationFailed(t *testing.T) {
 			t.Parallel()
 			g := NewWithT(t)
 			scc := shootfakes.NewFakeShootClientBuilder(nil, nil).WithDiscoveryClientCreationError(entry.discoveryClientCreationErr).Build()
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.1)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: DefaultKCMNodeMonitorGraceDuration}, 0.1)
 
 			p := NewProber(context.Background(), nil, test.DefaultNamespace, config, nil, nil, scc, logr.Discard())
 			g.Expect(p.IsClosed()).To(BeFalse())
@@ -128,7 +128,7 @@ func TestClientCreationFailed(t *testing.T) {
 			t.Parallel()
 			g := NewWithT(t)
 			scc := shootfakes.NewFakeShootClientBuilder(shootDiscoveryClient, nil).WithClientCreationError(entry.clientCreationErr).Build()
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: DefaultKCMNodeMonitorGraceDuration}, 0.2)
 
 			p := NewProber(context.Background(), nil, test.DefaultNamespace, config, nil, nil, scc, logr.Discard())
 			g.Expect(p.IsClosed()).To(BeFalse())
@@ -173,7 +173,7 @@ func TestNoScalingIfErrorInListingNodes(t *testing.T) {
 			seedClient := initializeSeedClientBuilder(machines, scaleTargetDeployments).Build()
 			scaler := scalefakes.NewFakeScaler(seedClient, test.DefaultNamespace, nil, nil)
 			scc := shootfakes.NewFakeShootClientBuilder(shootDiscoveryClient, shootClient).Build()
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: DefaultKCMNodeMonitorGraceDuration}, 0.2)
 
 			p := NewProber(ctx, seedClient, test.DefaultNamespace, config, nil, scaler, scc, logr.Discard())
 			g.Expect(p.IsClosed()).To(BeFalse())
@@ -219,7 +219,7 @@ func TestNoScalingIfErrorInListingMachines(t *testing.T) {
 			seedClient := initializeSeedClientBuilder(machines, scaleTargetDeployments).RecordErrorForObjectsWithGVK("List", test.DefaultNamespace, corev1.SchemeGroupVersion.WithKind("Machines"), entry.machineListErr).Build()
 			scaler := scalefakes.NewFakeScaler(seedClient, test.DefaultNamespace, nil, nil)
 			scc := shootfakes.NewFakeShootClientBuilder(shootDiscoveryClient, shootClient).Build()
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: DefaultKCMNodeMonitorGraceDuration}, 0.2)
 
 			p := NewProber(ctx, seedClient, test.DefaultNamespace, config, nil, scaler, scc, logr.Discard())
 			g.Expect(p.IsClosed()).To(BeFalse())
@@ -252,7 +252,7 @@ func TestLeaseProbeShouldNotConsiderNodesNotManagedByMCM(t *testing.T) {
 	seedClient := initializeSeedClientBuilder(machines, scaleTargetDeployments).Build()
 	scaler := scalefakes.NewFakeScaler(seedClient, test.DefaultNamespace, nil, nil)
 	scc := shootfakes.NewFakeShootClientBuilder(shootDiscoveryClient, shootClient).Build()
-	config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+	config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: DefaultKCMNodeMonitorGraceDuration}, 0.2)
 
 	p := NewProber(ctx, seedClient, test.DefaultNamespace, config, nil, scaler, scc, logr.Discard())
 	g.Expect(p.IsClosed()).To(BeFalse())
@@ -300,7 +300,7 @@ func TestLeaseProbeShouldNotConsiderFailedOrTerminatingMachines(t *testing.T) {
 			seedClient := initializeSeedClientBuilder(machines, scaleTargetDeployments).Build()
 			scaler := scalefakes.NewFakeScaler(seedClient, test.DefaultNamespace, nil, nil)
 			scc := shootfakes.NewFakeShootClientBuilder(shootDiscoveryClient, shootClient).Build()
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: DefaultKCMNodeMonitorGraceDuration}, 0.2)
 
 			p := NewProber(ctx, seedClient, test.DefaultNamespace, config, nil, scaler, scc, logr.Discard())
 			g.Expect(p.IsClosed()).To(BeFalse())
@@ -355,7 +355,7 @@ func TestLeaseProbeShouldNotConsiderUnhealthyNodes(t *testing.T) {
 			seedClient := initializeSeedClientBuilder(machines, scaleTargetDeployments).Build()
 			scaler := scalefakes.NewFakeScaler(seedClient, test.DefaultNamespace, nil, nil)
 			scc := shootfakes.NewFakeShootClientBuilder(shootDiscoveryClient, shootClient).Build()
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: DefaultKCMNodeMonitorGraceDuration}, 0.2)
 
 			p := NewProber(ctx, seedClient, test.DefaultNamespace, config, map[string][]string{test.Worker1Name: {test.NodeConditionDiskPressure, test.NodeConditionMemoryPressure}}, scaler, scc, logr.Discard())
 			g.Expect(p.IsClosed()).To(BeFalse())
@@ -469,7 +469,7 @@ func TestLeaseProbeShouldNotConsiderNodesUndergoingInPlaceUpdate(t *testing.T) {
 			seedClient := initializeSeedClientBuilder(machines, scaleTargetDeployments).Build()
 			scaler := scalefakes.NewFakeScaler(seedClient, test.DefaultNamespace, nil, nil)
 			scc := shootfakes.NewFakeShootClientBuilder(shootDiscoveryClient, shootClient).Build()
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: DefaultKCMNodeMonitorGraceDuration}, 0.2)
 
 			p := NewProber(ctx, seedClient, test.DefaultNamespace, config, map[string][]string{test.Worker1Name: {test.NodeConditionDiskPressure, test.NodeConditionMemoryPressure}}, scaler, scc, logr.Discard())
 			g.Expect(p.IsClosed()).To(BeFalse())
@@ -512,7 +512,7 @@ func TestNoScalingIfErrorInListingLeases(t *testing.T) {
 			seedClient := initializeSeedClientBuilder(machines, scaleTargetDeployments).Build()
 			scaler := scalefakes.NewFakeScaler(seedClient, test.DefaultNamespace, nil, nil)
 			scc := shootfakes.NewFakeShootClientBuilder(shootDiscoveryClient, shootClient).Build()
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: DefaultKCMNodeMonitorGraceDuration}, 0.2)
 
 			p := NewProber(ctx, seedClient, test.DefaultNamespace, config, nil, scaler, scc, logr.Discard())
 			g.Expect(p.IsClosed()).To(BeFalse())
@@ -554,7 +554,7 @@ func TestNoScalingInSingleNodeClusters(t *testing.T) {
 			shootDiscoveryClient := k8sfakes.NewFakeDiscoveryClient(nil)
 			shootClientCreator := shootfakes.NewFakeShootClientBuilder(shootDiscoveryClient, shootClient).Build()
 
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: DefaultKCMNodeMonitorGraceDuration}, 0.2)
 			p := NewProber(ctx, seedClient, test.DefaultNamespace, config, nil, scaler, shootClientCreator, logr.Discard())
 			g.Expect(p.IsClosed()).To(BeFalse())
 
@@ -602,7 +602,7 @@ func TestLeaseProbeShouldNotConsiderOrphanedLeases(t *testing.T) {
 			seedClient := initializeSeedClientBuilder(machines, scaleTargetDeployments).Build()
 			scaler := scalefakes.NewFakeScaler(seedClient, test.DefaultNamespace, nil, nil)
 			scc := shootfakes.NewFakeShootClientBuilder(shootDiscoveryClient, shootClient).Build()
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: DefaultKCMNodeMonitorGraceDuration}, 0.2)
 
 			p := NewProber(ctx, seedClient, test.DefaultNamespace, config, nil, scaler, scc, logr.Discard())
 			g.Expect(p.IsClosed()).To(BeFalse())
@@ -647,7 +647,7 @@ func TestSuccessfulProbesShouldRunScaleUp(t *testing.T) {
 			g := NewWithT(t)
 			ctx := context.Background()
 			scaler := scalefakes.NewFakeScaler(seedClient, test.DefaultNamespace, entry.scaleUpErr, nil)
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: DefaultKCMNodeMonitorGraceDuration}, 0.2)
 
 			p := NewProber(ctx, seedClient, test.DefaultNamespace, config, nil, scaler, shootClientCreator, logr.Discard())
 			g.Expect(p.IsClosed()).To(BeFalse())
@@ -698,7 +698,7 @@ func TestLeaseProbeFailureShouldRunScaleDown(t *testing.T) {
 			g := NewWithT(t)
 			ctx := context.Background()
 			scaler := scalefakes.NewFakeScaler(seedClient, test.DefaultNamespace, nil, entry.scaleDownErr)
-			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: 40 * time.Second}, 0.2)
+			config := createConfig(testProbeInterval, metav1.Duration{Duration: time.Microsecond}, metav1.Duration{Duration: DefaultKCMNodeMonitorGraceDuration}, 0.2)
 
 			p := NewProber(ctx, seedClient, test.DefaultNamespace, config, nil, scaler, shootClientCreator, logr.Discard())
 			g.Expect(p.IsClosed()).To(BeFalse())

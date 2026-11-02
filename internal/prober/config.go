@@ -35,7 +35,7 @@ const (
 	// DefaultKCMNodeMonitorGraceDuration is set to the default value of nodeMonitorGracePeriod in KCM.
 	// See https://kubernetes.io/docs/reference/command-line-tools-reference/kube-controller-manager/#:~:text=%2D%2Dnode%2Dmonitor%2Dgrace%2Dperiod%20duration
 	// Note: Make sure to keep this value in sync with default value of nodeMonitorGracePeriod in KCM.
-	DefaultKCMNodeMonitorGraceDuration = 40 * time.Second
+	DefaultKCMNodeMonitorGraceDuration = 50 * time.Second
 )
 
 // LoadConfig reads the prober configuration from a file, unmarshalls it, fills in the default values and

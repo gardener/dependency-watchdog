@@ -150,6 +150,12 @@ func (r *Reconciler) getEffectiveProbeConfig(shoot *v1beta1.Shoot, logger logr.L
 	probeConfig := *r.DefaultProbeConfig
 	kcmConfig := shoot.Spec.Kubernetes.KubeControllerManager
 	if kcmConfig != nil && kcmConfig.NodeMonitorGracePeriod != nil {
+		if kcmConfig.NodeMonitorGracePeriod.Duration < r.DefaultProbeConfig.KCMNodeMonitorGraceDuration.Duration {
+			logger.Info("Discarded the NodeMonitorGracePeriod set in the shoot as it is below the minimum allowed value; using configured default",
+				"nodeMonitorGracePeriod", *kcmConfig.NodeMonitorGracePeriod,
+				"minKCMNodeMonitorGraceDuration", r.DefaultProbeConfig.KCMNodeMonitorGraceDuration.Duration)
+			return &probeConfig
+		}
 		logger.Info("Using the NodeMonitorGracePeriod set in the shoot as KCMNodeMonitorGraceDuration in the probe config", "nodeMonitorGraceDuration", *kcmConfig.NodeMonitorGracePeriod)
 		probeConfig.KCMNodeMonitorGraceDuration = kcmConfig.NodeMonitorGracePeriod
 	}

@@ -48,8 +48,9 @@ const (
 )
 
 var (
-	shootKCMNodeMonitorGracePeriod   = &metav1.Duration{Duration: 80 * time.Second}
-	defaultKCMNodeMonitorGracePeriod = metav1.Duration{Duration: proberpackage.DefaultKCMNodeMonitorGraceDuration}
+	shootKCMNodeMonitorGracePeriod             = &metav1.Duration{Duration: 80 * time.Second}
+	shootKCMNodeMonitorGracePeriodBelowDefault = &metav1.Duration{Duration: proberpackage.DefaultKCMNodeMonitorGraceDuration / 2}
+	defaultKCMNodeMonitorGracePeriod           = metav1.Duration{Duration: proberpackage.DefaultKCMNodeMonitorGraceDuration}
 )
 
 func setupProberEnv(ctx context.Context, g *WithT) (client.Client, *envtest.Environment, *Reconciler, manager.Manager) {
@@ -176,6 +177,7 @@ func testProberSharedEnvTest(t *testing.T) {
 		{"start prober if last operation is reconciliation of shoot", testLastOperationIsShootReconciliation},
 		{"no prober if shoot has no workers", testShootHasNoWorkers},
 		{"prober should start with correct worker node conditions mapping", testShootWorkerNodeConditions},
+		{"shoot NodeMonitorGracePeriod below default falls back to default", testShootNodeMonitorGracePeriodBelowDefault},
 	}
 
 	for _, test := range tests {
@@ -201,6 +203,19 @@ func testShootWorkerNodeConditions(g *WithT, crClient client.Client, reconciler 
 	}
 	updateCluster(g, crClient, cluster)
 	expectedWorkerNodeConditions = util.GetEffectiveNodeConditionsForWorkers(shoot)
+	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod, expectedWorkerNodeConditions)
+	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
+}
+
+// testShootNodeMonitorGracePeriodBelowDefault verifies that a shoot NodeMonitorGracePeriod set below
+// the configured default KCMNodeMonitorGraceDuration is rejected and the configured default is used instead.
+func testShootNodeMonitorGracePeriodBelowDefault(g *WithT, crClient client.Client, reconciler *Reconciler) {
+	cluster, shoot, err := testutil.NewClusterBuilder().WithWorkerCount(1).WithNodeMonitorGracePeriod(shootKCMNodeMonitorGracePeriodBelowDefault).Build()
+	g.Expect(err).ToNot(HaveOccurred())
+	setShootLastOperationStatus(cluster, shoot, gardencorev1beta1.LastOperationTypeReconcile, gardencorev1beta1.LastOperationStateSucceeded)
+	createCluster(g, crClient, cluster)
+	expectedWorkerNodeConditions := util.GetEffectiveNodeConditionsForWorkers(shoot)
+	// The below-default value should be discarded; prober should use the configured default.
 	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod, expectedWorkerNodeConditions)
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
