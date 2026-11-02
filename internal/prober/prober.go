@@ -24,6 +24,7 @@ import (
 	"github.com/go-logr/logr"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -302,6 +303,15 @@ func (p *Prober) resetBackoff(d time.Duration) {
 // AreWorkerNodeConditionsStale checks if the worker node conditions are up-to-date
 func (p *Prober) AreWorkerNodeConditionsStale(newWorkerNodeConditions map[string][]string) bool {
 	return !reflect.DeepEqual(p.workerNodeConditions, newWorkerNodeConditions)
+}
+
+// IsKCMNodeMonitorGracePeriodStale returns true if the running prober's KCMNodeMonitorGraceDuration
+// differs from the newly computed effective value, indicating the prober must be restarted.
+func (p *Prober) IsKCMNodeMonitorGracePeriodStale(newDuration *metav1.Duration) bool {
+	if newDuration == nil {
+		return false
+	}
+	return p.config.KCMNodeMonitorGraceDuration.Duration != newDuration.Duration
 }
 
 // IsInBackOff checks if the prober is in backoff. Currently, this is only used for testing purposes.

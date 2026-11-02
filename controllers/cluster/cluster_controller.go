@@ -110,12 +110,19 @@ func (r *Reconciler) startProber(ctx context.Context, shootControlNs string, sho
 	existingProber, ok := r.ProberMgr.GetProber(shootControlNs)
 	if !ok {
 		r.createAndRunProber(ctx, shootControlNs, shoot, workerNodeConditions, logger)
-	} else {
-		if existingProber.AreWorkerNodeConditionsStale(workerNodeConditions) {
-			logger.Info("Restarting prober due to change in node conditions for workers")
-			_ = r.ProberMgr.Unregister(shootControlNs)
-			r.createAndRunProber(ctx, shootControlNs, shoot, workerNodeConditions, logger)
-		}
+		return
+	}
+	workerConditionsStale := existingProber.AreWorkerNodeConditionsStale(workerNodeConditions)
+	kcmGracePeriodStale := existingProber.IsKCMNodeMonitorGracePeriodStale(r.getEffectiveProbeConfig(shoot, logger).KCMNodeMonitorGraceDuration)
+	if workerConditionsStale {
+		logger.Info("Restarting prober due to change in node conditions for workers")
+	}
+	if kcmGracePeriodStale {
+		logger.Info("Restarting prober due to change in KCMNodeMonitorGracePeriod")
+	}
+	if workerConditionsStale || kcmGracePeriodStale {
+		_ = r.ProberMgr.Unregister(shootControlNs)
+		r.createAndRunProber(ctx, shootControlNs, shoot, workerNodeConditions, logger)
 	}
 }
 

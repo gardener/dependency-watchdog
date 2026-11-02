@@ -178,6 +178,7 @@ func testProberSharedEnvTest(t *testing.T) {
 		{"no prober if shoot has no workers", testShootHasNoWorkers},
 		{"prober should start with correct worker node conditions mapping", testShootWorkerNodeConditions},
 		{"shoot NodeMonitorGracePeriod below default falls back to default", testShootNodeMonitorGracePeriodBelowDefault},
+		{"prober restarts when shoot NodeMonitorGracePeriod changes", testShootKCMNodeMonitorGracePeriodUpdate},
 	}
 
 	for _, test := range tests {
@@ -217,6 +218,28 @@ func testShootNodeMonitorGracePeriodBelowDefault(g *WithT, crClient client.Clien
 	expectedWorkerNodeConditions := util.GetEffectiveNodeConditionsForWorkers(shoot)
 	// The below-default value should be discarded; prober should use the configured default.
 	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod, expectedWorkerNodeConditions)
+	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
+}
+
+// testShootKCMNodeMonitorGracePeriodUpdate verifies that changing NodeMonitorGracePeriod in the shoot
+// spec after the prober is running causes the prober to restart with the updated value.
+func testShootKCMNodeMonitorGracePeriodUpdate(g *WithT, crClient client.Client, reconciler *Reconciler) {
+	// Start with no NodeMonitorGracePeriod set — prober should use the default.
+	cluster, shoot, err := testutil.NewClusterBuilder().WithWorkerCount(1).Build()
+	g.Expect(err).ToNot(HaveOccurred())
+	createCluster(g, crClient, cluster)
+	expectedWorkerNodeConditions := util.GetEffectiveNodeConditionsForWorkers(shoot)
+	proberShouldBePresent(g, reconciler, cluster, defaultKCMNodeMonitorGracePeriod, expectedWorkerNodeConditions)
+
+	// Update the shoot spec with a new NodeMonitorGracePeriod above the default.
+	updatedGracePeriod := &metav1.Duration{Duration: 2 * proberpackage.DefaultKCMNodeMonitorGraceDuration}
+	shoot.Spec.Kubernetes.KubeControllerManager = &gardencorev1beta1.KubeControllerManagerConfig{
+		NodeMonitorGracePeriod: updatedGracePeriod,
+	}
+	cluster.Spec.Shoot = runtime.RawExtension{Object: shoot}
+	updateCluster(g, crClient, cluster)
+	// Prober should restart and use the updated value.
+	proberShouldBePresent(g, reconciler, cluster, *updatedGracePeriod, expectedWorkerNodeConditions)
 	deleteClusterAndCheckIfProberRemoved(g, crClient, reconciler, cluster)
 }
 
