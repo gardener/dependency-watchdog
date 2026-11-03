@@ -24,6 +24,7 @@ import (
 	"github.com/go-logr/logr"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -33,8 +34,8 @@ const (
 	// expiryBufferFraction is used to compute a revised expiry time used by the prober to determine expired leases
 	// Using a fraction allows the prober to intervene before KCM marks a node as unknown, but at the same time allowing
 	// kubelet sufficient retries to renew the node lease.
-	// Eg:- nodeLeaseDuration = 40s, kcmNodeMonitorGraceDuration = 40s, kubeletRenewTime = 10s.
-	// 		The node lease will be considered expired by the prober at 30s. This allows kubelet 3 attempts instead of 4
+	// Eg:- nodeLeaseDuration = 50s, kcmNodeMonitorGraceDuration = 50s, kubeletRenewTime = 10s.
+	// 		The node lease will be considered expired by the prober at 37.5s. This allows kubelet 3 attempts instead of 4
 	// 		to renew the node lease.
 	expiryBufferFraction = 0.75
 	nodeLeaseNamespace   = "kube-node-lease"
@@ -272,6 +273,10 @@ func (p *Prober) getFilteredNodeLeases(ctx context.Context, shootClient client.C
 }
 
 func (p *Prober) isLeaseExpired(lease coordinationv1.Lease) bool {
+	if lease.Spec.RenewTime == nil || lease.Spec.RenewTime.IsZero() {
+		p.l.Info("Lease has nil or zero RenewTime, treating as expired", "lease", types.NamespacedName{Namespace: lease.Namespace, Name: lease.Name})
+		return true
+	}
 	revisedNodeLeaseExpiryTime := float64(p.config.KCMNodeMonitorGraceDuration.Duration) * expiryBufferFraction
 	expiryTime := lease.Spec.RenewTime.Add(time.Duration(revisedNodeLeaseExpiryTime))
 	return util.EqualOrBeforeNow(expiryTime)
@@ -302,6 +307,15 @@ func (p *Prober) resetBackoff(d time.Duration) {
 // AreWorkerNodeConditionsStale checks if the worker node conditions are up-to-date
 func (p *Prober) AreWorkerNodeConditionsStale(newWorkerNodeConditions map[string][]string) bool {
 	return !reflect.DeepEqual(p.workerNodeConditions, newWorkerNodeConditions)
+}
+
+// IsKCMNodeMonitorGracePeriodStale returns true if the running prober's KCMNodeMonitorGraceDuration
+// differs from the newly computed effective value, indicating the prober must be restarted.
+func (p *Prober) IsKCMNodeMonitorGracePeriodStale(newDuration *metav1.Duration) bool {
+	if newDuration == nil {
+		return false
+	}
+	return p.config.KCMNodeMonitorGraceDuration.Duration != newDuration.Duration
 }
 
 // IsInBackOff checks if the prober is in backoff. Currently, this is only used for testing purposes.

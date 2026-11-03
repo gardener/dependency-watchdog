@@ -71,7 +71,7 @@ func (b *ClusterBuilder) Build() (*gardenerv1alpha1.Cluster, *gardencorev1beta1.
 			CloudProfile: runtime.RawExtension{
 				Object: &cloudProfile,
 			},
-			Seed: runtime.RawExtension{
+			Seed: &runtime.RawExtension{
 				Object: &seed,
 			},
 		},

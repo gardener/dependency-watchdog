@@ -110,12 +110,19 @@ func (r *Reconciler) startProber(ctx context.Context, shootControlNs string, sho
 	existingProber, ok := r.ProberMgr.GetProber(shootControlNs)
 	if !ok {
 		r.createAndRunProber(ctx, shootControlNs, shoot, workerNodeConditions, logger)
-	} else {
-		if existingProber.AreWorkerNodeConditionsStale(workerNodeConditions) {
-			logger.Info("Restarting prober due to change in node conditions for workers")
-			_ = r.ProberMgr.Unregister(shootControlNs)
-			r.createAndRunProber(ctx, shootControlNs, shoot, workerNodeConditions, logger)
-		}
+		return
+	}
+	workerConditionsStale := existingProber.AreWorkerNodeConditionsStale(workerNodeConditions)
+	kcmGracePeriodStale := existingProber.IsKCMNodeMonitorGracePeriodStale(r.getEffectiveProbeConfig(shoot, logger).KCMNodeMonitorGraceDuration)
+	if workerConditionsStale {
+		logger.Info("Restarting prober due to change in node conditions for workers")
+	}
+	if kcmGracePeriodStale {
+		logger.Info("Restarting prober due to change in KCMNodeMonitorGracePeriod")
+	}
+	if workerConditionsStale || kcmGracePeriodStale {
+		_ = r.ProberMgr.Unregister(shootControlNs)
+		r.createAndRunProber(ctx, shootControlNs, shoot, workerNodeConditions, logger)
 	}
 }
 
@@ -150,6 +157,12 @@ func (r *Reconciler) getEffectiveProbeConfig(shoot *v1beta1.Shoot, logger logr.L
 	probeConfig := *r.DefaultProbeConfig
 	kcmConfig := shoot.Spec.Kubernetes.KubeControllerManager
 	if kcmConfig != nil && kcmConfig.NodeMonitorGracePeriod != nil {
+		if kcmConfig.NodeMonitorGracePeriod.Duration < r.DefaultProbeConfig.KCMNodeMonitorGraceDuration.Duration {
+			logger.Info("Discarded the NodeMonitorGracePeriod set in the shoot as it is below the minimum allowed value; using configured default",
+				"nodeMonitorGracePeriod", *kcmConfig.NodeMonitorGracePeriod,
+				"minKCMNodeMonitorGraceDuration", r.DefaultProbeConfig.KCMNodeMonitorGraceDuration.Duration)
+			return &probeConfig
+		}
 		logger.Info("Using the NodeMonitorGracePeriod set in the shoot as KCMNodeMonitorGraceDuration in the probe config", "nodeMonitorGraceDuration", *kcmConfig.NodeMonitorGracePeriod)
 		probeConfig.KCMNodeMonitorGraceDuration = kcmConfig.NodeMonitorGracePeriod
 	}
