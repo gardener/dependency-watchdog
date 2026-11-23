@@ -25,6 +25,7 @@ import (
 	v1beta1helper "github.com/gardener/gardener/pkg/api/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/scale"
@@ -107,13 +108,14 @@ func (r *Reconciler) getCluster(ctx context.Context, namespace string, name stri
 // Typically, the key in case of a shoot cluster is the shoot namespace
 func (r *Reconciler) startProber(ctx context.Context, shootControlNs string, shoot *v1beta1.Shoot, logger logr.Logger) {
 	workerNodeConditions := util.GetEffectiveNodeConditionsForWorkers(shoot)
+	effectiveConfig := r.getEffectiveProbeConfig(shoot, logger)
 	existingProber, ok := r.ProberMgr.GetProber(shootControlNs)
 	if !ok {
-		r.createAndRunProber(ctx, shootControlNs, shoot, workerNodeConditions, logger)
+		r.createAndRunProber(ctx, shootControlNs, effectiveConfig, workerNodeConditions, logger)
 		return
 	}
 	workerConditionsStale := existingProber.AreWorkerNodeConditionsStale(workerNodeConditions)
-	kcmGracePeriodStale := existingProber.IsKCMNodeMonitorGracePeriodStale(r.getEffectiveProbeConfig(shoot, logger).KCMNodeMonitorGraceDuration)
+	kcmGracePeriodStale := existingProber.IsKCMNodeMonitorGracePeriodStale(effectiveConfig.KCMNodeMonitorGraceDuration)
 	if workerConditionsStale {
 		logger.Info("Restarting prober due to change in node conditions for workers")
 	}
@@ -122,12 +124,16 @@ func (r *Reconciler) startProber(ctx context.Context, shootControlNs string, sho
 	}
 	if workerConditionsStale || kcmGracePeriodStale {
 		_ = r.ProberMgr.Unregister(shootControlNs)
-		r.createAndRunProber(ctx, shootControlNs, shoot, workerNodeConditions, logger)
+		// When restarting an already-running prober, skip the initial delay so DWD does not
+		// miss the intervention window between the lease expiry threshold and when KCM marks
+		// nodes unhealthy.
+		restartConfig := *effectiveConfig
+		restartConfig.InitialDelay = &metav1.Duration{}
+		r.createAndRunProber(ctx, shootControlNs, &restartConfig, workerNodeConditions, logger)
 	}
 }
 
-func (r *Reconciler) createAndRunProber(ctx context.Context, shootNamespace string, shoot *v1beta1.Shoot, workerNodeConditions map[string][]string, logger logr.Logger) {
-	probeConfig := r.getEffectiveProbeConfig(shoot, logger)
+func (r *Reconciler) createAndRunProber(ctx context.Context, shootNamespace string, probeConfig *papi.Config, workerNodeConditions map[string][]string, logger logr.Logger) {
 	deploymentScaler := scaler.NewScaler(shootNamespace, probeConfig.DependentResourceInfos, r.Client, r.ScaleGetter, logger)
 	shootClientCreator := shootclient.NewClientCreator(shootNamespace, probeConfig.KubeConfigSecretName, r.Client)
 	p := prober.NewProber(ctx, r.Client, shootNamespace, probeConfig, workerNodeConditions, deploymentScaler, shootClientCreator, logger)
@@ -152,15 +158,17 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // getEffectiveProbeConfig returns the updated probe config after checking the shoot KCM configuration for NodeMonitorGracePeriod.
-// If NodeMonitorGracePeriod is not set in the shoot, then the KCMNodeMonitorGraceDuration defined in the configmap of probe config will be used
+// If NodeMonitorGracePeriod is not set in the shoot, then the KCMNodeMonitorGraceDuration defined in the configmap of probe config will be used.
+// If the shoot's NodeMonitorGracePeriod is below MinKCMNodeMonitorGraceDuration the configured default is used instead to avoid
+// premature lease expiry on the first probe run.
 func (r *Reconciler) getEffectiveProbeConfig(shoot *v1beta1.Shoot, logger logr.Logger) *papi.Config {
 	probeConfig := *r.DefaultProbeConfig
 	kcmConfig := shoot.Spec.Kubernetes.KubeControllerManager
 	if kcmConfig != nil && kcmConfig.NodeMonitorGracePeriod != nil {
-		if kcmConfig.NodeMonitorGracePeriod.Duration < r.DefaultProbeConfig.KCMNodeMonitorGraceDuration.Duration {
+		if kcmConfig.NodeMonitorGracePeriod.Duration < prober.MinKCMNodeMonitorGraceDuration {
 			logger.Info("Discarded the NodeMonitorGracePeriod set in the shoot as it is below the minimum allowed value; using configured default",
 				"nodeMonitorGracePeriod", *kcmConfig.NodeMonitorGracePeriod,
-				"minKCMNodeMonitorGraceDuration", r.DefaultProbeConfig.KCMNodeMonitorGraceDuration.Duration)
+				"minKCMNodeMonitorGraceDuration", prober.MinKCMNodeMonitorGraceDuration)
 			return &probeConfig
 		}
 		logger.Info("Using the NodeMonitorGracePeriod set in the shoot as KCMNodeMonitorGraceDuration in the probe config", "nodeMonitorGraceDuration", *kcmConfig.NodeMonitorGracePeriod)

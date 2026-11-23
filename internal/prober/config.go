@@ -36,6 +36,11 @@ const (
 	// See https://kubernetes.io/docs/reference/command-line-tools-reference/kube-controller-manager/#:~:text=%2D%2Dnode%2Dmonitor%2Dgrace%2Dperiod%20duration
 	// Note: Make sure to keep this value in sync with default value of nodeMonitorGracePeriod in KCM.
 	DefaultKCMNodeMonitorGraceDuration = 50 * time.Second
+	// MinKCMNodeMonitorGraceDuration is the minimum allowed value for KCMNodeMonitorGraceDuration.
+	// A value below this means that given the initial delay of 30s before the first probe, any lease
+	// renewed just before the prober started would already be considered expired on the first run,
+	// causing DWD to prematurely scale down KCM/MCM/CA on a healthy cluster.
+	MinKCMNodeMonitorGraceDuration = DefaultKCMNodeMonitorGraceDuration
 )
 
 // LoadConfig reads the prober configuration from a file, unmarshalls it, fills in the default values and

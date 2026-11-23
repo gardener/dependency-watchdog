@@ -312,9 +312,6 @@ func (p *Prober) AreWorkerNodeConditionsStale(newWorkerNodeConditions map[string
 // IsKCMNodeMonitorGracePeriodStale returns true if the running prober's KCMNodeMonitorGraceDuration
 // differs from the newly computed effective value, indicating the prober must be restarted.
 func (p *Prober) IsKCMNodeMonitorGracePeriodStale(newDuration *metav1.Duration) bool {
-	if newDuration == nil {
-		return false
-	}
 	return p.config.KCMNodeMonitorGraceDuration.Duration != newDuration.Duration
 }
 
