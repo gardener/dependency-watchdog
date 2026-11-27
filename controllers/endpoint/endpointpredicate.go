@@ -14,8 +14,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-// ReadyEndpoints is a predicate to allow events for only ready endpoints. Endpoint is considered ready
-// when there is at least a single endpoint subset that has at least one IP address assigned.
+// ReadyEndpoints is a predicate to allow events for only ready endpoints. An EndpointSlice
+// is considered ready when at least one of its endpoints has Conditions.Ready set to true.
 func ReadyEndpoints(logger logr.Logger) predicate.Predicate {
 	log := logger.WithValues("predicate", "ReadyEndpointsPredicate")
 	isEndpointReady := func(obj runtime.Object) bool {
@@ -24,13 +24,12 @@ func ReadyEndpoints(logger logr.Logger) predicate.Predicate {
 			return false
 		}
 		for _, endpoint := range epSlice.Endpoints {
-			// check if there is at least one endpoint with condition ready as false and return false
-			if endpoint.Conditions.Ready == nil || (endpoint.Conditions.Ready != nil && !*endpoint.Conditions.Ready) {
-				log.Info("Not all endpoints in the endpoint slice are ready", "namespace", epSlice.Namespace, "endpoint", epSlice.Name)
-				return false
+			if endpoint.Conditions.Ready != nil && *endpoint.Conditions.Ready {
+				return true
 			}
 		}
-		return true
+		log.Info("Endpoint slice has no ready endpoints", "namespace", epSlice.Namespace, "name", epSlice.Name)
+		return false
 	}
 
 	return predicate.Funcs{

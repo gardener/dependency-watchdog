@@ -7,20 +7,24 @@ package cmd
 import (
 	"flag"
 	"fmt"
-	machinev1alpha1 "github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
-	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/gardener/dependency-watchdog/controllers/cluster"
 	"github.com/gardener/dependency-watchdog/internal/prober"
 	"github.com/gardener/dependency-watchdog/internal/util"
+	machinev1alpha1 "github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 const (
@@ -110,6 +114,18 @@ func startClusterControllerMgr(logger logr.Logger) (manager.Manager, error) {
 		LeaderElectionID:           proberLeaderElectionID,
 		Logger:                     proberLogger,
 		PprofBindAddress:           proberOpts.SharedOpts.PprofBindAddress,
+		Cache: cache.Options{
+			ByObject: map[client.Object]cache.ByObject{
+				// Cache only the shoot-access kubeconfig secrets that DWD reads on each probe
+				// cycle, identified by the token-requestor label set by the resource manager.
+				// This avoids a direct API server call per probe tick per shoot cluster.
+				&corev1.Secret{}: {
+					Label: labels.SelectorFromSet(labels.Set{
+						"resources.gardener.cloud/purpose": "token-requestor",
+					}),
+				},
+			},
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to start the prober controller manager %w", err)
