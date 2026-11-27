@@ -24,7 +24,7 @@ jobs:
 
   release-to-github-and-bump:
     if: github.ref_name == 'master' || startsWith(github.ref_name, 'rel-v')
-    uses: gardener/cc-utils/.github/workflows/release.yaml@master
+    uses: gardener/cc-utils/.github/workflows/release.yaml@d478850afa1a7e0f9deb710e4d44eb0a2d8dce07 # 1.2881.0
     needs:
       - build
     secrets: inherit
