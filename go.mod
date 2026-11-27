@@ -70,7 +70,7 @@ require (
 	github.com/gardener/cert-management v0.22.0 // indirect
 	github.com/gardener/etcd-druid/api v0.36.3 // indirect
 	github.com/gardener/gardener/pkg/apis v1.143.0
-	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.6 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/errors v0.22.7 // indirect
