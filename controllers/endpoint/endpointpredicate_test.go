@@ -28,6 +28,14 @@ func TestReadyEndpoints(t *testing.T) {
 	notReadyEpSlice := &discoveryv1.EndpointSlice{}
 	turnNotReady(notReadyEpSlice)
 
+	emptyEpSlice := &discoveryv1.EndpointSlice{} // no endpoints at all — quorum loss
+
+	partialEpSlice := &discoveryv1.EndpointSlice{}
+	turnPartiallyReady(partialEpSlice)
+
+	nilReadyEpSlice := &discoveryv1.EndpointSlice{}
+	turnNilReady(nilReadyEpSlice)
+
 	testcases := []struct {
 		name                             string
 		ep                               *discoveryv1.EndpointSlice
@@ -82,6 +90,33 @@ func TestReadyEndpoints(t *testing.T) {
 		{
 			name:                             "NotReady ep -> no ep",
 			oldEp:                            notReadyEpSlice,
+			expectedCreateEventFilterOutput:  false,
+			expectedUpdateEventFilterOutput:  false,
+			expectedDeleteEventFilterOutput:  false,
+			expectedGenericEventFilterOutput: false,
+		},
+		{
+			// quorum loss: all pods gone, EndpointSlice has zero entries — must not trigger weeder
+			name:                             "empty ep slice (quorum loss)",
+			ep:                               emptyEpSlice,
+			expectedCreateEventFilterOutput:  false,
+			expectedUpdateEventFilterOutput:  false,
+			expectedDeleteEventFilterOutput:  false,
+			expectedGenericEventFilterOutput: false,
+		},
+		{
+			// at-least-one semantics: 1-of-3 ready must still trigger the weeder
+			name:                             "partially ready ep slice (1 of 3 ready)",
+			ep:                               partialEpSlice,
+			expectedCreateEventFilterOutput:  true,
+			expectedUpdateEventFilterOutput:  true,
+			expectedDeleteEventFilterOutput:  false,
+			expectedGenericEventFilterOutput: true,
+		},
+		{
+			// nil Ready field must not count as ready
+			name:                             "ep slice with nil Ready condition",
+			ep:                               nilReadyEpSlice,
 			expectedCreateEventFilterOutput:  false,
 			expectedUpdateEventFilterOutput:  false,
 			expectedDeleteEventFilterOutput:  false,
@@ -259,6 +294,24 @@ func turnNotReady(epSlice *discoveryv1.EndpointSlice) {
 				Ready: ptr.To(false),
 			},
 		},
+	}
+	epSlice.Ports = []discoveryv1.EndpointPort{}
+}
+
+// turnPartiallyReady sets 1 of 3 endpoints to ready, exercising at-least-one semantics.
+func turnPartiallyReady(epSlice *discoveryv1.EndpointSlice) {
+	epSlice.Endpoints = []discoveryv1.Endpoint{
+		{Addresses: []string{"10.1.0.51"}, Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(true)}},
+		{Addresses: []string{"10.1.0.52"}, Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(false)}},
+		{Addresses: []string{"10.1.0.53"}, Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(false)}},
+	}
+	epSlice.Ports = []discoveryv1.EndpointPort{}
+}
+
+// turnNilReady sets an endpoint whose Ready condition pointer is nil.
+func turnNilReady(epSlice *discoveryv1.EndpointSlice) {
+	epSlice.Endpoints = []discoveryv1.Endpoint{
+		{Addresses: []string{"10.1.0.52"}, Conditions: discoveryv1.EndpointConditions{Ready: nil}},
 	}
 	epSlice.Ports = []discoveryv1.EndpointPort{}
 }

@@ -10,16 +10,14 @@ import (
 	"net/http"
 	"time"
 
-	"k8s.io/client-go/discovery"
-
 	"github.com/go-logr/logr"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -27,6 +25,7 @@ import (
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/scale"
 	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -84,6 +83,13 @@ func createRestConfigFromKubeConfigBytes(kubeConfigBytes []byte, connectionTimeo
 	if err != nil {
 		return nil, err
 	}
+	rawConfig, err := clientConfig.RawConfig()
+	if err != nil {
+		return nil, err
+	}
+	if err := validateKubeConfig(rawConfig); err != nil {
+		return nil, err
+	}
 	config, err := clientConfig.ClientConfig()
 	if err != nil {
 		return nil, err
@@ -97,6 +103,34 @@ func createRestConfigFromKubeConfigBytes(kubeConfigBytes []byte, connectionTimeo
 		return transport
 	})
 	return config, nil
+}
+
+// validateKubeConfig checks that the kubeconfig only uses safe, inline auth mechanisms.
+// It rejects file-based credentials (client-certificate, client-key, tokenFile), exec plugins,
+// auth-providers and impersonation — mirroring the semantics of gardener/gardener's
+// ValidateConfigWithAllowList (pkg/client/kubernetes/client.go).
+func validateKubeConfig(config clientcmdapi.Config) error {
+	for userName, authInfo := range config.AuthInfos {
+		if authInfo.ClientCertificate != "" {
+			return fmt.Errorf("kubeconfig for user %q uses client-certificate (file path); only inline client-certificate-data is allowed", userName)
+		}
+		if authInfo.ClientKey != "" {
+			return fmt.Errorf("kubeconfig for user %q uses client-key (file path); only inline client-key-data is allowed", userName)
+		}
+		if authInfo.TokenFile != "" {
+			return fmt.Errorf("kubeconfig for user %q uses tokenFile; token files are not supported", userName)
+		}
+		if authInfo.Impersonate != "" || len(authInfo.ImpersonateGroups) > 0 {
+			return fmt.Errorf("kubeconfig for user %q uses impersonation; impersonation is not supported", userName)
+		}
+		if authInfo.AuthProvider != nil && authInfo.AuthProvider.Name != "" {
+			return fmt.Errorf("kubeconfig for user %q uses auth-provider %q; auth-providers are not supported", userName, authInfo.AuthProvider.Name)
+		}
+		if authInfo.Exec != nil {
+			return fmt.Errorf("kubeconfig for user %q uses exec credential plugin; exec plugins are not supported", userName)
+		}
+	}
+	return nil
 }
 
 // Client created for probing the Kube ApiServer needs to have 'KeepAlive` disabled to ensure

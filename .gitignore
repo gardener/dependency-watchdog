@@ -31,3 +31,8 @@ hack/test
 
 # gosec
 gosec-report.sarif
+
+# claude
+.claude
+.serena
+Claude.md
