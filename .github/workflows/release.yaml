@@ -11,6 +11,7 @@ on:
 
 jobs:
   build:
+    if: github.ref_name == 'master' || startsWith(github.ref_name, 'rel-v')
     uses: ./.github/workflows/build.yaml
     secrets: inherit
     permissions:
@@ -22,6 +23,7 @@ jobs:
       run-tests: true
 
   release-to-github-and-bump:
+    if: github.ref_name == 'master' || startsWith(github.ref_name, 'rel-v')
     uses: gardener/cc-utils/.github/workflows/release.yaml@master
     needs:
       - build
